@@ -89,6 +89,69 @@
         </div>
     </header>
 
+    <!-- SCREEN 0: Project Entry & Workspace Modal (Apple Liquid Glass) -->
+    <div id="project-entry-modal" class="project-modal-backdrop" style="display: none;">
+        <div class="project-modal-card">
+            <div class="project-modal-header">
+                <div class="project-modal-brand">
+                    <svg class="brand-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
+                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                    </svg>
+                    <div>
+                        <div class="project-modal-title">AeroQuantum-Wind</div>
+                        <div class="project-modal-tagline">Design a wind farm from real geographic data.</div>
+                    </div>
+                </div>
+                <button type="button" id="btn-close-project-modal" class="btn-modal-close" aria-label="Close dialog">✕</button>
+            </div>
+
+            <div class="project-modal-body">
+                <div class="project-action-buttons">
+                    <button type="button" id="btn-modal-new-project" class="btn-primary-hero">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        <span>New Project</span>
+                    </button>
+                    <button type="button" id="btn-modal-continue-project" class="btn-secondary-hero">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 3l14 9-14 9V3z"></path>
+                        </svg>
+                        <span>Continue Existing Project</span>
+                    </button>
+                </div>
+
+                <div class="recent-projects-container">
+                    <div class="recent-projects-heading">Recent Projects</div>
+                    <div class="recent-projects-list">
+                        <div class="project-item-card" data-project="kanyakumari">
+                            <div class="project-item-info">
+                                <div class="project-item-name">Kanyakumari Wind Farm Complex</div>
+                                <div class="project-item-meta">Tamil Nadu, India · 24.8 km² · Last analyzed: Today</div>
+                            </div>
+                            <span class="project-status-tag status-opt">Optimized</span>
+                        </div>
+                        <div class="project-item-card" data-project="jaisalmer">
+                            <div class="project-item-info">
+                                <div class="project-item-name">Jaisalmer Desert Array</div>
+                                <div class="project-item-meta">Rajasthan, India · 32.4 km² · Last analyzed: Yesterday</div>
+                            </div>
+                            <span class="project-status-tag status-feas">Feasible</span>
+                        </div>
+                        <div class="project-item-card" data-project="kutch">
+                            <div class="project-item-info">
+                                <div class="project-item-name">Kutch Coastal Basin</div>
+                                <div class="project-item-meta">Gujarat, India · 28.0 km² · Last analyzed: 2 days ago</div>
+                            </div>
+                            <span class="project-status-tag status-feas">Feasible</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Main Viewport Workspace -->
     <main class="screen-viewport">
 
@@ -99,8 +162,8 @@
 
             <!-- Left Panel: Site Selection Mode & Recents (Desktop) -->
             <aside class="site-selection-panel">
-                <div class="panel-heading">Select Wind Farm Site</div>
-                <div class="panel-subheading">Choose a geographical area where the wind farm will be designed.</div>
+                <div class="panel-heading">Where do you want to build?</div>
+                <div class="panel-subheading">Design a wind farm from real geographic data. Search, use GPS, enter coordinates, or draw.</div>
 
                 <!-- Mode Selection Tabs -->
                 <div class="selection-mode-tabs">
@@ -126,13 +189,26 @@
                     </button>
                 </div>
 
-                <!-- Mode 1: Search Input Box -->
-                <div id="search-box-container" class="search-input-box">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="11" cy="11" r="8"></circle>
-                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                    </svg>
-                    <input id="search-input-field" class="search-input-field" type="text" placeholder="Search site (city, state, country)..." value="Kanyakumari, Tamil Nadu, India">
+                <!-- Mode 1: Search Input Box + Use Current Location -->
+                <div id="search-box-container" class="search-input-box-wrapper" style="display: flex; flex-direction: column; gap: 8px;">
+                    <div class="search-input-box">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                        <input id="search-input-field" class="search-input-field" type="text" placeholder="Search site (city, state, country)..." value="Kanyakumari, Tamil Nadu, India">
+                    </div>
+                    <button type="button" id="btn-use-current-location" class="btn-location-gps">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <line x1="12" y1="2" x2="12" y2="6"></line>
+                            <line x1="12" y1="18" x2="12" y2="22"></line>
+                            <line x1="2" y1="12" x2="6" y2="12"></line>
+                            <line x1="18" y1="12" x2="22" y2="12"></line>
+                        </svg>
+                        <span>Use Current Location</span>
+                    </button>
                 </div>
 
                 <!-- Mode 2: Enter Coordinates Form -->
@@ -150,9 +226,22 @@
                     <button type="button" id="btn-apply-coords" class="btn-apply-coords">Apply Coordinates</button>
                 </div>
 
-                <!-- Mode 3: Draw on Map Hint -->
+                <!-- Mode 3: Draw on Map Boundary Controls -->
                 <div id="draw-mode-hint" class="draw-mode-hint">
-                    Tap anywhere on the satellite map to position the site center or adjust boundaries.
+                    <div style="font-size: 12px; margin-bottom: 8px; color: var(--text-secondary);">
+                        Tap on the satellite map or use boundary tools to reshape your wind farm concession:
+                    </div>
+                    <div class="draw-boundary-tools-row">
+                        <button type="button" id="btn-draw-circle" class="btn-draw-tool">
+                            <span>⭕ Draw Circle</span>
+                        </button>
+                        <button type="button" id="btn-draw-polygon" class="btn-draw-tool">
+                            <span>📐 Draw Polygon</span>
+                        </button>
+                        <button type="button" id="btn-reset-boundary" class="btn-draw-tool secondary">
+                            <span>↺ Reset</span>
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Recent Locations Section -->
@@ -244,12 +333,83 @@
                 </div>
 
                 <div class="site-info-content">
+                    <!-- Progressive Site Intelligence Section -->
+                    <div class="site-intelligence-card" id="site-intelligence-card">
+                        <div class="intel-header">
+                            <span class="intel-title">Let's check this site</span>
+                            <span class="intel-status-pill verified" id="intel-overall-pill">✓ Verified</span>
+                        </div>
+                        <div class="intel-subtitle">Real-time geotechnical and atmospheric analysis:</div>
+                        <div class="intel-checks-list" id="intel-checks-list">
+                            <div class="intel-check-item verified">
+                                <span class="check-icon">✓</span>
+                                <span class="check-label">Checking terrain</span>
+                                <span class="check-source">Verified (SRTM DEM, 42m avg)</span>
+                            </div>
+                            <div class="intel-check-item verified">
+                                <span class="check-icon">✓</span>
+                                <span class="check-label">Checking available land</span>
+                                <span class="check-source">Verified (24.8 km² GIS boundary)</span>
+                            </div>
+                            <div class="intel-check-item verified">
+                                <span class="check-icon">✓</span>
+                                <span class="check-label">Checking buildings</span>
+                                <span class="check-source">Verified (500m setback clear)</span>
+                            </div>
+                            <div class="intel-check-item verified">
+                                <span class="check-icon">✓</span>
+                                <span class="check-label">Checking roads</span>
+                                <span class="check-source">Verified (Corridor access)</span>
+                            </div>
+                            <div class="intel-check-item verified">
+                                <span class="check-icon">✓</span>
+                                <span class="check-label">Checking access</span>
+                                <span class="check-source">Verified (Heavy haulage road)</span>
+                            </div>
+                            <div class="intel-check-item verified">
+                                <span class="check-icon">✓</span>
+                                <span class="check-label">Checking wind resource</span>
+                                <span class="check-source">Verified (ECMWF 7.1 m/s)</span>
+                            </div>
+                            <div class="intel-check-item warning">
+                                <span class="check-icon">!</span>
+                                <span class="check-label">Checking construction suitability</span>
+                                <span class="check-source">Requires verification (soil test)</span>
+                            </div>
+                            <div class="intel-check-item verified">
+                                <span class="check-icon">✓</span>
+                                <span class="check-label">Checking environmental constraints</span>
+                                <span class="check-source">Verified (No wildlife sanctuaries)</span>
+                            </div>
+                            <div class="intel-check-item verified">
+                                <span class="check-icon">✓</span>
+                                <span class="check-label">Checking turbine spacing</span>
+                                <span class="check-source">Verified (5D compliant)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SITE SUITABILITY Summary Card -->
+                    <div class="site-suitability-summary">
+                        <div class="suitability-badge-row">
+                            <span class="suitability-label">SITE SUITABILITY</span>
+                            <span class="suitability-val good" id="site-suitability-val">Good</span>
+                        </div>
+                        <div class="suitability-reasons">
+                            <div class="reason-row"><span>Wind resource:</span> <strong>Good (7.1 m/s)</strong></div>
+                            <div class="reason-row"><span>Available area:</span> <strong>Good (24.8 km²)</strong></div>
+                            <div class="reason-row"><span>Terrain:</span> <strong>Good (Mild slope)</strong></div>
+                            <div class="reason-row"><span>Road access:</span> <strong>Moderate (1.8 km to highway)</strong></div>
+                            <div class="reason-row"><span>Construction:</span> <strong style="color: var(--warning);">Requires verification</strong></div>
+                        </div>
+                    </div>
+
                     <!-- Verification Confirmation Card -->
                     <div class="site-verified-card">
                         <div class="verified-icon">✓</div>
                         <div class="verified-text">
                             <strong>Site Selected</strong>
-                            <span>Review the details and confirm to proceed.</span>
+                            <span>Review the progressive site checks and confirm to proceed.</span>
                         </div>
                     </div>
 
@@ -440,7 +600,7 @@
                         <div class="config-card-header">
                             <div class="card-title-group">
                                 <span class="card-title-icon">🔢</span>
-                                <span class="card-title">Number of Turbines</span>
+                                <span class="card-title">How many turbines?</span>
                             </div>
                             <span id="badge-capacity-utilization" class="card-badge">Safe Capacity</span>
                         </div>
@@ -464,22 +624,36 @@
 
                         <!-- Real-Time Aerodynamic Capacity Status & Landscape Suitability Gate -->
                         <div id="cfg-capacity-card" class="capacity-status-card optimal">
-                            <div style="font-weight: 700; display: flex; align-items: center; gap: 6px;">
-                                <span id="capacity-status-icon">✓</span>
-                                <span id="capacity-status-headline">Site Capacity Optimal</span>
+                            <div style="font-weight: 700; display: flex; align-items: center; justify-content: space-between;">
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <span id="capacity-status-icon">✓</span>
+                                    <span id="capacity-status-headline">Site Capacity Optimal</span>
+                                </div>
+                                <span class="capacity-feasibility-pill" id="feasibility-badge">12 / 17 Feasible</span>
                             </div>
                             <div id="capacity-status-desc">
                                 12 turbines comfortably fit within the 11.0 km² site with standard 5D×7D aerodynamic wake buffer spacing.
                             </div>
-                            <button type="button" id="btn-clamp-capacity" class="btn-auto-fit" style="display: none;">
+                            <div class="feasibility-reasons-list" style="margin-top: 8px; font-size: 11px; display: flex; flex-direction: column; gap: 4px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 8px;">
+                                <div class="feas-row" style="display: flex; justify-content: space-between;"><span>• Site boundary:</span> <strong>24.8 km² concession</strong></div>
+                                <div class="feas-row" style="display: flex; justify-content: space-between;"><span>• Terrain suitability:</span> <strong>8.8 km² buildable slope (&lt;10%)</strong></div>
+                                <div class="feas-row" style="display: flex; justify-content: space-between;"><span>• Building setbacks:</span> <strong>500m exclusion buffer</strong></div>
+                                <div class="feas-row" style="display: flex; justify-content: space-between;"><span>• Road access:</span> <strong>100m transport corridor</strong></div>
+                                <div class="feas-row" style="display: flex; justify-content: space-between;"><span>• Minimum spacing:</span> <strong>5D (600m) aerodynamic wake buffer</strong></div>
+                            </div>
+                            <button type="button" id="btn-clamp-capacity" class="btn-auto-fit" style="display: none; margin-top: 8px;">
                                 Auto-Adjust to Recommended Capacity
                             </button>
+                            <div class="capacity-metric-row" style="margin-top: 8px;">
+                                <span>Requested Turbines</span>
+                                <strong id="metric-requested-count">12 Turbines</strong>
+                            </div>
                             <div class="capacity-metric-row">
                                 <span>Aerodynamic Footprint per Unit</span>
                                 <strong id="metric-footprint-unit">~ 0.50 km² (5D × 7D)</strong>
                             </div>
                             <div class="capacity-metric-row">
-                                <span>Max Theoretical Site Capacity</span>
+                                <span>Max Feasible Positions</span>
                                 <strong id="metric-max-capacity">17 Turbines (8.8 km² buildable)</strong>
                             </div>
                         </div>
@@ -662,6 +836,15 @@
                     <!-- Dynamic Floating Conflict Badges Container -->
                     <div id="s3-conflict-badges-overlay"></div>
 
+                    <!-- Compact Simulation Status Checklist -->
+                    <div class="simulation-status-strip" id="s3-simulation-status">
+                        <div class="sim-check-item"><span>Wind field</span> <strong class="sim-check-mark">✓</strong></div>
+                        <div class="sim-check-item"><span>Turbine placement</span> <strong class="sim-check-mark">✓</strong></div>
+                        <div class="sim-check-item"><span>Wake interaction</span> <strong class="sim-check-mark">✓</strong></div>
+                        <div class="sim-check-item"><span>Energy estimation</span> <strong class="sim-check-mark">✓</strong></div>
+                        <div class="sim-check-item"><span>Optimization prep</span> <strong class="sim-check-mark">✓</strong></div>
+                    </div>
+
                     <!-- Map Floating Controls -->
                     <div class="map-controls-group" style="position: absolute; top: 68px; right: 20px; z-index: 500; display: flex; flex-direction: column; gap: 8px;">
                         <button type="button" id="btn-s3-toggle-wakes" class="map-icon-btn active" title="Toggle Jensen Wake Cones">
@@ -843,12 +1026,12 @@
                     <div class="config-card-header" style="margin-bottom: 4px;">
                         <div class="card-title-group">
                             <span class="card-title-icon">⚛️</span>
-                            <span class="card-title">Quantum Optimization Engine</span>
+                            <span class="card-title">Finding a better turbine arrangement</span>
                         </div>
-                        <span class="card-badge">QAOA SIMULATION</span>
+                        <span class="card-badge">QUANTUM OPTIMIZATION</span>
                     </div>
-                    <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.45;">
-                        Using QAOA to find turbine placements that maximize energy production while minimizing wake losses and satisfying physical spacing constraints.
+                    <div style="font-size: 13px; color: var(--text-secondary); line-height: 1.45;">
+                        We evaluate candidate layouts using quantum superposition to minimize turbulent wake interference and maximize total wind farm yield.
                     </div>
 
                     <!-- 3 Segmented Filter Tabs -->

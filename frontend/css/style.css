@@ -3694,3 +3694,446 @@ body {
     font-variant-numeric: tabular-nums lining-nums;
     letter-spacing: -0.01em;
 }
+
+/* ==========================================================================
+   Screen 0: Project Entry Modal & Apple Liquid Glass Materials
+   ========================================================================== */
+
+.project-modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 2000;
+    background: rgba(5, 8, 14, 0.75);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.project-modal-card {
+    background: rgba(18, 24, 38, 0.94);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 20px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65);
+    width: 100%;
+    max-width: 520px;
+    padding: 26px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    animation: modalPopIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalPopIn {
+    from {
+        opacity: 0;
+        transform: scale(0.96) translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.project-modal-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+}
+
+.project-modal-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.project-modal-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--foreground);
+    letter-spacing: -0.02em;
+}
+
+.project-modal-tagline {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
+.btn-modal-close {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-secondary);
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-modal-close:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+}
+
+.project-action-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.btn-primary-hero {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    height: 48px;
+    background: var(--primary);
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 14px;
+    border-radius: 12px;
+    border: none;
+    cursor: pointer;
+    transition: background 0.18s ease, transform 0.1s ease;
+}
+
+.btn-primary-hero:hover {
+    background: var(--primary-hover);
+    transform: translateY(-1px);
+}
+
+.btn-secondary-hero {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    height: 48px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--foreground);
+    font-weight: 600;
+    font-size: 14px;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: background 0.18s ease;
+}
+
+.btn-secondary-hero:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.recent-projects-heading {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+}
+
+.recent-projects-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.project-item-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.project-item-card:hover {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+.project-item-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--foreground);
+}
+
+.project-item-meta {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 2px;
+}
+
+.project-status-tag {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 6px;
+}
+
+.project-status-tag.status-opt {
+    background: rgba(32, 201, 151, 0.15);
+    color: #20C997;
+    border: 1px solid rgba(32, 201, 151, 0.3);
+}
+
+.project-status-tag.status-feas {
+    background: rgba(22, 159, 229, 0.15);
+    color: var(--primary);
+    border: 1px solid rgba(22, 159, 229, 0.3);
+}
+
+/* ==========================================================================
+   Screen 1: Location GPS & Boundary Tools & Progressive Site Intelligence
+   ========================================================================== */
+
+.btn-location-gps {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 40px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 10px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-location-gps:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--foreground);
+    border-color: rgba(255, 255, 255, 0.18);
+}
+
+.draw-boundary-tools-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.btn-draw-tool {
+    flex: 1;
+    height: 38px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-draw-tool:hover {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.btn-draw-tool.secondary {
+    flex: 0 0 65px;
+    color: var(--text-secondary);
+}
+
+.site-intelligence-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 14px;
+    margin-bottom: 12px;
+}
+
+.intel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 2px;
+}
+
+.intel-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--foreground);
+}
+
+.intel-status-pill {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 20px;
+}
+
+.intel-status-pill.verified {
+    background: rgba(32, 201, 151, 0.15);
+    color: #20C997;
+    border: 1px solid rgba(32, 201, 151, 0.3);
+}
+
+.intel-subtitle {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+}
+
+.intel-checks-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.intel-check-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.intel-check-item .check-icon {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.intel-check-item.verified .check-icon {
+    background: rgba(32, 201, 151, 0.2);
+    color: #20C997;
+}
+
+.intel-check-item.warning .check-icon {
+    background: rgba(242, 184, 75, 0.2);
+    color: #F2B84B;
+}
+
+.intel-check-item .check-label {
+    flex: 1;
+}
+
+.intel-check-item .check-source {
+    font-size: 10px;
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+}
+
+.site-suitability-summary {
+    background: rgba(32, 201, 151, 0.08);
+    border: 1px solid rgba(32, 201, 151, 0.25);
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 12px;
+}
+
+.suitability-badge-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.suitability-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+}
+
+.suitability-val.good {
+    font-size: 13px;
+    font-weight: 800;
+    color: #20C997;
+}
+
+.suitability-reasons {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.suitability-reasons .reason-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.capacity-feasibility-pill {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: rgba(22, 159, 229, 0.15);
+    color: var(--primary);
+    border: 1px solid rgba(22, 159, 229, 0.3);
+}
+
+.capacity-feasibility-pill.warning {
+    background: rgba(242, 184, 75, 0.15);
+    color: var(--warning);
+    border-color: rgba(242, 184, 75, 0.3);
+}
+
+/* ==========================================================================
+   Screen 3: Compact Simulation Status Strip
+   ========================================================================== */
+
+.simulation-status-strip {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    z-index: 500;
+    display: flex;
+    gap: 12px;
+    background: rgba(13, 17, 28, 0.88);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 24px;
+    padding: 6px 14px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+.sim-check-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.sim-check-mark {
+    color: #20C997;
+    font-weight: 700;
+}
+
+@media (max-width: 768px) {
+    .simulation-status-strip {
+        left: 12px;
+        right: 12px;
+        bottom: 84px;
+        justify-content: space-between;
+        padding: 5px 10px;
+        font-size: 10px;
+    }
+}
