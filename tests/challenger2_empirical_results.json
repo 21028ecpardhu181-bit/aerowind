@@ -166,29 +166,29 @@
       6
     ],
     "table_decimals": [
-      5,
-      5,
-      5,
-      5,
-      5,
-      5,
-      5,
-      5,
-      5,
-      5,
-      5,
-      5,
-      5,
-      5,
-      5,
-      5,
-      5,
-      5,
-      5
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6
     ],
     "max_diff_live_vs_csv": 0.0,
     "max_diff_live_vs_geojson": 0.0,
-    "max_diff_live_vs_table": 4.999999999810711e-06,
+    "max_diff_live_vs_table": 0.0,
     "sample_checks": [
       {
         "turbine_id": "T1",
@@ -200,13 +200,13 @@
         "csv_lon_decimals": 6,
         "geo_lat": 8.084143,
         "geo_lon": 77.53833,
-        "tbl_lat_str": "8.08414",
-        "tbl_lon_str": "77.53833",
-        "tbl_lat_decimals": 5,
-        "tbl_lon_decimals": 5,
+        "tbl_lat_str": "8.084143",
+        "tbl_lon_str": "77.538330",
+        "tbl_lat_decimals": 6,
+        "tbl_lon_decimals": 6,
         "diff_live_csv": 0.0,
         "diff_live_geo": 0.0,
-        "diff_live_tbl": 2.9999999995311555e-06
+        "diff_live_tbl": 0.0
       },
       {
         "turbine_id": "T2",
@@ -218,13 +218,13 @@
         "csv_lon_decimals": 6,
         "geo_lat": 8.091697,
         "geo_lon": 77.53179,
-        "tbl_lat_str": "8.09170",
-        "tbl_lon_str": "77.53179",
-        "tbl_lat_decimals": 5,
-        "tbl_lon_decimals": 5,
+        "tbl_lat_str": "8.091697",
+        "tbl_lon_str": "77.531790",
+        "tbl_lat_decimals": 6,
+        "tbl_lon_decimals": 6,
         "diff_live_csv": 0.0,
         "diff_live_geo": 0.0,
-        "diff_live_tbl": 2.9999999995311555e-06
+        "diff_live_tbl": 0.0
       },
       {
         "turbine_id": "T3",
@@ -236,13 +236,13 @@
         "csv_lon_decimals": 6,
         "geo_lat": 8.086301,
         "geo_lon": 77.53179,
-        "tbl_lat_str": "8.08630",
-        "tbl_lon_str": "77.53179",
-        "tbl_lat_decimals": 5,
-        "tbl_lon_decimals": 5,
+        "tbl_lat_str": "8.086301",
+        "tbl_lon_str": "77.531790",
+        "tbl_lat_decimals": 6,
+        "tbl_lon_decimals": 6,
         "diff_live_csv": 0.0,
         "diff_live_geo": 0.0,
-        "diff_live_tbl": 1.0000000010279564e-06
+        "diff_live_tbl": 0.0
       }
     ]
   }

@@ -3489,8 +3489,8 @@
 
             tbody.innerHTML = turbines.map((t, idx) => {
                 const label = t.label ? (t.label.startsWith('T-') ? t.label : `T-${String(idx + 1).padStart(2, '0')}`) : `T-${String(idx + 1).padStart(2, '0')}`;
-                const latStr = `${t.lat.toFixed(5)}° N`;
-                const lonStr = `${t.lon.toFixed(5)}° E`;
+                const latStr = `${t.lat.toFixed(6)}° N`;
+                const lonStr = `${t.lon.toFixed(6)}° E`;
                 const elevation = t.elevation !== undefined ? t.elevation : Math.round(site.elevationM || 35);
                 const effWind = (t.effective_mps || t.effective_wind_speed_mps || (7.1 - idx * 0.08)).toFixed(2);
                 const outputMw = (t.output_mw || ((cfg.ratedPowerKw / 1000) * (effWind / 7.1) * 0.95)).toFixed(2);
