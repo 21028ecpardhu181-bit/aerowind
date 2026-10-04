@@ -217,6 +217,44 @@
         }
 
         /**
+         * Tightly frame the 3D camera around the site polygon boundary.
+         * @param {Array<Array<number>>} polygonCoords - Array of [lat, lon]
+         * @param {number} duration - Flight duration in seconds
+         */
+        fitToBoundary(polygonCoords, duration = 1.2) {
+            if (!this.viewer || !Array.isArray(polygonCoords) || polygonCoords.length < 3) return;
+
+            let minLat = 90.0, maxLat = -90.0, minLon = 180.0, maxLon = -180.0;
+            polygonCoords.forEach(([lat, lon]) => {
+                if (lat < minLat) minLat = lat;
+                if (lat > maxLat) maxLat = lat;
+                if (lon < minLon) minLon = lon;
+                if (lon > maxLon) maxLon = lon;
+            });
+
+            const centerLat = (minLat + maxLat) / 2.0;
+            const centerLon = (minLon + maxLon) / 2.0;
+
+            const latSpanM = (maxLat - minLat) * 111000.0;
+            const lonSpanM = (maxLon - minLon) * 111000.0 * Math.cos(centerLat * Math.PI / 180.0);
+            const maxSpanM = Math.max(latSpanM, lonSpanM, 800.0);
+
+            // Frame tightly with a 45 degree pitch
+            const targetAltitude = Math.max(800.0, Math.min(maxSpanM * 1.35, 9500.0));
+            const latOffsetDeg = (targetAltitude * 0.45) / 111000.0;
+
+            this.viewer.camera.flyTo({
+                destination: Cesium.Cartesian3.fromDegrees(centerLon, centerLat - latOffsetDeg, targetAltitude),
+                orientation: {
+                    heading: Cesium.Math.toRadians(this.currentHeading || 0.0),
+                    pitch: Cesium.Math.toRadians(this.currentPitch || -45.0),
+                    roll: 0.0
+                },
+                duration: duration
+            });
+        }
+
+        /**
          * Set project site boundary polygon with glowing outline and surface fill.
          * @param {Array<Array<number>>} polygonCoords - Array of [lat, lon]
          */
@@ -383,15 +421,23 @@
                 const labelText = t.label ? (t.label.startsWith('T-') ? t.label : `T-${String(idx + 1).padStart(2, '0')}`) : `T-${String(idx + 1).padStart(2, '0')}`;
                 const isConflicted = !!t.is_conflicted;
                 const isSelected = idx === this.selectedTurbineIndex;
+                const baseElev = (t.elevation_m !== undefined && t.elevation_m !== null) ? Number(t.elevation_m) : 0;
 
                 const primaryColor = isConflicted 
                     ? Cesium.Color.fromCssColorString('#ef4444')
                     : (isSelected ? Cesium.Color.fromCssColorString('#38bdf8') : Cesium.Color.WHITE);
 
+                // Compute orientation aligned with prevailing wind direction
+                // Wind heading: in meteorology, wind from deg blows towards deg + 180
+                const windHeadingRad = Cesium.Math.toRadians(windDirectionDeg);
+                const hpr = new Cesium.HeadingPitchRoll(windHeadingRad, 0, 0);
+                const nacellePos = Cesium.Cartesian3.fromDegrees(t.lon, t.lat, baseElev + hubHeight);
+                const orientation = Cesium.Transforms.headingPitchRollQuaternion(nacellePos, hpr);
+
                 // 1. Ground Foundation Shadow & Target Ring
                 const groundRing = this.viewer.entities.add({
                     turbineIndex: idx,
-                    position: Cesium.Cartesian3.fromDegrees(t.lon, t.lat, 1.0),
+                    position: Cesium.Cartesian3.fromDegrees(t.lon, t.lat, baseElev + 1.0),
                     ellipse: {
                         semiMajorAxis: isSelected ? 28.0 : 18.0,
                         semiMinorAxis: isSelected ? 28.0 : 18.0,
@@ -406,7 +452,7 @@
                 const tower = this.viewer.entities.add({
                     turbineIndex: idx,
                     name: `Tower ${labelText}`,
-                    position: Cesium.Cartesian3.fromDegrees(t.lon, t.lat, hubHeight / 2.0),
+                    position: Cesium.Cartesian3.fromDegrees(t.lon, t.lat, baseElev + hubHeight / 2.0),
                     cylinder: {
                         length: hubHeight,
                         topRadius: 2.2,
@@ -420,7 +466,8 @@
                 const nacelle = this.viewer.entities.add({
                     turbineIndex: idx,
                     name: `Nacelle ${labelText}`,
-                    position: Cesium.Cartesian3.fromDegrees(t.lon, t.lat, hubHeight),
+                    position: nacellePos,
+                    orientation: orientation,
                     box: {
                         dimensions: new Cesium.Cartesian3(5.0, 15.0, 5.0),
                         material: Cesium.Color.fromCssColorString('#f1f5f9'),
@@ -432,7 +479,8 @@
                 const rotor = this.viewer.entities.add({
                     turbineIndex: idx,
                     name: `Rotor ${labelText}`,
-                    position: Cesium.Cartesian3.fromDegrees(t.lon, t.lat, hubHeight),
+                    position: nacellePos,
+                    orientation: orientation,
                     cylinder: {
                         length: 1.5,
                         topRadius: rotorRadius,
@@ -447,7 +495,7 @@
                 // 5. Floating Label Tag
                 const label = this.viewer.entities.add({
                     turbineIndex: idx,
-                    position: Cesium.Cartesian3.fromDegrees(t.lon, t.lat, hubHeight + rotorRadius + 20),
+                    position: Cesium.Cartesian3.fromDegrees(t.lon, t.lat, baseElev + hubHeight + rotorRadius + 18),
                     label: {
                         text: labelText,
                         font: 'bold 11px JetBrains Mono, monospace',
@@ -478,14 +526,16 @@
 
             if (!Array.isArray(turbines)) return;
 
-            const coneLengthM = 750.0; // Downstream wake distance
-            const windRad = Cesium.Math.toRadians(windDirectionDeg);
+            const coneLengthM = 380.0; // Scaled down so it does not overpower map terrain
+            const downwindDeg = (windDirectionDeg + 180) % 360;
+            const windRad = Cesium.Math.toRadians(downwindDeg);
             const dx = Math.sin(windRad);
             const dy = Math.cos(windRad);
 
             turbines.forEach((t, idx) => {
                 const deficit = t.wake_deficit_pct || (idx % 3 === 0 ? 14 : 4);
                 const isHighLoss = deficit > 10;
+                const baseElev = (t.elevation_m !== undefined && t.elevation_m !== null) ? Number(t.elevation_m) : 0;
 
                 const latMPerDeg = 111000.0;
                 const lonMPerDeg = 111000.0 * Math.cos(t.lat * Math.PI / 180.0);
@@ -498,13 +548,13 @@
                 // Wake Cone representation
                 const wakeCone = this.viewer.entities.add({
                     name: `Wake T-${idx + 1}`,
-                    position: Cesium.Cartesian3.fromDegrees(midLon, midLat, 80.0),
+                    position: Cesium.Cartesian3.fromDegrees(midLon, midLat, baseElev + 70.0),
                     cylinder: {
                         length: coneLengthM,
-                        topRadius: 90.0,
-                        bottomRadius: 30.0,
+                        topRadius: 48.0,
+                        bottomRadius: 18.0,
                         material: Cesium.Color.fromCssColorString(
-                            isHighLoss ? 'rgba(239, 68, 68, 0.18)' : 'rgba(56, 189, 248, 0.15)'
+                            isHighLoss ? 'rgba(239, 68, 68, 0.16)' : 'rgba(56, 189, 248, 0.12)'
                         )
                     }
                 });

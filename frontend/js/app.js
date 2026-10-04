@@ -238,13 +238,16 @@
         },
 
         getSiteBoundaryVertices(site) {
+            if (site && Array.isArray(site.boundary) && site.boundary.length >= 3) {
+                return site.boundary;
+            }
             const lat = site.lat;
             const lon = site.lon;
             const areaKm2 = site.areaKm2 || 24.8;
             const radiusKm = Math.sqrt(areaKm2) / 2.0;
             const latDelta = radiusKm / 111.0;
             const lonDelta = radiusKm / (111.0 * Math.cos(lat * Math.PI / 180.0));
-            return [
+            const vertices = [
                 [lat + latDelta * 1.1, lon - lonDelta * 0.1],
                 [lat + latDelta * 0.7, lon + lonDelta * 0.1],
                 [lat + latDelta * 0.2, lon + lonDelta * 0.45],
@@ -256,6 +259,8 @@
                 [lat + latDelta * 0.25, lon - lonDelta * 0.65],
                 [lat + latDelta * 0.65, lon - lonDelta * 0.55]
             ];
+            if (site) site.boundary = vertices;
+            return vertices;
         },
 
         drawSitePolygon(lat, lon, areaKm2) {
@@ -271,6 +276,7 @@
             const vertices = this.getSiteBoundaryVertices({ lat, lon, areaKm2 });
             const calculatedAreaKm2 = this.calculatePolygonAreaKm2(vertices);
             site.areaKm2 = calculatedAreaKm2;
+            site.boundary = vertices;
 
             APP_STATE.sitePolygon = L.polygon(vertices, {
                 color: '#3b82f6',
@@ -280,6 +286,12 @@
                 fillOpacity: 0.18,
                 smoothFactor: 1
             }).addTo(map);
+
+            const isMobile = window.innerWidth <= 768;
+            map.fitBounds(APP_STATE.sitePolygon.getBounds(), {
+                padding: isMobile ? [35, 35] : [55, 55],
+                maxZoom: 15
+            });
 
             // Center Area Badge with authentic calculated area
             const badgeIcon = L.divIcon({
@@ -307,6 +319,7 @@
 
             if (APP_STATE.screen1CesiumActive && APP_STATE.screen1CesiumEngine) {
                 APP_STATE.screen1CesiumEngine.setSiteBoundary(vertices);
+                APP_STATE.screen1CesiumEngine.fitToBoundary(vertices);
                 APP_STATE.screen1CesiumEngine.renderGISAnalysisLayers(lat, lon, radiusKm * 2.0);
             }
         },
@@ -332,6 +345,7 @@
 
             const calculatedAreaKm2 = this.calculatePolygonAreaKm2(vertices);
             site.areaKm2 = calculatedAreaKm2;
+            site.boundary = vertices;
 
             APP_STATE.sitePolygon = L.polygon(vertices, {
                 color: '#3b82f6',
@@ -341,6 +355,12 @@
                 fillOpacity: 0.18,
                 smoothFactor: 1
             }).addTo(map);
+
+            const isMobile = window.innerWidth <= 768;
+            map.fitBounds(APP_STATE.sitePolygon.getBounds(), {
+                padding: isMobile ? [35, 35] : [55, 55],
+                maxZoom: 15
+            });
 
             const badgeIcon = L.divIcon({
                 className: 'badge-div-wrapper',
@@ -355,6 +375,7 @@
 
             if (APP_STATE.screen1CesiumActive && APP_STATE.screen1CesiumEngine) {
                 APP_STATE.screen1CesiumEngine.setSiteBoundary(vertices);
+                APP_STATE.screen1CesiumEngine.fitToBoundary(vertices);
             }
         },
 
@@ -580,6 +601,24 @@
                 this.showToast('Boundary reset to default concession geometry.', 'info');
             };
 
+            const handleFitSite = () => {
+                const site = APP_STATE.selectedSite;
+                if (!site) return;
+                const vertices = this.getSiteBoundaryVertices(site);
+                if (APP_STATE.sitePolygon && APP_STATE.map) {
+                    const isMobile = window.innerWidth <= 768;
+                    APP_STATE.map.fitBounds(APP_STATE.sitePolygon.getBounds(), {
+                        padding: isMobile ? [35, 35] : [55, 55],
+                        maxZoom: 15
+                    });
+                }
+                if (APP_STATE.screen1CesiumActive && APP_STATE.screen1CesiumEngine) {
+                    APP_STATE.screen1CesiumEngine.fitToBoundary(vertices);
+                }
+                this.showToast('Camera aligned tightly to site boundary.', 'info');
+            };
+
+            document.getElementById('btn-ctx-fit')?.addEventListener('click', handleFitSite);
             document.getElementById('btn-draw-circle')?.addEventListener('click', handleDrawCircle);
             document.getElementById('btn-ctx-circle')?.addEventListener('click', handleDrawCircle);
             document.getElementById('btn-draw-polygon')?.addEventListener('click', handleDrawPoly);
@@ -773,7 +812,7 @@
                 const vertices = this.getSiteBoundaryVertices(site);
                 APP_STATE.screen1CesiumEngine.setSiteBoundary(vertices);
                 APP_STATE.screen1CesiumEngine.renderGISAnalysisLayers(site.lat, site.lon, Math.sqrt(site.areaKm2 || 24.8));
-                APP_STATE.screen1CesiumEngine.flyTo(site.lat, site.lon, 4500, -45, 0, 1.2);
+                APP_STATE.screen1CesiumEngine.fitToBoundary(vertices, 1.2);
             }
 
             // Fetch Live Physical & Atmospheric Telemetry from Backend (Open-Meteo ECMWF / SRTM)
@@ -904,10 +943,21 @@
 
         recenterMap() {
             const site = APP_STATE.selectedSite;
-            if (APP_STATE.map && site) {
-                const isMobile = window.innerWidth <= 768;
+            if (!site) return;
+            const isMobile = window.innerWidth <= 768;
+            if (APP_STATE.sitePolygon && APP_STATE.map) {
+                APP_STATE.map.fitBounds(APP_STATE.sitePolygon.getBounds(), {
+                    padding: isMobile ? [35, 35] : [55, 55],
+                    maxZoom: 15
+                });
+            } else if (APP_STATE.map) {
                 const targetLat = isMobile ? site.lat - 0.025 : site.lat;
                 APP_STATE.map.flyTo([targetLat, site.lon], isMobile ? 12.0 : 13.0, { duration: 0.8 });
+            }
+
+            if (APP_STATE.screen1CesiumActive && APP_STATE.screen1CesiumEngine) {
+                const vertices = this.getSiteBoundaryVertices(site);
+                APP_STATE.screen1CesiumEngine.fitToBoundary(vertices);
             }
         },
 
@@ -964,7 +1014,7 @@
                     const vertices = this.getSiteBoundaryVertices(site);
                     APP_STATE.screen1CesiumEngine.setSiteBoundary(vertices);
                     APP_STATE.screen1CesiumEngine.renderGISAnalysisLayers(site.lat, site.lon, Math.sqrt(site.areaKm2 || 24.8));
-                    APP_STATE.screen1CesiumEngine.flyTo(site.lat, site.lon, 4500, -45, 0, 1.2);
+                    APP_STATE.screen1CesiumEngine.fitToBoundary(vertices, 1.2);
                 }
 
                 this.showToast('CesiumJS 3D Globe Active (Drag to orbit, pinch to tilt)', 'info');
@@ -1556,10 +1606,13 @@
 
             this.showToast('Computing aerodynamic wake matrix...', 'info');
 
+            const vertices = this.getSiteBoundaryVertices(site);
             const payload = {
                 center_lat: site.lat,
                 center_lon: site.lon,
                 area_km2: site.areaKm2,
+                boundary: vertices,
+                exclusions: APP_STATE.activeExclusions || [],
                 turbine_count: cfg.turbineCount,
                 rotor_diameter: cfg.rotorDiameter,
                 hub_height: cfg.hubHeight,
@@ -1617,21 +1670,7 @@
 
                 // Render Site Polygon
                 const site = APP_STATE.selectedSite;
-                const radiusKm = Math.sqrt(site.areaKm2) / 2.0;
-                const latDelta = radiusKm / 111.0;
-                const lonDelta = radiusKm / (111.0 * Math.cos(site.lat * Math.PI / 180.0));
-                const vertices = [
-                    [site.lat + latDelta * 1.1, site.lon - lonDelta * 0.1],
-                    [site.lat + latDelta * 0.7, site.lon + lonDelta * 0.1],
-                    [site.lat + latDelta * 0.2, site.lon + lonDelta * 0.45],
-                    [site.lat - latDelta * 0.4, site.lon + lonDelta * 0.85],
-                    [site.lat - latDelta * 0.9, site.lon + lonDelta * 0.95],
-                    [site.lat - latDelta * 1.2, site.lon - lonDelta * 0.45],
-                    [site.lat - latDelta * 0.6, site.lon - lonDelta * 1.1],
-                    [site.lat - latDelta * 0.1, site.lon - lonDelta * 0.85],
-                    [site.lat + latDelta * 0.25, site.lon - lonDelta * 0.65],
-                    [site.lat + latDelta * 0.65, site.lon - lonDelta * 0.55]
-                ];
+                const vertices = this.getSiteBoundaryVertices(site);
 
                 APP_STATE.screen3Polygon = L.polygon(vertices, {
                     color: '#3b82f6',
@@ -1641,6 +1680,12 @@
                     fillOpacity: 0.12,
                     dashArray: '4, 4'
                 }).addTo(map);
+
+                const isMobile = window.innerWidth <= 768;
+                map.fitBounds(APP_STATE.screen3Polygon.getBounds(), {
+                    padding: isMobile ? [35, 35] : [55, 55],
+                    maxZoom: 15
+                });
 
                 // Render Candidate Grid Dots
                 if (Array.isArray(data.candidate_positions)) {
@@ -1947,10 +1992,13 @@
 
             this.showToast('Executing QAOA combinatorial optimization...', 'info');
 
+            const vertices = this.getSiteBoundaryVertices(site);
             const payload = {
                 center_lat: site.lat,
                 center_lon: site.lon,
                 area_km2: site.areaKm2,
+                boundary: vertices,
+                exclusions: APP_STATE.activeExclusions || [],
                 turbine_count: cfg.turbineCount,
                 rotor_diameter: cfg.rotorDiameter,
                 hub_height: cfg.hubHeight,
@@ -2355,21 +2403,7 @@
                     APP_STATE.screen5Polygon = null;
                 }
                 const site = APP_STATE.selectedSite;
-                const radiusKm = Math.sqrt(site.areaKm2) / 2.0;
-                const latDelta = radiusKm / 111.0;
-                const lonDelta = radiusKm / (111.0 * Math.cos(site.lat * Math.PI / 180.0));
-                const vertices = [
-                    [site.lat + latDelta * 1.1, site.lon - lonDelta * 0.1],
-                    [site.lat + latDelta * 0.7, site.lon + lonDelta * 0.1],
-                    [site.lat + latDelta * 0.2, site.lon + lonDelta * 0.45],
-                    [site.lat - latDelta * 0.4, site.lon + lonDelta * 0.85],
-                    [site.lat - latDelta * 0.9, site.lon + lonDelta * 0.95],
-                    [site.lat - latDelta * 1.2, site.lon - lonDelta * 0.45],
-                    [site.lat - latDelta * 0.6, site.lon - lonDelta * 1.1],
-                    [site.lat - latDelta * 0.1, site.lon - lonDelta * 0.85],
-                    [site.lat + latDelta * 0.25, site.lon - lonDelta * 0.65],
-                    [site.lat + latDelta * 0.65, site.lon - lonDelta * 0.55]
-                ];
+                const vertices = this.getSiteBoundaryVertices(site);
 
                 APP_STATE.screen5Polygon = L.polygon(vertices, {
                     color: '#ffffff',
@@ -2831,7 +2865,7 @@
             }
 
             engine.selectTurbine(APP_STATE.screen5SelectedTurbineIndex);
-            engine.flyTo(site.lat, site.lon, 3400, -42, 0, 0.8);
+            engine.fitToBoundary(vertices, 0.8);
         },
 
         // ======================================================================

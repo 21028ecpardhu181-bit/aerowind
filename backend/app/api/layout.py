@@ -13,11 +13,11 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 try:
-    from backend.app.geo_utils import generate_grid_candidates
+    from backend.app.geo_utils import generate_grid_candidates, generate_feasible_candidates
     from core.aerodynamics import pairwise_wake_matrix
     from core.post_processor import compute_aep_summary
 except ImportError:
-    from app.geo_utils import generate_grid_candidates
+    from app.geo_utils import generate_grid_candidates, generate_feasible_candidates
     from core.aerodynamics import pairwise_wake_matrix
     from core.post_processor import compute_aep_summary
 
@@ -27,6 +27,8 @@ router = APIRouter(prefix="", tags=["layout"])
 class InitialLayoutRequest(BaseModel):
     center_lat: float = Field(..., description="Site center latitude")
     center_lon: float = Field(..., description="Site center longitude")
+    boundary: Optional[List[List[float]]] = Field(default=None, description="Site boundary polygon [[lat, lon], ...]")
+    exclusions: Optional[List[Dict[str, Any]]] = Field(default=None, description="Environmental / legal exclusion zones")
     area_km2: float = Field(default=11.0, description="Site boundary area in km2")
     turbine_count: int = Field(default=10, ge=1, le=100, description="Number of turbines")
     rotor_diameter: float = Field(default=120.0, ge=40.0, le=250.0, description="Rotor diameter in meters")
@@ -45,6 +47,7 @@ class TurbineNode(BaseModel):
     lon: float
     x_m: float
     y_m: float
+    elevation_m: Optional[float] = None
     effective_mps: float
     wake_deficit_pct: float
     is_conflicted: bool
@@ -94,13 +97,16 @@ def get_cardinal_label(deg: float) -> str:
     description="Places un-optimized candidate layout, simulates Jensen wake deficit matrix, and identifies wake conflicts.",
 )
 def compute_initial_layout(req: InitialLayoutRequest) -> InitialLayoutResponse:
-    span_km = max(1.5, math.sqrt(req.area_km2))
-    grid_n = req.grid_n
-    candidates = generate_grid_candidates(
+    candidates = generate_feasible_candidates(
         center_lat=req.center_lat,
         center_lon=req.center_lon,
-        span_km=span_km,
-        grid_n=grid_n,
+        boundary=req.boundary,
+        area_km2=req.area_km2,
+        rotor_diameter=req.rotor_diameter,
+        spacing_multiplier_d=req.spacing_multiplier_d,
+        min_wind_speed_mps=4.0,
+        site_wind_speed_mps=req.wind_speed_mps,
+        exclusions=req.exclusions,
     )
 
     all_coords = np.array([[c["x_m"], c["y_m"]] for c in candidates], dtype=np.float64)
@@ -196,6 +202,7 @@ def compute_initial_layout(req: InitialLayoutRequest) -> InitialLayoutResponse:
                 lon=cand["lon"],
                 x_m=cand["x_m"],
                 y_m=cand["y_m"],
+                elevation_m=cand.get("elevation_m", 45.0),
                 effective_mps=eff_speed,
                 wake_deficit_pct=def_pct,
                 is_conflicted=is_conf,
@@ -239,6 +246,8 @@ def compute_initial_layout(req: InitialLayoutRequest) -> InitialLayoutResponse:
 class QAOAOptimizeRequest(BaseModel):
     center_lat: float = Field(..., description="Site center latitude")
     center_lon: float = Field(..., description="Site center longitude")
+    boundary: Optional[List[List[float]]] = Field(default=None, description="Site boundary polygon [[lat, lon], ...]")
+    exclusions: Optional[List[Dict[str, Any]]] = Field(default=None, description="Environmental / legal exclusion zones")
     area_km2: float = Field(default=11.0, description="Site area in km2")
     turbine_count: int = Field(default=12, ge=1, le=100, description="Number of turbines")
     rotor_diameter: float = Field(default=120.0, ge=40.0, le=250.0, description="Rotor diameter in meters")
@@ -328,13 +337,16 @@ class QAOAOptimizeResponse(BaseModel):
     description="Solves the QUBO formulation of turbine micro-siting to find optimal wake-minimized layout.",
 )
 def compute_qaoa_optimization(req: QAOAOptimizeRequest) -> QAOAOptimizeResponse:
-    span_km = max(1.5, math.sqrt(req.area_km2))
-    grid_n = req.grid_n
-    candidates = generate_grid_candidates(
+    candidates = generate_feasible_candidates(
         center_lat=req.center_lat,
         center_lon=req.center_lon,
-        span_km=span_km,
-        grid_n=grid_n,
+        boundary=req.boundary,
+        area_km2=req.area_km2,
+        rotor_diameter=req.rotor_diameter,
+        spacing_multiplier_d=req.spacing_multiplier_d,
+        min_wind_speed_mps=4.0,
+        site_wind_speed_mps=req.wind_speed_mps,
+        exclusions=req.exclusions,
     )
     N = len(candidates)
     K = min(req.turbine_count, N)
@@ -532,6 +544,7 @@ def compute_qaoa_optimization(req: QAOAOptimizeRequest) -> QAOAOptimizeResponse:
                 lon=cand["lon"],
                 x_m=cand["x_m"],
                 y_m=cand["y_m"],
+                elevation_m=cand.get("elevation_m", 45.0),
                 effective_mps=eff_speed,
                 wake_deficit_pct=def_pct,
                 is_conflicted=False,
