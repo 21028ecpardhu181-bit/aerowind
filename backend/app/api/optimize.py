@@ -26,10 +26,10 @@ from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import HTMLResponse
 import numpy as np
 
+# Heavy quantum modules (qiskit, scipy) are imported LAZILY inside endpoints
+# so the serverless function boots fast. See _lazy_quantum().
 from core.aerodynamics import pairwise_wake_matrix
 from core.post_processor import compute_aep_summary, repair
-from core.quantum_hamiltonian import build_ising
-from core.wsqaoa import optimize
 
 try:
     from backend.app.geo_utils import compute_pairwise_distances, lat_lon_to_meters
@@ -53,6 +53,18 @@ JOB_STORE: Dict[str, Dict[str, Any]] = {}
 
 # Most recent live QAOA run telemetry for /api/compare
 _LATEST_QAOA_RUN: Optional[Dict[str, Any]] = None
+
+
+# Lazy loader for heavy quantum modules — keeps serverless cold start fast.
+# qiskit/scipy (~200MB) only load on the first /api/optimize call, not at boot.
+_QUANTUM_MODS = {}
+def _lazy_quantum():
+    if "optimize" not in _QUANTUM_MODS:
+        from core.quantum_hamiltonian import build_ising
+        from core.wsqaoa import optimize
+        _QUANTUM_MODS["build_ising"] = build_ising
+        _QUANTUM_MODS["optimize"] = optimize
+    return _QUANTUM_MODS["build_ising"], _QUANTUM_MODS["optimize"]
 
 
 def get_latest_qaoa_run() -> Optional[Dict[str, Any]]:
@@ -475,7 +487,8 @@ def _sync_optimize_worker(
         use_wake_cone=True,
     )
 
-    # 2. Build QAOA Ising Cost Hamiltonian (h, J)
+    # 2. Build QAOA Ising Cost Hamiltonian (h, J) — lazy-load quantum modules
+    build_ising, qaoa_optimize = _lazy_quantum()
     h, J = build_ising(
         W,
         wind_speeds=8.42,
@@ -485,7 +498,7 @@ def _sync_optimize_worker(
     )
 
     # 3. WS-QAOA classical-quantum optimization
-    best_bs, best_e, counts, opt_rt = optimize(
+    best_bs, best_e, counts, opt_rt = qaoa_optimize(
         h,
         J,
         K=K,
