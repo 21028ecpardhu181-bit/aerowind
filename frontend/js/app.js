@@ -23,9 +23,17 @@
             windPowerDensity: 320
         },
         farmConfig: {
-            turbineCount: 4,
-            windAngle: 270.0,
-            rotorDiameter: 120.0
+            turbineCount: 12,
+            model: 'ge-120',
+            modelName: 'GE 2.5-120',
+            rotorDiameter: 120.0,
+            hubHeight: 110.0,
+            ratedPowerKw: 2500,
+            windDirectionDeg: 300.0,
+            spacingMultiplierD: 5.0,
+            wakeDecay: 0.075,
+            quboLambda: 150.0,
+            gridResolution: 6
         },
         selectionMode: 'search', // 'search' | 'coords' | 'draw'
         isSheetCollapsed: false,
@@ -35,6 +43,34 @@
         sitePolygon: null,
         areaBadgeMarker: null,
         locationLabelMarker: null
+    };
+
+    // Standard Wind Turbine Industry Presets
+    const TURBINE_MODELS = {
+        'ge-120': {
+            name: 'GE 2.5-120',
+            rotorDiameter: 120.0,
+            hubHeight: 110.0,
+            ratedPowerKw: 2500
+        },
+        'vestas-110': {
+            name: 'Vestas V110-2.0MW',
+            rotorDiameter: 110.0,
+            hubHeight: 100.0,
+            ratedPowerKw: 2000
+        },
+        'sg-132': {
+            name: 'Siemens Gamesa SG 3.4-132',
+            rotorDiameter: 132.0,
+            hubHeight: 120.0,
+            ratedPowerKw: 3400
+        },
+        'suzlon-120': {
+            name: 'Suzlon S120-2.1MW',
+            rotorDiameter: 120.0,
+            hubHeight: 120.0,
+            ratedPowerKw: 2100
+        }
     };
 
     // Location Presets matching reference
@@ -585,30 +621,403 @@
                 mobileStepPill.innerText = `Step ${screenNum}/6: ${stepNames[screenNum] || ''}`;
             }
 
-            // If navigating to Screen 2, update Screen 2 view
+            this.hideToast();
+
+            // View containers
             const screen1Container = document.getElementById('screen-1-container');
             const screen2Container = document.getElementById('screen-2-container');
+            const screen3Container = document.getElementById('screen-3-container');
 
-            if (screenNum === 2) {
-                if (screen1Container) screen1Container.style.display = 'none';
-                if (screen2Container) {
-                    screen2Container.style.display = 'flex';
-                    this.initScreen2();
-                }
-            } else if (screenNum === 1) {
+            if (screenNum === 1) {
                 if (screen1Container) screen1Container.style.display = 'flex';
                 if (screen2Container) screen2Container.style.display = 'none';
+                if (screen3Container) screen3Container.style.display = 'none';
                 APP_STATE.map?.invalidateSize();
+            } else if (screenNum === 2) {
+                if (screen1Container) screen1Container.style.display = 'none';
+                if (screen2Container) screen2Container.style.display = 'flex';
+                if (screen3Container) screen3Container.style.display = 'none';
+                this.initScreen2();
+            } else if (screenNum === 3) {
+                if (screen1Container) screen1Container.style.display = 'none';
+                if (screen2Container) screen2Container.style.display = 'none';
+                if (screen3Container) screen3Container.style.display = 'flex';
+                this.initScreen3();
             }
         },
 
-        // Screen 2 Placeholder initializer (preserved for Screen 2 implementation)
+        // Screen 2 Initializer
         initScreen2() {
             const site = APP_STATE.selectedSite;
-            const screen2SiteTag = document.getElementById('screen-2-site-tag');
-            if (screen2SiteTag) {
-                screen2SiteTag.innerText = `${site.shortName} (${site.lat.toFixed(4)}° N, ${site.lon.toFixed(4)}° E)`;
+            const cfg = APP_STATE.farmConfig;
+
+            // Populate Site Header Pill & Summary
+            const indText = document.getElementById('s2-indicator-text');
+            if (indText) indText.innerText = `${site.shortName} · ${site.lat.toFixed(4)}° N, ${site.lon.toFixed(4)}° E`;
+
+            const s2Loc = document.getElementById('s2-meta-location');
+            if (s2Loc) s2Loc.innerText = site.name;
+
+            const s2Coords = document.getElementById('s2-meta-coords');
+            if (s2Coords) s2Coords.innerText = `${site.lat.toFixed(4)}° N, ${site.lon.toFixed(4)}° E`;
+
+            const s2Area = document.getElementById('s2-meta-area');
+            if (s2Area) s2Area.innerText = `${site.areaKm2.toFixed(1)} km²`;
+
+            const s2Wind = document.getElementById('s2-meta-wind');
+            if (s2Wind) {
+                const speed = site.windSpeedMps || 7.1;
+                const dir = site.windDirectionDeg || 300;
+                s2Wind.innerText = `${speed} m/s @ ${dir}° (ECMWF Telemetry)`;
             }
+
+            // Sync wind direction from telemetry if not customized
+            if (site.windDirectionDeg !== undefined) {
+                cfg.windDirectionDeg = site.windDirectionDeg;
+            }
+            this.setWindDirection(cfg.windDirectionDeg);
+
+            // Setup listeners once
+            if (!this._screen2Initialized) {
+                this.setupScreen2EventListeners();
+                this._screen2Initialized = true;
+            }
+
+            // Update Turbine Count and Capacity status
+            this.setTurbineCount(cfg.turbineCount);
+            this.updateScreen2Capacity();
+        },
+
+        setupScreen2EventListeners() {
+            // Back button to Screen 1
+            document.getElementById('btn-back-to-screen-1')?.addEventListener('click', () => {
+                this.goToScreen(1);
+            });
+
+            // Turbine Model Selector
+            const modelSelect = document.getElementById('cfg-turbine-model');
+            modelSelect?.addEventListener('change', (e) => {
+                this.syncScreen2Model(e.target.value);
+            });
+
+            // Rotor Diameter Input
+            const rotorInput = document.getElementById('cfg-rotor-diam');
+            rotorInput?.addEventListener('input', (e) => {
+                const val = parseFloat(e.target.value) || 120;
+                APP_STATE.farmConfig.rotorDiameter = val;
+                const badge = document.getElementById('badge-rotor-diam');
+                if (badge) badge.innerText = `${val} m`;
+                this.updateScreen2Capacity();
+            });
+
+            // Hub Height Input
+            const hubInput = document.getElementById('cfg-hub-height');
+            hubInput?.addEventListener('input', (e) => {
+                const val = parseFloat(e.target.value) || 110;
+                APP_STATE.farmConfig.hubHeight = val;
+                const badge = document.getElementById('badge-hub-height');
+                if (badge) badge.innerText = `${val} m`;
+            });
+
+            // Rated Power Input
+            const powerInput = document.getElementById('cfg-rated-power');
+            powerInput?.addEventListener('input', (e) => {
+                const val = parseFloat(e.target.value) || 2500;
+                APP_STATE.farmConfig.ratedPowerKw = val;
+                const badge = document.getElementById('badge-rated-power');
+                if (badge) badge.innerText = `${val.toLocaleString()} kW (${(val/1000).toFixed(1)} MW)`;
+                this.updateScreen2Capacity();
+            });
+
+            // Turbine Quick Chips
+            document.querySelectorAll('.chip-btn[data-turbines]').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const count = parseInt(e.currentTarget.dataset.turbines, 10);
+                    this.setTurbineCount(count);
+                });
+            });
+
+            // Stepper Minus / Plus
+            document.getElementById('btn-turbines-minus')?.addEventListener('click', () => {
+                this.setTurbineCount(Math.max(1, APP_STATE.farmConfig.turbineCount - 1));
+            });
+
+            document.getElementById('btn-turbines-plus')?.addEventListener('click', () => {
+                this.setTurbineCount(Math.min(100, APP_STATE.farmConfig.turbineCount + 1));
+            });
+
+            // Slider & Direct Numeric Input
+            const countSlider = document.getElementById('cfg-turbines-slider');
+            countSlider?.addEventListener('input', (e) => {
+                this.setTurbineCount(parseInt(e.target.value, 10));
+            });
+
+            const countInput = document.getElementById('cfg-turbines-count');
+            countInput?.addEventListener('input', (e) => {
+                const val = parseInt(e.target.value, 10);
+                if (!isNaN(val) && val >= 1) {
+                    this.setTurbineCount(val);
+                }
+            });
+
+            // Wind Direction Slider
+            const windSlider = document.getElementById('cfg-wind-dir-slider');
+            windSlider?.addEventListener('input', (e) => {
+                this.setWindDirection(parseFloat(e.target.value));
+            });
+
+            // Wind Quick Chips
+            document.querySelectorAll('.chip-btn[data-wind-dir]').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const val = e.currentTarget.dataset.windDir;
+                    if (val === 'live') {
+                        const liveDir = APP_STATE.selectedSite.windDirectionDeg || 300;
+                        this.setWindDirection(liveDir);
+                    } else {
+                        this.setWindDirection(parseFloat(val));
+                    }
+                });
+            });
+
+            // Spacing Multiplier Chips (3D, 5D, 7D)
+            document.querySelectorAll('.chip-btn[data-spacing]').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    document.querySelectorAll('.chip-btn[data-spacing]').forEach(b => b.classList.remove('active'));
+                    e.currentTarget.classList.add('active');
+                    const mult = parseFloat(e.currentTarget.dataset.spacing);
+                    APP_STATE.farmConfig.spacingMultiplierD = mult;
+                    const badge = document.getElementById('badge-spacing-meters');
+                    if (badge) badge.innerText = `${Math.round(mult * APP_STATE.farmConfig.rotorDiameter)} m (${mult}D)`;
+                    this.updateScreen2Capacity();
+                });
+            });
+
+            // Advanced Accordion Toggle
+            document.getElementById('accordion-advanced-header')?.addEventListener('click', () => {
+                this.toggleAdvancedAccordion();
+            });
+
+            // Wake Decay & QUBO Lambda Inputs
+            document.getElementById('cfg-wake-decay')?.addEventListener('change', (e) => {
+                APP_STATE.farmConfig.wakeDecay = parseFloat(e.target.value);
+            });
+
+            document.getElementById('cfg-qubo-lambda')?.addEventListener('input', (e) => {
+                APP_STATE.farmConfig.quboLambda = parseFloat(e.target.value) || 150.0;
+            });
+
+            // Auto-clamp capacity button
+            document.getElementById('btn-clamp-capacity')?.addEventListener('click', () => {
+                const site = APP_STATE.selectedSite;
+                const cfg = APP_STATE.farmConfig;
+                const { maxCapacity } = this.calculateSiteCapacity(site.areaKm2, cfg.rotorDiameter, cfg.spacingMultiplierD);
+                this.setTurbineCount(maxCapacity);
+                this.showToast(`Turbine count adjusted to site capacity (${maxCapacity} turbines)`, 'info');
+            });
+
+            // Primary Action: GENERATE INITIAL LAYOUT
+            document.getElementById('btn-generate-layout')?.addEventListener('click', () => {
+                this.validateAndGenerateLayout();
+            });
+        },
+
+        setTurbineCount(count) {
+            APP_STATE.farmConfig.turbineCount = count;
+
+            const slider = document.getElementById('cfg-turbines-slider');
+            if (slider) slider.value = count;
+
+            const input = document.getElementById('cfg-turbines-count');
+            if (input) input.value = count;
+
+            // Update Quick Chips active state
+            document.querySelectorAll('.chip-btn[data-turbines]').forEach(btn => {
+                btn.classList.toggle('active', parseInt(btn.dataset.turbines, 10) === count);
+            });
+
+            this.updateScreen2Capacity();
+        },
+
+        setWindDirection(deg) {
+            APP_STATE.farmConfig.windDirectionDeg = deg;
+
+            const slider = document.getElementById('cfg-wind-dir-slider');
+            if (slider) slider.value = deg;
+
+            const rotor = document.getElementById('compass-rotor');
+            if (rotor) rotor.style.transform = `rotate(${deg}deg)`;
+
+            const badge = document.getElementById('badge-wind-dir');
+            if (badge) {
+                const cardinals = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+                const cardIdx = Math.round(deg / 22.5) % 16;
+                badge.innerText = `${Math.round(deg)}° (${cardinals[cardIdx]})`;
+            }
+
+            document.querySelectorAll('.chip-btn[data-wind-dir]').forEach(btn => {
+                const val = btn.dataset.windDir;
+                btn.classList.toggle('active', (val === 'live' && deg === APP_STATE.selectedSite.windDirectionDeg) || parseFloat(val) === deg);
+            });
+        },
+
+        syncScreen2Model(modelKey) {
+            const model = TURBINE_MODELS[modelKey];
+            if (!model) return;
+
+            APP_STATE.farmConfig.model = modelKey;
+            APP_STATE.farmConfig.modelName = model.name;
+            APP_STATE.farmConfig.rotorDiameter = model.rotorDiameter;
+            APP_STATE.farmConfig.hubHeight = model.hubHeight;
+            APP_STATE.farmConfig.ratedPowerKw = model.ratedPowerKw;
+
+            const rotorInput = document.getElementById('cfg-rotor-diam');
+            if (rotorInput) rotorInput.value = model.rotorDiameter;
+            const rotorBadge = document.getElementById('badge-rotor-diam');
+            if (rotorBadge) rotorBadge.innerText = `${model.rotorDiameter} m`;
+
+            const hubInput = document.getElementById('cfg-hub-height');
+            if (hubInput) hubInput.value = model.hubHeight;
+            const hubBadge = document.getElementById('badge-hub-height');
+            if (hubBadge) hubBadge.innerText = `${model.hubHeight} m`;
+
+            const powerInput = document.getElementById('cfg-rated-power');
+            if (powerInput) powerInput.value = model.ratedPowerKw;
+            const powerBadge = document.getElementById('badge-rated-power');
+            if (powerBadge) powerBadge.innerText = `${model.ratedPowerKw.toLocaleString()} kW (${(model.ratedPowerKw / 1000).toFixed(1)} MW)`;
+
+            const spacingBadge = document.getElementById('badge-spacing-meters');
+            if (spacingBadge) spacingBadge.innerText = `${Math.round(APP_STATE.farmConfig.spacingMultiplierD * model.rotorDiameter)} m (${APP_STATE.farmConfig.spacingMultiplierD}D)`;
+
+            this.updateScreen2Capacity();
+        },
+
+        calculateSiteCapacity(areaKm2, rotorDiameter, spacingMultiplierD) {
+            const crosswindM = spacingMultiplierD * rotorDiameter;
+            const downwindM = (spacingMultiplierD * 1.4) * rotorDiameter;
+            const footprintM2 = crosswindM * downwindM;
+            const footprintKm2 = footprintM2 / 1000000.0;
+            const buildableAreaKm2 = areaKm2 * 0.80; // 80% buildable excluding residential setbacks & terrain slope
+            const maxCapacity = Math.max(1, Math.floor(buildableAreaKm2 / footprintKm2));
+
+            return {
+                footprintKm2,
+                buildableAreaKm2,
+                maxCapacity
+            };
+        },
+
+        updateScreen2Capacity() {
+            const site = APP_STATE.selectedSite;
+            const cfg = APP_STATE.farmConfig;
+
+            const { footprintKm2, buildableAreaKm2, maxCapacity } = this.calculateSiteCapacity(
+                site.areaKm2,
+                cfg.rotorDiameter,
+                cfg.spacingMultiplierD
+            );
+
+            const footprintElem = document.getElementById('metric-footprint-unit');
+            if (footprintElem) footprintElem.innerText = `~ ${footprintKm2.toFixed(2)} km² (${cfg.spacingMultiplierD}D × ${(cfg.spacingMultiplierD * 1.4).toFixed(0)}D)`;
+
+            const maxCapElem = document.getElementById('metric-max-capacity');
+            if (maxCapElem) maxCapElem.innerText = `${maxCapacity} Turbines (${buildableAreaKm2.toFixed(1)} km² buildable)`;
+
+            const card = document.getElementById('cfg-capacity-card');
+            const icon = document.getElementById('capacity-status-icon');
+            const headline = document.getElementById('capacity-status-headline');
+            const desc = document.getElementById('capacity-status-desc');
+            const clampBtn = document.getElementById('btn-clamp-capacity');
+            const utilBadge = document.getElementById('badge-capacity-utilization');
+
+            const currentCount = cfg.turbineCount;
+
+            if (currentCount <= maxCapacity) {
+                if (card) card.className = 'capacity-status-card optimal';
+                if (icon) icon.innerText = '✓';
+                if (headline) headline.innerText = 'Site Capacity Optimal';
+                if (desc) desc.innerText = `${currentCount} turbines comfortably fit within the ${site.areaKm2.toFixed(1)} km² site with standard ${cfg.spacingMultiplierD}D aerodynamic wake buffer spacing.`;
+                if (clampBtn) clampBtn.style.display = 'none';
+                if (utilBadge) {
+                    utilBadge.innerText = `${Math.round((currentCount / maxCapacity) * 100)}% Capacity`;
+                    utilBadge.style.color = 'var(--primary-cyan)';
+                }
+            } else {
+                if (card) card.className = 'capacity-status-card exceeded';
+                if (icon) icon.innerText = '⚠️';
+                if (headline) headline.innerText = `Exceeds Safe Site Capacity (${maxCapacity} Max)`;
+                if (desc) desc.innerText = `At ${cfg.rotorDiameter}m rotor diameter and ${cfg.spacingMultiplierD}D spacing, this ${site.areaKm2.toFixed(1)} km² site safely accommodates at most ${maxCapacity} turbines. Placing ${currentCount} turbines will cause severe wake degradation or overlap residential setback zones.`;
+                if (clampBtn) {
+                    clampBtn.style.display = 'inline-block';
+                    clampBtn.innerText = `Auto-Adjust to Recommended: ${maxCapacity} Turbines`;
+                }
+                if (utilBadge) {
+                    utilBadge.innerText = `Exceeds Capacity (${currentCount}/${maxCapacity})`;
+                    utilBadge.style.color = '#ef4444';
+                }
+            }
+
+            const totalMw = (currentCount * cfg.ratedPowerKw) / 1000.0;
+            const totalCapElem = document.getElementById('cfg-total-capacity');
+            if (totalCapElem) {
+                totalCapElem.innerText = `${currentCount} Turbines · ${totalMw.toFixed(1)} MW`;
+            }
+        },
+
+        toggleAdvancedAccordion() {
+            const wrapper = document.getElementById('accordion-advanced-wrapper');
+            if (wrapper) {
+                wrapper.classList.toggle('expanded');
+            }
+        },
+
+        validateAndGenerateLayout() {
+            const cfg = APP_STATE.farmConfig;
+            const site = APP_STATE.selectedSite;
+
+            if (isNaN(cfg.turbineCount) || cfg.turbineCount < 1) {
+                this.showToast('Please select at least 1 turbine', 'error');
+                document.getElementById('cfg-turbines-count')?.focus();
+                return;
+            }
+
+            if (isNaN(cfg.rotorDiameter) || cfg.rotorDiameter < 40 || cfg.rotorDiameter > 250) {
+                this.showToast('Rotor diameter must be between 40m and 250m', 'error');
+                document.getElementById('cfg-rotor-diam')?.focus();
+                return;
+            }
+
+            if (isNaN(cfg.hubHeight) || cfg.hubHeight < 40 || cfg.hubHeight > 250) {
+                this.showToast('Hub height must be between 40m and 250m', 'error');
+                document.getElementById('cfg-hub-height')?.focus();
+                return;
+            }
+
+            // Success validation
+            this.showToast(`Initial layout configured: ${cfg.turbineCount} turbines (${(cfg.turbineCount * cfg.ratedPowerKw / 1000).toFixed(1)} MW)`, 'success');
+
+            setTimeout(() => {
+                this.goToScreen(3);
+            }, 500);
+        },
+
+        initScreen3() {
+            const site = APP_STATE.selectedSite;
+            const cfg = APP_STATE.farmConfig;
+
+            const siteTag = document.getElementById('screen-3-site-tag');
+            if (siteTag) {
+                siteTag.innerText = `${site.shortName} (${site.lat.toFixed(4)}°, ${site.lon.toFixed(4)}°)`;
+            }
+
+            const turbTag = document.getElementById('screen-3-turbines-tag');
+            if (turbTag) {
+                turbTag.innerText = `${cfg.turbineCount} turbines · ${(cfg.turbineCount * cfg.ratedPowerKw / 1000).toFixed(1)} MW`;
+            }
+        },
+
+        hideToast() {
+            const toast = document.getElementById('app-toast');
+            if (toast) toast.style.display = 'none';
         },
 
         showToast(msg, type = 'info') {

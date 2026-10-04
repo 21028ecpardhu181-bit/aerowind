@@ -326,14 +326,287 @@
         </div>
 
         <!-- ===================================================================
-             SCREEN 2: CONFIGURE WIND FARM (Container preserved for Screen 2)
+             SCREEN 2: CONFIGURE WIND FARM (Mobile-first Scrollable Configuration)
              =================================================================== -->
-        <div id="screen-2-container" class="screen-1-view" style="display: none; align-items: center; justify-content: center; flex-direction: column; gap: 16px; background: var(--bg-panel);">
-            <div style="font-size: 20px; font-weight: 700; color: #ffffff;">Screen 2: Configure Wind Farm</div>
-            <div style="font-size: 13px; color: var(--text-secondary);">Preserved Site: <strong id="screen-2-site-tag" style="color: var(--primary-cyan);">Kanyakumari (8.0883° N, 77.5385° E)</strong></div>
-            <button type="button" class="btn-confirm-site" style="max-width: 280px;" onclick="APP.goToScreen(1)">
-                <span>‹ Back to Site Selection</span>
-            </button>
+        <div id="screen-2-container" class="screen-2-view">
+            <div class="config-container-wrapper">
+                <!-- Screen 2 Top Sub-Header -->
+                <div class="config-header">
+                    <button type="button" id="btn-back-to-screen-1" class="btn-sub-back">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                            <polyline points="15 18 9 12 15 6"></polyline>
+                        </svg>
+                        <span>Back</span>
+                    </button>
+                    <div class="config-header-center">
+                        <div class="config-title">Farm Configuration</div>
+                        <div id="screen-2-site-indicator" class="config-site-pill">
+                            <span>📍</span>
+                            <span id="s2-indicator-text">Kanyakumari · 8.0883° N, 77.5385° E</span>
+                        </div>
+                    </div>
+                    <div style="width: 60px;"></div> <!-- balance spacing -->
+                </div>
+
+                <!-- Scrollable Form Body -->
+                <div class="config-scroll-body">
+
+                    <!-- SECTION 1: Selected Site Persistence Summary -->
+                    <div class="config-card">
+                        <div class="config-card-header">
+                            <div class="card-title-group">
+                                <span class="card-title-icon">📍</span>
+                                <span class="card-title">Selected Site</span>
+                            </div>
+                            <span class="card-badge" id="s2-site-status-badge">Verified GIS Boundary</span>
+                        </div>
+
+                        <div class="site-metadata-table" style="margin-top: 4px;">
+                            <div class="meta-row">
+                                <span class="meta-label">Location</span>
+                                <span id="s2-meta-location" class="meta-val">Kanyakumari, Tamil Nadu, India</span>
+                            </div>
+                            <div class="meta-row">
+                                <span class="meta-label">Coordinates</span>
+                                <span id="s2-meta-coords" class="meta-val mono">8.0883° N, 77.5385° E</span>
+                            </div>
+                            <div class="meta-row">
+                                <span class="meta-label">Calculated Area</span>
+                                <span id="s2-meta-area" class="meta-val">11.0 km²</span>
+                            </div>
+                            <div class="meta-row">
+                                <span class="meta-label">Live Wind Telemetry</span>
+                                <span id="s2-meta-wind" class="meta-val" style="color: var(--primary-cyan);">3.4 m/s @ 300° (ECMWF)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SECTION 2: Turbine Specification & Model Selection -->
+                    <div class="config-card">
+                        <div class="config-card-header">
+                            <div class="card-title-group">
+                                <span class="card-title-icon">⚙️</span>
+                                <span class="card-title">Turbine Specification</span>
+                            </div>
+                            <span class="card-badge">IEC Class IIA</span>
+                        </div>
+
+                        <div class="form-field-group">
+                            <label class="field-label" for="cfg-turbine-model">Turbine Model / Preset</label>
+                            <select id="cfg-turbine-model" class="cfg-select">
+                                <option value="ge-120" selected>GE 2.5-120 (120m rotor, 110m hub, 2.5 MW)</option>
+                                <option value="vestas-110">Vestas V110-2.0MW (110m rotor, 100m hub, 2.0 MW)</option>
+                                <option value="sg-132">Siemens Gamesa SG 3.4-132 (132m rotor, 120m hub, 3.4 MW)</option>
+                                <option value="suzlon-120">Suzlon S120-2.1MW (120m rotor, 120m hub, 2.1 MW)</option>
+                                <option value="custom">Custom Engineering Specification...</option>
+                            </select>
+                        </div>
+
+                        <div class="two-col-grid">
+                            <div class="form-field-group">
+                                <div class="field-label-row">
+                                    <label class="field-label" for="cfg-rotor-diam">Rotor Diameter</label>
+                                    <span id="badge-rotor-diam" class="field-value-badge">120 m</span>
+                                </div>
+                                <input id="cfg-rotor-diam" class="cfg-text-input" type="number" inputmode="numeric" min="40" max="250" value="120">
+                            </div>
+
+                            <div class="form-field-group">
+                                <div class="field-label-row">
+                                    <label class="field-label" for="cfg-hub-height">Hub Height</label>
+                                    <span id="badge-hub-height" class="field-value-badge">110 m</span>
+                                </div>
+                                <input id="cfg-hub-height" class="cfg-text-input" type="number" inputmode="numeric" min="40" max="250" value="110">
+                            </div>
+                        </div>
+
+                        <div class="form-field-group">
+                            <div class="field-label-row">
+                                <label class="field-label" for="cfg-rated-power">Rated Power per Turbine (kW)</label>
+                                <span id="badge-rated-power" class="field-value-badge">2,500 kW (2.5 MW)</span>
+                            </div>
+                            <input id="cfg-rated-power" class="cfg-text-input" type="number" inputmode="numeric" min="500" max="15000" step="100" value="2500">
+                        </div>
+                    </div>
+
+                    <!-- SECTION 3: Turbine Quantity & Real-Time Capacity Gate -->
+                    <div class="config-card">
+                        <div class="config-card-header">
+                            <div class="card-title-group">
+                                <span class="card-title-icon">🔢</span>
+                                <span class="card-title">Number of Turbines</span>
+                            </div>
+                            <span id="badge-capacity-utilization" class="card-badge">Safe Capacity</span>
+                        </div>
+
+                        <div class="quick-chips-row">
+                            <button type="button" class="chip-btn" data-turbines="4">4</button>
+                            <button type="button" class="chip-btn" data-turbines="8">8</button>
+                            <button type="button" class="chip-btn active" data-turbines="12">12</button>
+                            <button type="button" class="chip-btn" data-turbines="16">16</button>
+                            <button type="button" class="chip-btn" data-turbines="24">24</button>
+                        </div>
+
+                        <div class="slider-stepper-combo">
+                            <input type="range" id="cfg-turbines-slider" class="slider-input" min="2" max="60" value="12" step="1">
+                            <div class="stepper-input-wrapper">
+                                <button type="button" id="btn-turbines-minus" class="stepper-btn" aria-label="Decrease turbine count">−</button>
+                                <input id="cfg-turbines-count" class="stepper-value-input" type="number" inputmode="numeric" min="1" max="100" value="12">
+                                <button type="button" id="btn-turbines-plus" class="stepper-btn" aria-label="Increase turbine count">+</button>
+                            </div>
+                        </div>
+
+                        <!-- Real-Time Aerodynamic Capacity Status & Landscape Suitability Gate -->
+                        <div id="cfg-capacity-card" class="capacity-status-card optimal">
+                            <div style="font-weight: 700; display: flex; align-items: center; gap: 6px;">
+                                <span id="capacity-status-icon">✓</span>
+                                <span id="capacity-status-headline">Site Capacity Optimal</span>
+                            </div>
+                            <div id="capacity-status-desc">
+                                12 turbines comfortably fit within the 11.0 km² site with standard 5D×7D aerodynamic wake buffer spacing.
+                            </div>
+                            <button type="button" id="btn-clamp-capacity" class="btn-auto-fit" style="display: none;">
+                                Auto-Adjust to Recommended Capacity
+                            </button>
+                            <div class="capacity-metric-row">
+                                <span>Aerodynamic Footprint per Unit</span>
+                                <strong id="metric-footprint-unit">~ 0.50 km² (5D × 7D)</strong>
+                            </div>
+                            <div class="capacity-metric-row">
+                                <span>Max Theoretical Site Capacity</span>
+                                <strong id="metric-max-capacity">17 Turbines (8.8 km² buildable)</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SECTION 4: Wind & Wake Alignment -->
+                    <div class="config-card">
+                        <div class="config-card-header">
+                            <div class="card-title-group">
+                                <span class="card-title-icon">🧭</span>
+                                <span class="card-title">Wind & Wake Alignment</span>
+                            </div>
+                            <span class="card-badge">Jensen Model</span>
+                        </div>
+
+                        <div class="form-field-group">
+                            <div class="field-label-row">
+                                <label class="field-label" for="cfg-wind-dir-input">Prevailing Wind Direction</label>
+                                <span id="badge-wind-dir" class="field-value-badge">300° (WNW)</span>
+                            </div>
+                            <div class="wind-dir-container">
+                                <div class="compass-visual-dial" title="Wind azimuth angle">
+                                    <div id="compass-rotor" class="compass-arrow-rotor" style="transform: rotate(300deg);">↑</div>
+                                </div>
+                                <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
+                                    <input type="range" id="cfg-wind-dir-slider" class="slider-input" min="0" max="360" value="300" step="1">
+                                    <div class="quick-chips-row">
+                                        <button type="button" class="chip-btn" data-wind-dir="0">0° N</button>
+                                        <button type="button" class="chip-btn" data-wind-dir="90">90° E</button>
+                                        <button type="button" class="chip-btn" data-wind-dir="180">180° S</button>
+                                        <button type="button" class="chip-btn" data-wind-dir="270">270° W</button>
+                                        <button type="button" class="chip-btn active" data-wind-dir="live">Live Telemetry</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-field-group" style="margin-top: 6px;">
+                            <div class="field-label-row">
+                                <label class="field-label">Minimum Turbine Spacing</label>
+                                <span id="badge-spacing-meters" class="field-value-badge">600 m (5D)</span>
+                            </div>
+                            <div class="quick-chips-row">
+                                <button type="button" class="chip-btn" data-spacing="3">3D (Dense / High Wake)</button>
+                                <button type="button" class="chip-btn active" data-spacing="5">5D (Standard)</button>
+                                <button type="button" class="chip-btn" data-spacing="7">7D (Optimal Low Wake)</button>
+                            </div>
+                            <div class="field-subtext">
+                                Spacing enforces minimum physical distance between candidate sites to prevent excessive wake loss.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SECTION 5: Advanced Engineering Parameters (Accordion) -->
+                    <div id="accordion-advanced-wrapper" class="accordion-wrapper">
+                        <div id="accordion-advanced-header" class="accordion-header">
+                            <div class="accordion-title">
+                                <span>🛠️</span>
+                                <span>Advanced Aerodynamics & Optimization Settings</span>
+                            </div>
+                            <span class="accordion-arrow">▼</span>
+                        </div>
+                        <div class="accordion-body">
+                            <div class="form-field-group">
+                                <div class="field-label-row">
+                                    <label class="field-label" for="cfg-wake-decay">Wake Decay Constant (k)</label>
+                                    <span id="badge-wake-decay" class="field-value-badge">0.075 (Onshore)</span>
+                                </div>
+                                <select id="cfg-wake-decay" class="cfg-select">
+                                    <option value="0.075" selected>0.075 — Standard Onshore (Moderate turbulence)</option>
+                                    <option value="0.050">0.050 — Offshore / Coastal Water (Low turbulence)</option>
+                                    <option value="0.090">0.090 — Complex Rough Terrain (High turbulence)</option>
+                                </select>
+                            </div>
+
+                            <div class="form-field-group">
+                                <div class="field-label-row">
+                                    <label class="field-label" for="cfg-qubo-lambda">QUBO Constraint Multiplier (λ)</label>
+                                    <span id="badge-qubo-lambda" class="field-value-badge">150.0</span>
+                                </div>
+                                <input id="cfg-qubo-lambda" class="cfg-text-input" type="number" step="10" min="50" max="1000" value="150.0">
+                                <div class="field-subtext">Weight applied in QAOA objective to strictly enforce exactly K turbines chosen.</div>
+                            </div>
+
+                            <div class="form-field-group">
+                                <div class="field-label-row">
+                                    <label class="field-label" for="cfg-grid-resolution">Candidate Micro-Siting Grid</label>
+                                    <span id="badge-grid-resolution" class="field-value-badge">6 × 6 (36 Candidate Sites)</span>
+                                </div>
+                                <select id="cfg-grid-resolution" class="cfg-select">
+                                    <option value="4">4 × 4 — 16 Candidate Sites (Fastest QAOA)</option>
+                                    <option value="5">5 × 5 — 25 Candidate Sites</option>
+                                    <option value="6" selected>6 × 6 — 36 Candidate Sites (Recommended)</option>
+                                    <option value="8">8 × 8 — 64 Candidate Sites (High Resolution)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Sticky Bottom Action Bar -->
+                <div class="config-sticky-footer">
+                    <div class="config-summary-group">
+                        <span class="summary-power-label">Total Rated Power</span>
+                        <span id="cfg-total-capacity" class="summary-power-val">12 Turbines · 30.0 MW</span>
+                    </div>
+                    <button type="button" id="btn-generate-layout" class="btn-generate-layout">
+                        <span>GENERATE INITIAL LAYOUT</span>
+                        <span>›</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================================================================
+             SCREEN 3: ANALYZE INITIAL LAYOUT (Preserved Container for Screen 3)
+             =================================================================== -->
+        <div id="screen-3-container" class="screen-2-view">
+            <div class="config-container-wrapper" style="align-items: center; justify-content: center; text-align: center; padding: 24px;">
+                <div style="font-size: 20px; font-weight: 700; color: #ffffff; margin-bottom: 8px;">Screen 3: Analyze Initial Layout</div>
+                <div style="font-size: 13px; color: var(--text-secondary); max-width: 480px; line-height: 1.5; margin-bottom: 24px;">
+                    Generated initial candidate layout for <strong id="screen-3-site-tag" style="color: var(--primary-cyan);">Site</strong> with <strong id="screen-3-turbines-tag" style="color: var(--primary-cyan);">12 turbines</strong>. Ready for QAOA quantum optimization.
+                </div>
+                <div style="display: flex; gap: 12px;">
+                    <button type="button" class="btn-sub-back" onclick="APP.goToScreen(2)">
+                        <span>‹ Back to Configure</span>
+                    </button>
+                    <button type="button" id="btn-screen3-optimize" class="btn-generate-layout" onclick="APP.goToScreen(4)">
+                        <span>OPTIMIZE WITH QAOA ›</span>
+                    </button>
+                </div>
+            </div>
         </div>
 
     </main>
