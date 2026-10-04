@@ -34,6 +34,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
       <div className="flex flex-col gap-5">
         {/* + New Wind Farm Action Button */}
         <button
+          id="btn-sidebar-new"
           onClick={onNewWindFarm}
           className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#FFD21F] hover:bg-[#F2C50F] text-slate-950 font-black text-sm shadow-sm hover:shadow active:scale-[0.98] transition-all"
         >

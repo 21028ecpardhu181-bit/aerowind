@@ -34,6 +34,7 @@ export const DesktopNavigation: React.FC<DesktopNavigationProps> = ({
         return (
           <button
             key={tab.id}
+            id={`btn-desktop-nav-${tab.id}`}
             onClick={() => {
               if (tab.onClick) {
                 tab.onClick();

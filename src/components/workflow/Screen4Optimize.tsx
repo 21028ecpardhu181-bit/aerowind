@@ -36,8 +36,17 @@ export const Screen4Optimize: React.FC<Screen4OptimizeProps> = ({
   const statusHeadline = isDone ? 'Best feasible layout identified' : 'Quantum WS-QAOA Optimization Active';
 
   return (
-    <div id="screen-4-container" className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 max-w-4xl mx-auto w-full">
+    <div id="screen-4-container" className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 pb-28 sm:pb-8 max-w-4xl mx-auto w-full">
       <div className="flex items-center justify-between mb-6">
+        <button
+          id="btn-s4-back"
+          onClick={() => window.history.back?.()}
+          className="flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-slate-900 bg-white/80 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-200 shadow-xs transition-all"
+        >
+          <ArrowRight className="w-3.5 h-3.5 rotate-180" />
+          <span>Back to Layout Analysis</span>
+        </button>
+
         <div id="s4-indicator-text" className="px-3 py-1 rounded-full bg-amber-100 text-amber-900 font-bold text-xs border border-amber-200">
           Step 4 · Optimization Kernel
         </div>

@@ -9,6 +9,8 @@ interface AppHeaderProps {
   telemetry: TelemetryData | null;
   onSearch?: (q: string) => void;
   onNewProject?: () => void;
+  onOpenAuth?: () => void;
+  user?: { username: string; email: string } | null;
 }
 
 export const AppHeader: React.FC<AppHeaderProps> = ({
@@ -17,6 +19,8 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   telemetry,
   onSearch,
   onNewProject,
+  onOpenAuth,
+  user,
 }) => {
   return (
     <header className="sticky top-0 z-40 w-full bg-white/80 backdrop-blur-md border-b border-slate-200/80 px-4 md:px-6 py-2.5 flex items-center justify-between gap-4 transition-all">
@@ -84,10 +88,20 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white" />
         </button>
 
-        {/* User Avatar */}
-        <div className="w-8 h-8 rounded-full bg-slate-200 border border-slate-300 overflow-hidden flex items-center justify-center font-bold text-xs text-slate-700 select-none shadow-sm">
-          <span>JD</span>
-        </div>
+        {/* User Sign In / Avatar Button */}
+        <button
+          id="btn-open-auth"
+          onClick={onOpenAuth}
+          className="flex items-center gap-1.5 p-1 sm:px-2.5 sm:py-1 rounded-full sm:rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-300 text-xs font-bold text-slate-800 transition-all select-none shadow-xs"
+          title={user ? `Signed in as ${user.username}` : 'Sign In / Account'}
+        >
+          <div className="w-6 h-6 rounded-full bg-[#FFD21F] text-slate-950 font-black flex items-center justify-center text-[10px]">
+            {user ? user.username.slice(0, 2).toUpperCase() : 'AQ'}
+          </div>
+          <span className="hidden sm:inline" id="header-user-label">
+            {user ? user.username : 'Sign In'}
+          </span>
+        </button>
       </div>
     </header>
   );
