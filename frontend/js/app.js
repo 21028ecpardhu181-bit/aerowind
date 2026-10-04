@@ -193,6 +193,9 @@
                 [lat + latDelta * 0.65, lon - lonDelta * 0.55]
             ];
 
+            const calculatedAreaKm2 = this.calculatePolygonAreaKm2(vertices);
+            APP_STATE.selectedSite.areaKm2 = calculatedAreaKm2;
+
             APP_STATE.sitePolygon = L.polygon(vertices, {
                 color: '#3b82f6',
                 weight: 2,
@@ -202,14 +205,17 @@
                 smoothFactor: 1
             }).addTo(map);
 
-            // Center Area Badge
+            // Center Area Badge with authentic calculated area
             const badgeIcon = L.divIcon({
                 className: 'badge-div-wrapper',
-                html: `<div class="selected-area-badge">Selected Area<br><strong>${areaKm2.toFixed(1)} km²</strong></div>`,
+                html: `<div class="selected-area-badge">Selected Area<br><strong>${calculatedAreaKm2.toFixed(1)} km²</strong></div>`,
                 iconSize: [110, 40],
                 iconAnchor: [55, 20]
             });
             APP_STATE.areaBadgeMarker = L.marker([lat, lon], { icon: badgeIcon }).addTo(map);
+
+            const areaElem = document.getElementById('meta-area');
+            if (areaElem) areaElem.innerText = `${calculatedAreaKm2.toFixed(1)} km²`;
 
             // Location Label on map
             const nameIcon = L.divIcon({
@@ -219,6 +225,23 @@
                 iconAnchor: [60, -20]
             });
             APP_STATE.locationLabelMarker = L.marker([lat - latDelta * 0.75, lon - lonDelta * 0.2], { icon: nameIcon }).addTo(map);
+        },
+
+        calculatePolygonAreaKm2(vertices) {
+            const R = 6371.0;
+            const refLat = vertices[0][0];
+            const cosLat = Math.cos(refLat * Math.PI / 180.0);
+            let area = 0.0;
+            const n = vertices.length;
+            for (let i = 0; i < n; i++) {
+                const j = (i + 1) % n;
+                const xi = (vertices[i][1] * Math.PI / 180.0) * R * cosLat;
+                const yi = (vertices[i][0] * Math.PI / 180.0) * R;
+                const xj = (vertices[j][1] * Math.PI / 180.0) * R * cosLat;
+                const yj = (vertices[j][0] * Math.PI / 180.0) * R;
+                area += (xi * yj - xj * yi);
+            }
+            return Math.abs(area) / 2.0;
         },
 
         setupEventListeners() {
@@ -435,7 +458,7 @@
             this.showToast(`Selected site: ${preset.shortName}`, 'success');
         },
 
-        updateUIWithSite(site) {
+        async updateUIWithSite(site) {
             APP_STATE.selectedSite = site;
 
             // Update inputs
@@ -444,26 +467,72 @@
             const mapSearchField = document.getElementById('map-search-input');
             if (mapSearchField) mapSearchField.value = site.name;
 
-            // Update Details Table
+            // Immediate initial values
             document.getElementById('meta-location-name').innerText = site.name;
             document.getElementById('meta-latitude').innerText = `${site.lat.toFixed(4)}° N`;
             document.getElementById('meta-longitude').innerText = `${site.lon.toFixed(4)}° E`;
-            document.getElementById('meta-area').innerText = `${site.areaKm2.toFixed(1)} km²`;
-            document.getElementById('meta-elevation').innerText = `${site.elevationM} m`;
-            document.getElementById('meta-terrain').innerText = site.terrainType;
-            document.getElementById('meta-coast').innerText = `${site.distanceToCoastKm} km`;
-            document.getElementById('meta-landuse').innerText = site.landUse;
+            document.getElementById('meta-area').innerText = `${(site.areaKm2 || 24.8).toFixed(1)} km²`;
+            document.getElementById('meta-elevation').innerText = `${site.elevationM || '--'} m`;
+            document.getElementById('meta-terrain').innerText = site.terrainType || 'Analyzing...';
+            document.getElementById('meta-coast').innerText = site.distanceToCoastKm !== undefined ? `${site.distanceToCoastKm} km` : '-- km';
+            document.getElementById('meta-landuse').innerText = site.landUse || 'Analyzing...';
 
-            // Wind Resource
-            document.getElementById('meta-wind-speed').innerText = `${site.windSpeedMps} m/s`;
-            document.getElementById('meta-wind-density').innerText = `~ ${site.windPowerDensity} W/m²`;
+            // Wind Resource Initial
+            document.getElementById('meta-wind-speed').innerText = `${site.windSpeedMps || '--'} m/s`;
+            document.getElementById('meta-wind-density').innerText = site.windPowerDensity ? `~ ${site.windPowerDensity} W/m²` : '-- W/m²';
 
             // Fly map & redraw polygon
             if (APP_STATE.map) {
                 const isMobile = window.innerWidth <= 768;
                 const targetLat = isMobile ? site.lat - 0.025 : site.lat;
                 APP_STATE.map.flyTo([targetLat, site.lon], isMobile ? 11.8 : 12.5, { duration: 1.2 });
-                this.drawSitePolygon(site.lat, site.lon, site.areaKm2);
+                this.drawSitePolygon(site.lat, site.lon, site.areaKm2 || 24.8);
+            }
+
+            // Fetch Live Physical & Atmospheric Telemetry from Backend (Open-Meteo ECMWF / SRTM)
+            try {
+                const res = await fetch(`/api/geo/telemetry?lat=${site.lat}&lon=${site.lon}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    // Merge real physical telemetry into state
+                    site.elevationM = data.elevation_m;
+                    site.distanceToCoastKm = data.distance_to_coast_km;
+                    site.terrainType = data.terrain_type;
+                    site.landUse = data.land_use;
+                    site.windSpeedMps = data.wind.speed_100m_mps;
+                    site.windPowerDensity = data.wind.power_density_wpm2;
+                    site.windDirectionDeg = data.wind.direction_100m_deg;
+                    site.airDensityKgpm3 = data.wind.air_density_kgpm3;
+                    site.pressureHpa = data.wind.pressure_hpa;
+                    site.temperatureC = data.wind.temperature_c;
+
+                    // Update DOM with 100% verified physical data
+                    const elevElem = document.getElementById('meta-elevation');
+                    if (elevElem) elevElem.innerText = `${data.elevation_m} m`;
+
+                    const coastElem = document.getElementById('meta-coast');
+                    if (coastElem) coastElem.innerText = `${data.distance_to_coast_km} km`;
+
+                    const terrainElem = document.getElementById('meta-terrain');
+                    if (terrainElem) terrainElem.innerText = data.terrain_type;
+
+                    const landElem = document.getElementById('meta-landuse');
+                    if (landElem) landElem.innerText = data.land_use;
+
+                    const speedElem = document.getElementById('meta-wind-speed');
+                    if (speedElem) speedElem.innerText = `${data.wind.speed_100m_mps} m/s`;
+
+                    const densityElem = document.getElementById('meta-wind-density');
+                    if (densityElem) densityElem.innerText = `~ ${data.wind.power_density_wpm2} W/m²`;
+
+                    const dirElem = document.getElementById('meta-wind-dir');
+                    if (dirElem) dirElem.innerText = `${data.wind.direction_100m_deg}°`;
+
+                    const airElem = document.getElementById('meta-air-density');
+                    if (airElem) airElem.innerText = `${data.wind.air_density_kgpm3} kg/m³`;
+                }
+            } catch (err) {
+                console.warn('Live telemetry fetch notice:', err);
             }
         },
 

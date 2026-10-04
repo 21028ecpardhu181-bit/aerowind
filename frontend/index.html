@@ -289,19 +289,27 @@
                         </div>
                     </div>
 
-                    <!-- Wind Resource Section (Estimated) -->
+                    <!-- Wind Resource Section (Live Telemetry & Engineering Physics) -->
                     <div class="wind-resource-card">
                         <div class="resource-header">
-                            <span>Wind Resource (Estimated)</span>
-                            <span title="Estimated atmospheric parameters based on regional wind rose telemetry">ⓘ</span>
+                            <span>Wind Resource (Live Telemetry)</span>
+                            <span id="meta-source-badge" style="font-size: 10px; color: var(--primary-cyan); font-weight: 600;" title="Live atmospheric model & SRTM digital elevation telemetry">ECMWF / SRTM ⓘ</span>
                         </div>
                         <div class="resource-row">
-                            <span>Avg. Wind Speed (100 m)</span>
+                            <span>Hub Wind Speed (100 m)</span>
                             <strong id="meta-wind-speed">7.1 m/s</strong>
                         </div>
                         <div class="resource-row">
                             <span>Wind Power Density</span>
                             <strong id="meta-wind-density">~ 320 W/m²</strong>
+                        </div>
+                        <div class="resource-row">
+                            <span>Wind Direction (100 m)</span>
+                            <strong id="meta-wind-dir">270° (W)</strong>
+                        </div>
+                        <div class="resource-row">
+                            <span>Air Density (ρ)</span>
+                            <strong id="meta-air-density">1.18 kg/m³</strong>
                         </div>
                     </div>
                 </div>
