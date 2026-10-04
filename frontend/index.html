@@ -14,6 +14,9 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
 
+    <!-- CesiumJS 3D Engine Stylesheet -->
+    <link rel="stylesheet" href="/assets/vendor/cesium/Widgets/widgets.css">
+
     <!-- Design System Stylesheet -->
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="/map/css/style.css" onerror="this.onerror=null;">
@@ -197,6 +200,7 @@
             <!-- Center Satellite Map Canvas -->
             <div class="map-container-wrapper">
                 <div id="map"></div>
+                <div id="screen1-cesium" style="display: none; width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 5;"></div>
 
                 <!-- On-Map Floating Top Search Pill & Layer Switcher -->
                 <div class="map-top-bar">
@@ -212,6 +216,7 @@
                         <button type="button" class="map-layer-btn" data-layer="map">Map</button>
                         <button type="button" class="map-layer-btn active" data-layer="satellite">Satellite</button>
                         <button type="button" class="map-layer-btn" data-layer="terrain">Terrain</button>
+                        <button type="button" class="map-layer-btn" id="btn-s1-toggle-3d" data-layer="3d" title="Real 3D Globe with Tilt & Elevation">3D Globe</button>
                     </div>
                 </div>
 
@@ -1170,6 +1175,7 @@
                 <!-- Center Hero Map Container -->
                 <div class="s5-map-container">
                     <div id="screen5-map"></div>
+                    <div id="screen5-cesium" style="display: none; width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 5;"></div>
                     <canvas id="screen5-canvas" class="wind-overlay-canvas"></canvas>
 
                     <!-- Floating Wind Vector Indicator -->
@@ -1213,10 +1219,11 @@
 
                     <!-- Top Floating Controls Toolbar matching Reference -->
                     <div class="s5-controls-toolbar">
-                        <!-- Satellite / Terrain Switch -->
+                        <!-- Satellite / Terrain / 3D Switch -->
                         <div class="s5-layer-toggle">
                             <button type="button" id="btn-s5-satellite" class="s5-layer-btn active" title="Satellite Basemap">Satellite</button>
                             <button type="button" id="btn-s5-terrain" class="s5-layer-btn" title="Terrain Basemap">Terrain</button>
+                            <button type="button" id="btn-s5-toggle-3d" class="s5-layer-btn" title="Real 3D Globe with Tilt & Elevation">3D Globe</button>
                         </div>
 
                         <!-- Wakes Toggle Pill -->
@@ -1440,17 +1447,182 @@
         </div>
 
         <!-- ===================================================================
-             SCREEN 6: VIEW ENGINEERING BLUEPRINT (Placeholder for Screen 6)
+             SCREEN 6: VIEW ENGINEERING BLUEPRINT & EXPORT
              =================================================================== -->
-        <div id="screen-6-container" class="screen-2-view">
-            <div class="config-container-wrapper" style="align-items: center; justify-content: center; text-align: center; padding: 24px;">
-                <div style="font-size: 20px; font-weight: 700; color: #ffffff; margin-bottom: 8px;">Screen 6: Engineering Blueprint & Export</div>
-                <div style="font-size: 13px; color: var(--text-secondary); max-width: 480px; line-height: 1.5; margin-bottom: 24px;">
-                    Optimized wind farm ready for blueprint review and CAD/GIS export. Awaiting Screen 6 reference design.
-                </div>
-                <button type="button" class="btn-sub-back" onclick="APP.goToScreen(5)">
-                    <span>‹ Back to Optimized Wind Farm</span>
+        <div id="screen-6-container" class="screen-6-view" style="display: none;">
+            <!-- Screen 6 Sub-header -->
+            <div class="config-header screen-sub-header">
+                <button id="btn-s6-back" type="button" class="btn-sub-back">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                        <polyline points="15 18 9 12 15 6"></polyline>
+                    </svg>
+                    <span>Back</span>
                 </button>
+                <div class="config-header-center screen-sub-title-group">
+                    <h2 class="config-title screen-sub-title">Engineering Blueprint</h2>
+                    <div id="s6-indicator-text" class="config-subtitle screen-sub-indicator">Kanyakumari · 12 Turbines (QAOA)</div>
+                </div>
+                <button id="btn-s6-print" type="button" class="btn-print-blueprint" title="Print Engineering Report">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                        <rect x="6" y="14" width="12" height="8"></rect>
+                    </svg>
+                    <span class="btn-print-text">Print</span>
+                </button>
+            </div>
+
+            <div class="s6-blueprint-scroll">
+                <!-- Blueprint Overview Card -->
+                <div class="blueprint-summary-card">
+                    <div class="blueprint-card-header">
+                        <div class="blueprint-badge">QAOA OPTIMIZED BLUEPRINT</div>
+                        <div class="blueprint-doc-id" id="s6-doc-id">DOC-AQW-2026-0883</div>
+                    </div>
+                    <div class="blueprint-site-hero">
+                        <div class="blueprint-site-title" id="s6-site-title">Kanyakumari Wind Farm Complex</div>
+                        <div class="blueprint-site-subtitle" id="s6-site-coords">8.0883° N, 77.5385° E · Tamil Nadu, India</div>
+                    </div>
+
+                    <!-- Key Engineering Metrics Grid -->
+                    <div class="blueprint-metrics-grid">
+                        <div class="bp-metric-item">
+                            <span class="bp-metric-label">Turbines Allocated</span>
+                            <span class="bp-metric-value" id="s6-stat-turbines">12 / 12</span>
+                        </div>
+                        <div class="bp-metric-item">
+                            <span class="bp-metric-label">Installed Capacity</span>
+                            <span class="bp-metric-value" id="s6-stat-capacity">30.0 MW</span>
+                        </div>
+                        <div class="bp-metric-item">
+                            <span class="bp-metric-label">Net Estimated AEP</span>
+                            <span class="bp-metric-value highlight" id="s6-stat-aep">88.1 GWh/yr</span>
+                        </div>
+                        <div class="bp-metric-item">
+                            <span class="bp-metric-label">Wake Loss Deficit</span>
+                            <span class="bp-metric-value success" id="s6-stat-wake-loss">4.2 %</span>
+                        </div>
+                        <div class="bp-metric-item">
+                            <span class="bp-metric-label">Deficit Reduction</span>
+                            <span class="bp-metric-value success" id="s6-stat-improvement">+71.6 %</span>
+                        </div>
+                        <div class="bp-metric-item">
+                            <span class="bp-metric-label">Mean Inter-Turbine Spacing</span>
+                            <span class="bp-metric-value" id="s6-stat-spacing">663 m (5.5D)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Site & Hardware Specification Card -->
+                <div class="blueprint-spec-card">
+                    <h3 class="bp-card-heading">Engineering & Environmental Parameters</h3>
+                    <div class="bp-specs-table">
+                        <div class="bp-spec-row">
+                            <span>Turbine Specification</span>
+                            <strong id="s6-spec-model">Vestas V120-2.5 MW (IEC IIIA)</strong>
+                        </div>
+                        <div class="bp-spec-row">
+                            <span>Rotor Diameter / Hub Height</span>
+                            <strong id="s6-spec-dims">120 m / 110 m</strong>
+                        </div>
+                        <div class="bp-spec-row">
+                            <span>Prevailing Wind Regime</span>
+                            <strong id="s6-spec-wind">7.1 m/s @ 270° (Westerly)</strong>
+                        </div>
+                        <div class="bp-spec-row">
+                            <span>Project Area & Terrain</span>
+                            <strong id="s6-spec-terrain">24.8 km² · Coastal / Marine Interface</strong>
+                        </div>
+                        <div class="bp-spec-row">
+                            <span>Optimization Algorithm</span>
+                            <strong>Warm-Started QAOA (K-Preserving Mixer, p=2)</strong>
+                        </div>
+                        <div class="bp-spec-row">
+                            <span>QUBO Formulation</span>
+                            <strong id="s6-spec-qubo">N=36 candidate sites, λ=150.0</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Turbines Micro-Siting Coordinates Table -->
+                <div class="blueprint-table-card">
+                    <div class="bp-table-header">
+                        <h3 class="bp-card-heading">Turbine Micro-Siting Schedule</h3>
+                        <span class="bp-table-sub">WGS84 Geodetic Datum & Hub Yield</span>
+                    </div>
+                    <div class="bp-table-wrapper">
+                        <table class="bp-schedule-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Latitude</th>
+                                    <th>Longitude</th>
+                                    <th>Elevation</th>
+                                    <th>Effective Wind</th>
+                                    <th>Est. Output</th>
+                                    <th>Wake Deficit</th>
+                                    <th>Nearest Spacing</th>
+                                </tr>
+                            </thead>
+                            <tbody id="s6-turbine-table-body">
+                                <!-- Dynamically populated -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Data Provenance & Legal Classification Card (Phase 14) -->
+                <div class="blueprint-provenance-card">
+                    <h3 class="bp-card-heading">Data Provenance & Verification Status</h3>
+                    <div class="provenance-list">
+                        <div class="prov-item">
+                            <span class="prov-tag live">Latest Available</span>
+                            <span class="prov-desc">Atmospheric & Hub-Height Wind Telemetry: Open-Meteo European Centre (ECMWF)</span>
+                        </div>
+                        <div class="prov-item">
+                            <span class="prov-tag live">Latest Available</span>
+                            <span class="prov-desc">Satellite & Terrain Imagery: Google Photorealistic 3D / Earth Observation System</span>
+                        </div>
+                        <div class="prov-item">
+                            <span class="prov-tag sim">Simulated</span>
+                            <span class="prov-desc">Micro-Siting & Wake Deficit Matrix: Analytical Jensen / Park Aerodynamic Wake Model</span>
+                        </div>
+                        <div class="prov-item">
+                            <span class="prov-tag sim">Simulated</span>
+                            <span class="prov-desc">Combinatorial Micro-Siting Solver: Quantum Approximate Optimization Algorithm (QAOA)</span>
+                        </div>
+                        <div class="prov-item">
+                            <span class="prov-tag warn">Requires Verification</span>
+                            <span class="prov-desc">Cadastral property parcel boundaries and local aviation height permits require external jurisdictional verification prior to civil ground-breaking.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Export Actions Bar (Phase 12) -->
+                <div class="blueprint-export-bar">
+                    <button id="btn-export-geojson" type="button" class="btn-bp-export primary">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        <span>Export GeoJSON (GIS)</span>
+                    </button>
+                    <button id="btn-export-csv" type="button" class="btn-bp-export secondary">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                        </svg>
+                        <span>Export CSV Coordinates</span>
+                    </button>
+                    <button id="btn-export-json" type="button" class="btn-bp-export secondary">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="16 18 22 12 16 6"></polyline>
+                            <polyline points="8 6 2 12 8 18"></polyline>
+                        </svg>
+                        <span>Export JSON Specification</span>
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -1470,8 +1642,12 @@
     <!-- Wind Aerodynamic Canvas Engine -->
     <script src="js/wind-fx.js"></script>
 
+    <!-- CesiumJS 3D Geospatial Engine -->
+    <script>window.CESIUM_BASE_URL = "/assets/vendor/cesium/";</script>
+    <script src="/assets/vendor/cesium/Cesium.js"></script>
+    <script src="js/cesium-map.js"></script>
+
     <!-- Engineering App Core Logic -->
     <script src="js/app.js"></script>
-    <script src="/map/js/app.js" onerror="this.onerror=null;"></script>
 </body>
 </html>

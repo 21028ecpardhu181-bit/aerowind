@@ -65,6 +65,10 @@ ASSETS_DIR = FRONTEND_DIR / "assets"
 if FRONTEND_DIR.exists():
     app.mount("/map", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="map")
     app.mount("/frontend", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")
+    if (FRONTEND_DIR / "js").exists():
+        app.mount("/js", StaticFiles(directory=str(FRONTEND_DIR / "js")), name="js")
+    if (FRONTEND_DIR / "css").exists():
+        app.mount("/css", StaticFiles(directory=str(FRONTEND_DIR / "css")), name="css")
     if ASSETS_DIR.exists():
         app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
 
