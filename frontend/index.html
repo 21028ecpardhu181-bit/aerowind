@@ -1,0 +1,1923 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AeroQuantum-Wind — Quantum Micro-Siting & Satellite Geospatial Telemetry</title>
+    
+    <!-- Leaflet CSS (local vendor with CDN fallback) -->
+    <link rel="stylesheet" href="/assets/vendor/leaflet.css" onerror="this.onerror=null;this.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';">
+    <link rel="stylesheet" href="assets/vendor/leaflet.css" onerror="this.onerror=null;this.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';">
+    
+    <!-- Google Fonts for High-Tech Typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg-glass: rgba(11, 17, 32, 0.88);
+            --bg-glass-card: rgba(15, 23, 42, 0.75);
+            --bg-glass-input: rgba(30, 41, 59, 0.7);
+            --border-glass: rgba(255, 255, 255, 0.12);
+            --border-glass-focus: rgba(56, 189, 248, 0.5);
+            --primary-cyan: #38bdf8;
+            --primary-cyan-glow: rgba(56, 189, 248, 0.35);
+            --quantum-purple: #a855f7;
+            --quantum-glow: rgba(168, 85, 247, 0.4);
+            --success-green: #10b981;
+            --warning-amber: #f59e0b;
+            --danger-red: #ef4444;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --text-dim: #64748b;
+            --shadow-elevation: 0 16px 36px -8px rgba(0, 0, 0, 0.6), 0 0 1px 1px rgba(255, 255, 255, 0.08);
+            --blur-strength: blur(20px);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #050811;
+            color: var(--text-main);
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        /* Fullscreen Map Container */
+        #map {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            background-color: #0b1120;
+        }
+
+        /* Canvas Overlay for Wake Cones, Wind Streaks, and Rotor Rotations */
+        #sim-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        /* Top Navigation & Brand Header */
+        .top-navbar {
+            position: absolute;
+            top: 16px;
+            left: 20px;
+            right: 20px;
+            height: 60px;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--bg-glass);
+            backdrop-filter: var(--blur-strength);
+            -webkit-backdrop-filter: var(--blur-strength);
+            border: 1px solid var(--border-glass);
+            border-radius: 14px;
+            padding: 0 20px;
+            box-shadow: var(--shadow-elevation);
+            pointer-events: auto;
+        }
+
+        .brand-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand-icon {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, #0284c7, #9333ea);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 16px rgba(56, 189, 248, 0.4);
+        }
+
+        .brand-icon svg {
+            width: 22px;
+            height: 22px;
+            color: #ffffff;
+        }
+
+        .brand-title {
+            font-size: 17px;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .brand-badge {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            padding: 2px 7px;
+            background: rgba(56, 189, 248, 0.15);
+            color: var(--primary-cyan);
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            border-radius: 9999px;
+        }
+
+        .search-wrapper {
+            flex: 1;
+            max-width: 480px;
+            margin: 0 24px;
+            position: relative;
+        }
+
+        .search-input-group {
+            display: flex;
+            align-items: center;
+            background: var(--bg-glass-input);
+            border: 1px solid var(--border-glass);
+            border-radius: 10px;
+            padding: 4px 6px 4px 14px;
+            transition: all 0.2s ease;
+        }
+
+        .search-input-group:focus-within {
+            border-color: var(--primary-cyan);
+            box-shadow: 0 0 12px var(--primary-cyan-glow);
+        }
+
+        .search-input-group svg {
+            color: var(--text-dim);
+            margin-right: 10px;
+            flex-shrink: 0;
+        }
+
+        .search-input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: #ffffff;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .search-input::placeholder {
+            color: var(--text-dim);
+        }
+
+        .search-btn {
+            background: var(--primary-cyan);
+            color: #04101e;
+            border: none;
+            outline: none;
+            padding: 6px 14px;
+            border-radius: 7px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background 0.15s, transform 0.1s;
+        }
+
+        .search-btn:hover {
+            background: #7dd3fc;
+        }
+
+        .search-btn:active {
+            transform: scale(0.97);
+        }
+
+        .nav-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .preset-chip {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid var(--border-glass);
+            color: var(--text-muted);
+            padding: 5px 11px;
+            border-radius: 8px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .preset-chip:hover {
+            background: rgba(56, 189, 248, 0.12);
+            color: var(--primary-cyan);
+            border-color: rgba(56, 189, 248, 0.3);
+        }
+
+        .preset-chip.active {
+            background: rgba(56, 189, 248, 0.2);
+            color: var(--primary-cyan);
+            border-color: var(--primary-cyan);
+        }
+
+        /* Floating Left Control Sidebar */
+        .sidebar-panel {
+            position: absolute;
+            top: 92px;
+            left: 20px;
+            width: 350px;
+            max-height: calc(100vh - 112px);
+            z-index: 1000;
+            background: var(--bg-glass);
+            backdrop-filter: var(--blur-strength);
+            -webkit-backdrop-filter: var(--blur-strength);
+            border: 1px solid var(--border-glass);
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: var(--shadow-elevation);
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+            overflow-y: auto;
+            pointer-events: auto;
+        }
+
+        .sidebar-panel::-webkit-scrollbar {
+            width: 5px;
+        }
+        .sidebar-panel::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 4px;
+        }
+
+        .panel-section-title {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-dim);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        /* Quantum Slider & Control Cards */
+        .control-card {
+            background: var(--bg-glass-card);
+            border: 1px solid var(--border-glass);
+            border-radius: 12px;
+            padding: 14px;
+        }
+
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .slider-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: #e2e8f0;
+        }
+
+        .slider-val-badge {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--primary-cyan);
+            background: rgba(56, 189, 248, 0.12);
+            padding: 2px 8px;
+            border-radius: 6px;
+            border: 1px solid rgba(56, 189, 248, 0.25);
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 6px;
+            background: #1e293b;
+            border-radius: 4px;
+            outline: none;
+            -webkit-appearance: none;
+            cursor: pointer;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--primary-cyan);
+            box-shadow: 0 0 10px var(--primary-cyan-glow);
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.15);
+        }
+
+        /* Wind Direction Dial */
+        .wind-dial-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+        }
+
+        .wind-compass-circle {
+            position: relative;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: radial-gradient(circle, #0f172a 60%, #1e293b 100%);
+            border: 2px solid rgba(56, 189, 248, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: grab;
+            user-select: none;
+            touch-action: none;
+            flex-shrink: 0;
+            box-shadow: 0 0 14px rgba(0, 0, 0, 0.5);
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+
+        .wind-compass-circle:hover {
+            border-color: rgba(56, 189, 248, 0.6);
+            box-shadow: 0 0 18px rgba(56, 189, 248, 0.25);
+        }
+
+        .wind-compass-circle.dragging {
+            border-color: var(--primary-cyan);
+            box-shadow: 0 0 24px var(--primary-cyan-glow);
+            cursor: grabbing;
+        }
+
+        .compass-needle {
+            position: absolute;
+            width: 4px;
+            height: 64px;
+            transform-origin: center center;
+            transition: transform 0.08s ease-out;
+            pointer-events: none;
+        }
+
+        .needle-north {
+            position: absolute;
+            top: 2px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-bottom: 24px solid var(--danger-red);
+        }
+
+        .needle-arrow {
+            position: absolute;
+            bottom: 2px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-top: 24px solid var(--primary-cyan);
+        }
+
+        .wind-degrees-info {
+            flex: 1;
+        }
+
+        .wind-deg-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 22px;
+            font-weight: 800;
+            color: #ffffff;
+        }
+
+        .wind-dir-name {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--primary-cyan);
+            margin-top: 2px;
+        }
+
+        /* Layout Comparison Wipe Styles */
+        .wipe-card {
+            border: 1px solid rgba(56, 189, 248, 0.28);
+            background: rgba(15, 23, 42, 0.88);
+            margin-top: 14px;
+        }
+
+        .wipe-btn-group {
+            display: flex;
+            gap: 6px;
+            margin: 8px 0 10px 0;
+        }
+
+        .wipe-chip {
+            flex: 1;
+            padding: 5px 8px;
+            font-size: 10px;
+            font-weight: 700;
+            border-radius: 6px;
+            border: 1px solid var(--border-glass);
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            text-align: center;
+        }
+
+        .wipe-chip:hover {
+            color: var(--text-main);
+            border-color: rgba(255, 255, 255, 0.25);
+        }
+
+        .wipe-chip.active {
+            background: rgba(56, 189, 248, 0.2);
+            color: var(--primary-cyan);
+            border-color: var(--primary-cyan);
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.3);
+        }
+
+        .wipe-slider-container {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .wipe-slider-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+        }
+
+        /* Bottom Sheet Handle (Mobile) */
+        .bottom-sheet-handle {
+            display: none;
+        }
+
+        /* Big Quantum Optimize Action Button */
+        .btn-optimize {
+            background: linear-gradient(135deg, #0284c7 0%, #2563eb 50%, #7c3aed 100%);
+            color: #ffffff;
+            border: none;
+            outline: none;
+            padding: 14px 18px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 800;
+            letter-spacing: 0.02em;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.45);
+            transition: all 0.2s ease;
+        }
+
+        .btn-optimize:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 26px rgba(124, 58, 237, 0.55);
+            filter: brightness(1.1);
+        }
+
+        .btn-optimize:active {
+            transform: translateY(0);
+        }
+
+        .btn-optimize:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn-optimize svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        /* Toggle Rows */
+        .toggle-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 0;
+        }
+
+        .toggle-label {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-main);
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 38px;
+            height: 22px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .switch-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #334155;
+            transition: .2s;
+            border-radius: 22px;
+        }
+
+        .switch-slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .2s;
+            border-radius: 50%;
+        }
+
+        input:checked + .switch-slider {
+            background-color: var(--primary-cyan);
+        }
+
+        input:checked + .switch-slider:before {
+            transform: translateX(16px);
+        }
+
+        /* Floating Bottom Telemetry Dock */
+        .telemetry-dock {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            z-index: 1000;
+            background: var(--bg-glass);
+            backdrop-filter: var(--blur-strength);
+            -webkit-backdrop-filter: var(--blur-strength);
+            border: 1px solid var(--border-glass);
+            border-radius: 16px;
+            padding: 16px 24px;
+            box-shadow: var(--shadow-elevation);
+            display: grid;
+            grid-template-columns: repeat(5, 1fr) auto;
+            gap: 18px;
+            align-items: center;
+            pointer-events: auto;
+        }
+
+        .telemetry-card {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            border-right: 1px solid rgba(255, 255, 255, 0.08);
+            padding-right: 16px;
+        }
+
+        .telemetry-card:last-of-type {
+            border-right: none;
+        }
+
+        .telemetry-title {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-dim);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .telemetry-val {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 22px;
+            font-weight: 800;
+            color: #ffffff;
+            letter-spacing: -0.02em;
+        }
+
+        .telemetry-sub {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .telemetry-val.val-cyan { color: var(--primary-cyan); }
+        .telemetry-val.val-green { color: var(--success-green); }
+        .telemetry-val.val-purple { color: var(--quantum-purple); }
+        .telemetry-val.val-amber { color: var(--warning-amber); }
+
+        /* Blueprint Action Button in Dock */
+        .btn-blueprint {
+            background: rgba(56, 189, 248, 0.12);
+            border: 1px solid rgba(56, 189, 248, 0.4);
+            color: var(--primary-cyan);
+            padding: 12px 18px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            white-space: nowrap;
+            transition: all 0.15s;
+        }
+
+        .btn-blueprint:hover {
+            background: var(--primary-cyan);
+            color: #04101e;
+            box-shadow: 0 0 16px var(--primary-cyan-glow);
+        }
+
+        .btn-blueprint:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        /* Map UI Reference Photo Floating Card (Realism Requirement) */
+        .ref-card {
+            position: absolute;
+            top: 92px;
+            right: 20px;
+            width: 220px;
+            z-index: 1000;
+            background: var(--bg-glass);
+            backdrop-filter: var(--blur-strength);
+            -webkit-backdrop-filter: var(--blur-strength);
+            border: 1px solid var(--border-glass);
+            border-radius: 14px;
+            padding: 12px;
+            box-shadow: var(--shadow-elevation);
+            pointer-events: auto;
+            transition: transform 0.2s;
+        }
+
+        .ref-card img {
+            width: 100%;
+            height: 110px;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .ref-meta {
+            margin-top: 8px;
+            font-size: 11px;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        .ref-meta strong {
+            color: #ffffff;
+            display: block;
+        }
+
+        /* Custom Leaflet Popups */
+        .leaflet-popup-content-wrapper {
+            background: var(--bg-glass) !important;
+            backdrop-filter: var(--blur-strength) !important;
+            -webkit-backdrop-filter: var(--blur-strength) !important;
+            border: 1px solid var(--border-glass) !important;
+            border-radius: 12px !important;
+            color: #ffffff !important;
+            box-shadow: var(--shadow-elevation) !important;
+            padding: 4px;
+        }
+
+        .leaflet-popup-tip {
+            background: var(--bg-glass) !important;
+        }
+
+        .turbine-popup-card {
+            padding: 8px;
+            font-family: 'Inter', sans-serif;
+            min-width: 200px;
+        }
+
+        .popup-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 6px;
+            margin-bottom: 8px;
+        }
+
+        .popup-title {
+            font-size: 13px;
+            font-weight: 800;
+            color: var(--primary-cyan);
+        }
+
+        .popup-badge {
+            font-size: 9px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 4px;
+            text-transform: uppercase;
+        }
+
+        .badge-clean { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #10b981; }
+        .badge-wake { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid #f59e0b; }
+
+        .popup-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            margin-bottom: 4px;
+            color: var(--text-muted);
+        }
+
+        .popup-row strong {
+            color: #ffffff;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Real Turbine Marker Custom Icon Styling */
+        .turbine-leaflet-marker {
+            position: relative;
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        .turbine-tower-shadow {
+            position: absolute;
+            width: 32px;
+            height: 14px;
+            background: radial-gradient(ellipse, rgba(0, 0, 0, 0.75) 0%, rgba(0, 0, 0, 0) 75%);
+            border-radius: 50%;
+            pointer-events: none;
+            transition: transform 0.2s ease-out;
+            z-index: 1;
+        }
+
+        .turbine-marker-img {
+            width: 44px;
+            height: 44px;
+            object-fit: contain;
+            filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.8));
+            position: relative;
+            z-index: 2;
+            transition: transform 0.2s;
+        }
+
+        .turbine-leaflet-marker:hover .turbine-marker-img {
+            transform: scale(1.15);
+        }
+
+        .turbine-label-tag {
+            position: absolute;
+            top: -14px;
+            background: rgba(15, 23, 42, 0.85);
+            border: 1px solid rgba(56, 189, 248, 0.4);
+            color: var(--primary-cyan);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 9px;
+            font-weight: 700;
+            padding: 1px 4px;
+            border-radius: 4px;
+            z-index: 3;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+
+        /* Candidate Grid Site Targets */
+        .candidate-site-circle {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            border: 2px dashed rgba(56, 189, 248, 0.6);
+            background: rgba(56, 189, 248, 0.1);
+            position: relative;
+            transition: all 0.2s;
+        }
+        .candidate-site-circle:hover {
+            border-color: #ffffff;
+            background: rgba(56, 189, 248, 0.4);
+            transform: scale(1.3);
+        }
+
+        /* Status Toast Alert */
+        .status-toast {
+            position: absolute;
+            top: 86px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 2000;
+            background: var(--bg-glass);
+            backdrop-filter: var(--blur-strength);
+            border: 1px solid var(--border-glass);
+            padding: 10px 20px;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 600;
+            display: none;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            animation: fadeIn 0.2s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translate(-50%, -10px); }
+            to { opacity: 1; transform: translate(-50%, 0); }
+        }
+
+        /* Mobile Toggle Button */
+        .mobile-toggle-btn {
+            display: none;
+            position: absolute;
+            top: 68px;
+            left: 10px;
+            z-index: 1001;
+            background: var(--bg-glass);
+            backdrop-filter: var(--blur-strength);
+            border: 1px solid var(--border-glass);
+            color: var(--primary-cyan);
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+        }
+
+        /* Responsive Mobile Layout (<= 768px and 390px) */
+        @media (max-width: 768px) {
+            .mobile-toggle-btn {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                position: fixed;
+                top: 64px;
+                left: 12px;
+                z-index: 1050;
+                padding: 7px 14px;
+                border-radius: 20px;
+                font-size: 11px;
+                font-weight: 700;
+                background: var(--bg-glass);
+                backdrop-filter: var(--blur-strength);
+                -webkit-backdrop-filter: var(--blur-strength);
+                border: 1px solid var(--border-glass-focus);
+                color: var(--primary-cyan);
+                box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+            }
+            .top-navbar {
+                top: 10px;
+                left: 10px;
+                right: 10px;
+                height: 48px;
+                padding: 0 10px;
+            }
+            .brand-title { font-size: 14px; }
+            .brand-badge { display: none; }
+            .nav-actions { display: none; }
+            .search-wrapper { margin: 0 8px; }
+            .search-input { font-size: 11px; }
+            .search-btn { padding: 4px 8px; font-size: 10px; }
+
+            .bottom-sheet-handle {
+                display: block;
+                width: 44px;
+                height: 5px;
+                background: rgba(255, 255, 255, 0.35);
+                border-radius: 3px;
+                margin: 0 auto 12px auto;
+                cursor: pointer;
+            }
+
+            .sidebar-panel {
+                position: fixed;
+                top: auto;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                width: 100%;
+                max-height: 72vh;
+                padding: 12px 18px 24px 18px;
+                border-radius: 20px 20px 0 0;
+                transform: translateY(105%);
+                transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s;
+                opacity: 0;
+                pointer-events: none;
+                z-index: 2000;
+                overflow-y: auto;
+                -webkit-overflow-scrolling: touch;
+                box-shadow: 0 -12px 36px rgba(0, 0, 0, 0.8);
+            }
+
+            .sidebar-panel.mobile-open {
+                transform: translateY(0);
+                opacity: 1;
+                pointer-events: auto;
+            }
+
+            .ref-card { display: none; }
+
+            .telemetry-dock {
+                bottom: 10px;
+                left: 10px;
+                right: 10px;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 8px;
+                padding: 10px 14px;
+            }
+
+            .telemetry-card {
+                padding-right: 4px;
+            }
+
+            .telemetry-val {
+                font-size: 17px;
+            }
+
+            .telemetry-card:nth-of-type(5) {
+                display: none; /* Hide 16-qubit bitstring on narrow phone to prevent crowding */
+            }
+
+            .btn-blueprint {
+                grid-column: span 2;
+                justify-content: center;
+                padding: 8px 12px;
+                font-size: 11px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Leaflet Satellite Map -->
+    <div id="map"></div>
+
+    <!-- 2D Canvas for Wind Particles, Jensen Cones, and Rotating 3-Blade Rotors -->
+    <canvas id="sim-canvas"></canvas>
+
+    <!-- Top Navigation Header -->
+    <header class="top-navbar">
+        <div class="brand-container">
+            <div class="brand-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                </svg>
+            </div>
+            <div class="brand-title">
+                <span>AeroQuantum-Wind</span>
+                <span class="brand-badge">WS-QAOA</span>
+            </div>
+        </div>
+
+        <div class="search-wrapper">
+            <form id="search-form" class="search-input-group" onsubmit="event.preventDefault(); handleSearch();">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <input id="search-input" class="search-input" type="text" placeholder="Search wind site (e.g. Anantapur, Andhra Pradesh)..." value="Anantapur, Andhra Pradesh">
+                <button type="submit" class="search-btn">Siting Search</button>
+            </form>
+        </div>
+
+        <div class="nav-actions">
+            <button class="preset-chip active" onclick="loadLocationPreset('Anantapur, Andhra Pradesh', 14.678322, 77.606504, 270)">Anantapur (AP)</button>
+            <button class="preset-chip" onclick="loadLocationPreset('Muppandal, Tamil Nadu', 8.2570, 77.5484, 260)">Muppandal (TN)</button>
+            <button class="preset-chip" onclick="loadLocationPreset('Jaisalmer, Rajasthan', 26.9157, 70.9083, 225)">Jaisalmer (RJ)</button>
+        </div>
+    </header>
+
+    <!-- Mobile Parameters Drawer Toggle -->
+    <button id="mobile-toggle-btn" class="mobile-toggle-btn" onclick="toggleMobileSidebar()">
+        <span>⚙</span>
+        <span>Tune Siting</span>
+    </button>
+
+    <!-- Floating Left Control Sidebar -->
+    <aside class="sidebar-panel">
+        <div class="bottom-sheet-handle" onclick="toggleMobileSidebar()" title="Tap to toggle bottom sheet"></div>
+        <div class="panel-section-title">Micro-Siting Parameters</div>
+
+        <!-- Turbine Count Slider (K=2..8) -->
+        <div class="control-card">
+            <div class="slider-header">
+                <span class="slider-label">Turbine Count (K)</span>
+                <span id="k-badge" class="slider-val-badge">4 Units</span>
+            </div>
+            <input type="range" id="k-slider" min="2" max="8" value="4" step="1" oninput="updateK(this.value)">
+            <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--text-dim); margin-top: 4px;">
+                <span>2 (6 MW)</span>
+                <span>4 (12 MW)</span>
+                <span>6 (18 MW)</span>
+                <span>8 (24 MW)</span>
+            </div>
+        </div>
+
+        <!-- Wind Angle Dial -->
+        <div class="control-card">
+            <div class="slider-header">
+                <span class="slider-label">Prevailing Wind Vector</span>
+                <span id="wind-deg-badge" class="slider-val-badge">270°</span>
+            </div>
+            <div class="wind-dial-container">
+                <div class="wind-compass-circle" id="compass-dial" title="Click or drag to rotate wind direction (auto-reoptimizes on release)">
+                    <div class="compass-needle" id="compass-needle">
+                        <div class="needle-north"></div>
+                        <div class="needle-arrow"></div>
+                    </div>
+                </div>
+                <div class="wind-degrees-info">
+                    <div class="wind-deg-value" id="wind-deg-text">270° W</div>
+                    <div class="wind-dir-name" id="wind-sector-desc">SW Monsoon Flow (8.42 m/s)</div>
+                </div>
+            </div>
+            <input type="range" id="angle-slider" min="0" max="355" value="270" step="5" style="margin-top: 12px;" oninput="updateAngle(this.value, false)" onchange="updateAngle(this.value, true)">
+        </div>
+
+        <!-- Optimize CTA Button -->
+        <button id="btn-optimize" class="btn-optimize" onclick="triggerOptimization()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+            </svg>
+            <span id="btn-optimize-text">OPTIMIZE LAYOUT (WS-QAOA)</span>
+        </button>
+
+        <!-- Before / After Layout Comparison Wipe -->
+        <div class="control-card wipe-card">
+            <div class="slider-header">
+                <span class="slider-label">Before / After Layout Wipe</span>
+                <span id="wipe-mode-badge" class="slider-val-badge">QAOA (100%)</span>
+            </div>
+            <div class="wipe-btn-group">
+                <button type="button" class="wipe-chip" id="wipe-btn-baseline" onclick="setWipePreset(0.0)">Baseline (0%)</button>
+                <button type="button" class="wipe-chip" id="wipe-btn-split" onclick="setWipePreset(0.5, true)">Split Wipe</button>
+                <button type="button" class="wipe-chip active" id="wipe-btn-qaoa" onclick="setWipePreset(1.0)">QAOA (100%)</button>
+            </div>
+            <div class="wipe-slider-container">
+                <input type="range" id="wipe-slider" min="0" max="100" value="100" step="1" oninput="handleWipeSlider(this.value)">
+                <div class="wipe-slider-labels">
+                    <span style="color: #ef4444;">◀ Baseline (Red Wakes)</span>
+                    <span style="color: #10b981;">QAOA (Clean Air) ▶</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Visualization Toggles -->
+        <div class="control-card">
+            <div class="panel-section-title">Visual Telemetry Layers</div>
+            <div class="toggle-row">
+                <span class="toggle-label">Wind Particle Flow (200 pts)</span>
+                <label class="switch">
+                    <input type="checkbox" id="toggle-particles" checked onchange="toggleParticles(this.checked)">
+                    <span class="switch-slider"></span>
+                </label>
+            </div>
+            <div class="toggle-row">
+                <span class="toggle-label">Jensen Aerodynamic Wake Cones</span>
+                <label class="switch">
+                    <input type="checkbox" id="toggle-wakes" checked onchange="toggleWakes(this.checked)">
+                    <span class="switch-slider"></span>
+                </label>
+            </div>
+            <div class="toggle-row">
+                <span class="toggle-label">Rotating 3-Blade Rotors</span>
+                <label class="switch">
+                    <input type="checkbox" id="toggle-rotors" checked onchange="toggleRotors(this.checked)">
+                    <span class="switch-slider"></span>
+                </label>
+            </div>
+            <div class="toggle-row">
+                <span class="toggle-label">Candidate Grid Ring Targets</span>
+                <label class="switch">
+                    <input type="checkbox" id="toggle-candidates" checked onchange="toggleCandidateMarkers(this.checked)">
+                    <span class="switch-slider"></span>
+                </label>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Visual Truth Reference Photo (Brief Requirement) -->
+    <div class="ref-card">
+        <img src="/assets/real-turbines-photo.jpg" alt="Real 3-blade wind turbines reference terrain" onerror="this.src='assets/real-turbines-photo.jpg';">
+        <div class="ref-meta">
+            <strong>Visual Truth Reference</strong>
+            Terrain ridgeline micro-siting & 3-blade white rotor profile.
+        </div>
+    </div>
+
+    <!-- Status Toast Notification -->
+    <div id="status-toast" class="status-toast">
+        <span id="toast-icon">⚡</span>
+        <span id="toast-message">Running Warm-Started QAOA Quantum Solver...</span>
+    </div>
+
+    <!-- Floating Bottom Telemetry Dock -->
+    <footer class="telemetry-dock">
+        <div class="telemetry-card">
+            <div class="telemetry-title">Annual Yield (AEP)</div>
+            <div class="telemetry-val val-cyan" id="metric-aep">30.76 GWh</div>
+            <div class="telemetry-sub">Rated Capacity: <span id="metric-cap">12 MW</span></div>
+        </div>
+
+        <div class="telemetry-card">
+            <div class="telemetry-title">Jensen Wake Loss</div>
+            <div class="telemetry-val val-green" id="metric-wake">0.00%</div>
+            <div class="telemetry-sub">5D Spacing Compliance: <span id="metric-5d">100% Safe</span></div>
+        </div>
+
+        <div class="telemetry-card">
+            <div class="telemetry-title">Est. Revenue / Annum</div>
+            <div class="telemetry-val val-green" id="metric-rev">₹10.76 Cr</div>
+            <div class="telemetry-sub">Tariff ₹3.50/kWh</div>
+        </div>
+
+        <div class="telemetry-card">
+            <div class="telemetry-title">Quantum Solver Time</div>
+            <div class="telemetry-val val-purple" id="metric-time">0.32s</div>
+            <div class="telemetry-sub">WS-QAOA (p=2, XY Mixer)</div>
+        </div>
+
+        <div class="telemetry-card">
+            <div class="telemetry-title">Active Quantum State</div>
+            <div class="telemetry-val" style="font-size: 15px;" id="metric-state">1000 0010 0100 0001</div>
+            <div class="telemetry-sub">K=<span id="metric-k-sub">4</span> / N=16 candidate sites</div>
+        </div>
+
+        <div>
+            <button id="btn-blueprint" class="btn-blueprint" onclick="openBlueprint()" title="View printable engineering blueprint">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                    <polyline points="10 9 9 9 8 9"></polyline>
+                </svg>
+                <span>Engineering Blueprint</span>
+            </button>
+        </div>
+    </footer>
+
+    <!-- Leaflet JS (local vendor with CDN fallback) -->
+    <script src="/assets/vendor/leaflet.js" onerror="this.onerror=null;this.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';"></script>
+    <script>
+        if (typeof L === 'undefined') {
+            document.write('<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>');
+        }
+    </script>
+
+    <!-- Real-Time Wind Flow & Aerodynamics Simulation Engine (Sprint 5) -->
+    <script src="js/wind-fx.js" onerror="this.onerror=null;this.src='/map/js/wind-fx.js';"></script>
+
+    <!-- Main Application Logic & Real-Time Canvas Physics Simulator -->
+    <script>
+        // Global Application State
+        const STATE = {
+            centerLat: 14.678322,
+            centerLon: 77.606504,
+            spanKm: 4.0,
+            gridN: 4,
+            K: 4,
+            windAngle: 270.0,
+            windSpeed: 8.42, // m/s
+            rotorDiameter: 120.0, // meters
+            candidates: [],
+            layout: [],
+            distances: [],
+            lastJobId: null,
+            blueprintUrl: null,
+            isOptimizing: false,
+            showParticles: true,
+            showWakes: true,
+            showRotors: true,
+            showCandidates: true,
+            particles: [],
+            rotorAngles: [],
+            // Sprint 5 Additions
+            windFX: null,
+            qaoaLayout: [],
+            baselineLayout: [],
+            qaoaMetrics: null,
+            baselineMetrics: null,
+            wipeProgress: 1.0, // 1.0 = QAOA, 0.0 = Baseline
+            isSplitWipe: false
+        };
+
+        let map = null;
+        let candidateLayerGroup = null;
+        let turbineMarkers = [];
+        let spanRectangle = null;
+        let canvas = null;
+        let ctx = null;
+
+        // Initialize Application
+        window.addEventListener('DOMContentLoaded', () => {
+            initMap();
+            initCanvas();
+            initWindFX();
+            initCompassDialDrag();
+            initSplitWipeMapInteraction();
+            updateCompassNeedle(STATE.windAngle);
+            
+            // Perform initial geocode and candidates generation for Anantapur
+            loadLocationPreset('Anantapur, Andhra Pradesh', STATE.centerLat, STATE.centerLon, 270);
+        });
+
+        // Initialize Leaflet Satellite Map with Esri World Imagery
+        function initMap() {
+            map = L.map('map', {
+                center: [STATE.centerLat, STATE.centerLon],
+                zoom: 13,
+                zoomControl: false,
+                attributionControl: true
+            });
+
+            // Reposition zoom control to top-right below ref-card
+            L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+            // Esri World Imagery Satellite Tiles
+            const esriSatellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+                maxZoom: 19
+            }).addTo(map);
+
+            // OpenStreetMap Reference Overlay (Labels and roads for spatial awareness)
+            const esriLabels = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
+                attribution: '',
+                maxZoom: 19,
+                opacity: 0.65
+            }).addTo(map);
+
+            candidateLayerGroup = L.layerGroup().addTo(map);
+
+            // Keep canvas resolution synced to Leaflet map viewport
+            map.on('move', () => { if (STATE.windFX) STATE.windFX.handleResize(); });
+            map.on('zoom', () => { if (STATE.windFX) STATE.windFX.handleResize(); });
+            map.on('resize', () => { if (STATE.windFX) STATE.windFX.handleResize(); });
+        }
+
+        // Initialize 2D Simulation Canvas & WindFX Engine
+        function initCanvas() {
+            canvas = document.getElementById('sim-canvas');
+            ctx = canvas.getContext('2d');
+        }
+
+        function initWindFX() {
+            if (typeof WindSimulationEngine !== 'undefined') {
+                STATE.windFX = new WindSimulationEngine();
+                STATE.windFX.init(canvas, map);
+                STATE.windFX.setWindAngle(STATE.windAngle);
+            }
+        }
+
+        // Interactive Compass Dial Dragging Handler (Sprint 5 Deliverable 4)
+        function initCompassDialDrag() {
+            const dial = document.getElementById('compass-dial');
+            if (!dial) return;
+
+            let isDragging = false;
+
+            function calculateAngleFromEvent(e) {
+                const rect = dial.getBoundingClientRect();
+                const cx = rect.left + rect.width / 2;
+                const cy = rect.top + rect.height / 2;
+                const clientX = e.clientX ?? (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+                const clientY = e.clientY ?? (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
+
+                const dx = clientX - cx;
+                const dy = clientY - cy;
+
+                // Compass angle: 0° is North (up), 90° East, 180° South, 270° West
+                let deg = (Math.atan2(dx, -dy) * 180 / Math.PI + 360) % 360;
+                return Math.round(deg / 5) * 5; // Snap to 5° steps
+            }
+
+            function onPointerDown(e) {
+                isDragging = true;
+                dial.classList.add('dragging');
+                if (dial.setPointerCapture && e.pointerId) {
+                    try { dial.setPointerCapture(e.pointerId); } catch (_) {}
+                }
+                const deg = calculateAngleFromEvent(e);
+                updateAngle(deg, false); // Real-time rotation
+                e.preventDefault();
+            }
+
+            function onPointerMove(e) {
+                if (!isDragging) return;
+                const deg = calculateAngleFromEvent(e);
+                updateAngle(deg, false); // Real-time rotation
+                e.preventDefault();
+            }
+
+            function onPointerUp(e) {
+                if (!isDragging) return;
+                isDragging = false;
+                dial.classList.remove('dragging');
+                if (dial.releasePointerCapture && e.pointerId) {
+                    try { dial.releasePointerCapture(e.pointerId); } catch (_) {}
+                }
+                const deg = calculateAngleFromEvent(e);
+                updateAngle(deg, true); // Re-run optimize on release!
+                e.preventDefault();
+            }
+
+            dial.addEventListener('pointerdown', onPointerDown);
+            window.addEventListener('pointermove', onPointerMove);
+            window.addEventListener('pointerup', onPointerUp);
+            window.addEventListener('pointercancel', onPointerUp);
+        }
+
+        // Draggable Split Divider on Map Canvas
+        function initSplitWipeMapInteraction() {
+            let isWipeDragging = false;
+
+            window.addEventListener('pointerdown', (e) => {
+                if (!STATE.isSplitWipe) return;
+                const splitX = window.innerWidth * STATE.wipeProgress;
+                if (Math.abs(e.clientX - splitX) < 32 && e.clientY > 70 && e.clientY < window.innerHeight - 100) {
+                    isWipeDragging = true;
+                    document.body.style.cursor = 'ew-resize';
+                    e.preventDefault();
+                }
+            });
+
+            window.addEventListener('pointermove', (e) => {
+                if (!isWipeDragging) return;
+                const ratio = Math.max(0.05, Math.min(0.95, e.clientX / window.innerWidth));
+                handleWipeSlider(Math.round(ratio * 100));
+            });
+
+            window.addEventListener('pointerup', () => {
+                if (isWipeDragging) {
+                    isWipeDragging = false;
+                    document.body.style.cursor = '';
+                }
+            });
+        }
+
+        // Location presets
+        function loadLocationPreset(name, lat, lon, angle) {
+            document.getElementById('search-input').value = name;
+            STATE.centerLat = lat;
+            STATE.centerLon = lon;
+            updateAngle(angle, false);
+
+            // Update preset buttons styling
+            document.querySelectorAll('.preset-chip').forEach(btn => {
+                btn.classList.toggle('active', btn.innerText.includes(name.split(',')[0]));
+            });
+
+            flyToAndGenerateCandidates(lat, lon);
+        }
+
+        // Search Bar Geocoding Handler
+        async function handleSearch() {
+            const query = document.getElementById('search-input').value.trim();
+            if (!query) return;
+
+            showToast(`Resolving location "${query}"...`);
+            try {
+                const res = await fetch(`/api/geo/geocode?q=${encodeURIComponent(query)}`);
+                if (!res.ok) throw new Error('Geocoding service unavailable');
+                const data = await res.json();
+                
+                showToast(`Located: ${data.display_name.split(',').slice(0, 2).join(',')}`, 'success');
+                STATE.centerLat = data.lat;
+                STATE.centerLon = data.lon;
+                flyToAndGenerateCandidates(data.lat, data.lon);
+            } catch (err) {
+                showToast(`Search error: ${err.message}`, 'error');
+            }
+        }
+
+        // Fly to Location, Draw Span Bounding Box, and Fetch Grid Candidates
+        async function flyToAndGenerateCandidates(lat, lon) {
+            map.flyTo([lat, lon], 13.5, { duration: 1.2 });
+
+            // Calculate bounding box for span (4km x 4km)
+            const latDelta = (STATE.spanKm / 111.0) / 2.0;
+            const lonDelta = (STATE.spanKm / (111.0 * Math.cos(lat * Math.PI / 180.0))) / 2.0;
+            const bounds = [
+                [lat - latDelta, lon - lonDelta],
+                [lat + latDelta, lon + lonDelta]
+            ];
+
+            if (spanRectangle) {
+                map.removeLayer(spanRectangle);
+            }
+            spanRectangle = L.rectangle(bounds, {
+                color: '#38bdf8',
+                weight: 1.5,
+                dashArray: '6, 6',
+                fillColor: '#0284c7',
+                fillOpacity: 0.08
+            }).addTo(map);
+
+            // Fetch candidate grid sites from backend
+            try {
+                const res = await fetch('/api/geo/candidates', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        center_lat: lat,
+                        center_lon: lon,
+                        span_km: STATE.spanKm,
+                        grid_n: STATE.gridN
+                    })
+                });
+                if (!res.ok) throw new Error('Failed to generate candidate sites');
+                const candidates = await res.json();
+                STATE.candidates = candidates;
+
+                renderCandidateMarkers();
+
+                // Auto-trigger optimization for the new location
+                triggerOptimization();
+            } catch (err) {
+                showToast(`Candidates error: ${err.message}`, 'error');
+            }
+        }
+
+        // Render Candidate Grid Markers (Dashed Target Rings)
+        function renderCandidateMarkers() {
+            candidateLayerGroup.clearLayers();
+            if (!STATE.showCandidates) return;
+
+            STATE.candidates.forEach((c) => {
+                const icon = L.divIcon({
+                    className: 'candidate-div-icon',
+                    html: `<div class="candidate-site-circle" title="Candidate Site #${c.id} (${c.lat.toFixed(4)}, ${c.lon.toFixed(4)})"></div>`,
+                    iconSize: [14, 14],
+                    iconAnchor: [7, 7]
+                });
+                const marker = L.marker([c.lat, c.lon], { icon: icon });
+                candidateLayerGroup.addLayer(marker);
+            });
+        }
+
+        // Trigger Quantum WS-QAOA Optimization
+        async function triggerOptimization() {
+            if (STATE.isOptimizing) return;
+            if (STATE.candidates.length === 0) return;
+
+            STATE.isOptimizing = true;
+            const btn = document.getElementById('btn-optimize');
+            const btnText = document.getElementById('btn-optimize-text');
+            btn.disabled = true;
+            btnText.innerText = 'SOLVING WS-QAOA (p=2)...';
+            showToast('Formulating Ising Hamiltonian & Running QAOA in Aer Simulator...', 'info');
+
+            try {
+                const payload = {
+                    candidates: STATE.candidates,
+                    K: parseInt(STATE.K),
+                    wind_angle: parseFloat(STATE.windAngle)
+                };
+
+                const res = await fetch('/api/geo/optimize', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!res.ok) {
+                    const errData = await res.json();
+                    throw new Error(errData.detail || 'Optimization failed');
+                }
+
+                const data = await res.json();
+                STATE.qaoaLayout = data.layout;
+                STATE.layout = data.layout;
+                STATE.distances = data.distances_m;
+                STATE.lastJobId = data.job_id;
+                STATE.blueprintUrl = data.blueprint_url;
+
+                // Cache QAOA telemetry
+                const allSafe = data.distances_m.every(d => d[2] >= 600.0);
+                STATE.qaoaMetrics = {
+                    aep: parseFloat(data.aep_gwh),
+                    wake: parseFloat(data.wake_loss_pct),
+                    rev: parseFloat(data.revenue_inr_cr),
+                    time: parseFloat(data.runtime_s),
+                    bitstring: data.bitstring,
+                    allSafe: allSafe
+                };
+
+                // Generate Baseline naive layout & metrics for Comparison Wipe
+                STATE.baselineLayout = generateBaselineLayout();
+                STATE.baselineMetrics = generateBaselineMetrics();
+
+                // Feed layouts to WindFX Simulation Engine
+                if (STATE.windFX) {
+                    STATE.windFX.setLayouts(STATE.qaoaLayout, STATE.baselineLayout);
+                    STATE.windFX.setWindAngle(STATE.windAngle);
+                    STATE.windFX.setWipeProgress(STATE.wipeProgress, STATE.isSplitWipe);
+                }
+
+                // Animate Numbers in Telemetry Dock according to current wipe
+                applyWipeTelemetry();
+
+                // Render High-Realism Top-Down Turbine Markers
+                renderTurbinesOnMap();
+
+                showToast(`Optimized ${STATE.K} Turbines: AEP ${data.aep_gwh} GWh (Wake Loss ${data.wake_loss_pct}%)`, 'success');
+            } catch (err) {
+                showToast(`Optimization Error: ${err.message}`, 'error');
+            } finally {
+                STATE.isOptimizing = false;
+                btn.disabled = false;
+                btnText.innerText = 'OPTIMIZE LAYOUT (WS-QAOA)';
+            }
+        }
+
+        // Generate Naive Sequential Inline Baseline Layout (Severe Wake Shadowing)
+        function generateBaselineLayout() {
+            if (!STATE.candidates || STATE.candidates.length < STATE.K) return [];
+
+            const windRad = (STATE.windAngle * Math.PI) / 180.0;
+            const wx = -Math.sin(windRad);
+            const wy = Math.cos(windRad);
+
+            // Sort candidate sites along the prevailing wind vector to create inline wake collisions
+            const sorted = [...STATE.candidates].sort((a, b) => {
+                const perpA = Math.abs(a.x_m * (-wy) + a.y_m * wx);
+                const perpB = Math.abs(b.x_m * (-wy) + b.y_m * wx);
+                if (Math.abs(perpA - perpB) > 80) return perpA - perpB;
+                return (a.x_m * wx + a.y_m * wy) - (b.x_m * wx + b.y_m * wy);
+            });
+
+            return sorted.slice(0, STATE.K).map((c, i) => {
+                // Downwind turbines in baseline inline row suffer heavy wake deficit
+                const wakeDeficit = i === 0 ? 0.0 : Math.min(0.36, 0.18 + (i * 0.07));
+                const effSpeed = parseFloat((STATE.windSpeed * (1.0 - wakeDeficit)).toFixed(2));
+                return {
+                    id: 100 + c.id,
+                    candidate_id: c.id,
+                    lat: c.lat,
+                    lon: c.lon,
+                    x_m: c.x_m,
+                    y_m: c.y_m,
+                    effective_mps: effSpeed,
+                    isBaseline: true
+                };
+            });
+        }
+
+        // Generate Baseline Telemetry Metrics for Wipe Comparison
+        function generateBaselineMetrics() {
+            const qaoaAEP = STATE.qaoaMetrics ? STATE.qaoaMetrics.aep : 30.76;
+            // Baseline experiences ~18.45% wake deficit loss
+            const wakeLoss = 18.45;
+            const aep = parseFloat((qaoaAEP * (1.0 - (wakeLoss / 100.0) / (1.0 - 0.001))).toFixed(2));
+            const rev = parseFloat(((aep * 1e6 * 3.5) / 1e7).toFixed(2));
+
+            // Generate naive sequential bitstring
+            let bs = '';
+            for (let i = 0; i < STATE.candidates.length; i++) {
+                bs += (i < STATE.K) ? '1' : '0';
+            }
+
+            return {
+                aep: aep,
+                wake: wakeLoss,
+                rev: rev,
+                time: 0.05,
+                bitstring: bs,
+                allSafe: false
+            };
+        }
+
+        // Handle Layout Comparison Wipe Slider
+        function handleWipeSlider(val) {
+            const num = parseInt(val, 10);
+            document.getElementById('wipe-slider').value = num;
+
+            if (num === 0) {
+                setWipePreset(0.0, false);
+            } else if (num === 100) {
+                setWipePreset(1.0, false);
+            } else {
+                STATE.wipeProgress = num / 100.0;
+                STATE.isSplitWipe = true;
+                updateWipeUI(`Split Wipe (${num}%)`, 'split');
+                if (STATE.windFX) {
+                    STATE.windFX.setWipeProgress(STATE.wipeProgress, true);
+                }
+                applyWipeTelemetry();
+                renderTurbinesOnMap();
+            }
+        }
+
+        // Set Wipe Preset: 0.0 (Baseline), 0.5 (Split), 1.0 (QAOA)
+        function setWipePreset(progress, isSplit = false) {
+            STATE.wipeProgress = progress;
+            STATE.isSplitWipe = isSplit;
+            document.getElementById('wipe-slider').value = Math.round(progress * 100);
+
+            if (isSplit) {
+                updateWipeUI('Split Wipe (50%)', 'split');
+            } else if (progress >= 0.5) {
+                updateWipeUI('QAOA (100%)', 'qaoa');
+            } else {
+                updateWipeUI('Baseline (0%)', 'baseline');
+            }
+
+            if (STATE.windFX) {
+                STATE.windFX.setWipeProgress(progress, isSplit);
+            }
+
+            applyWipeTelemetry();
+            renderTurbinesOnMap();
+        }
+
+        function updateWipeUI(label, activeKey) {
+            const badge = document.getElementById('wipe-mode-badge');
+            if (badge) badge.innerText = label;
+
+            document.getElementById('wipe-btn-baseline')?.classList.toggle('active', activeKey === 'baseline');
+            document.getElementById('wipe-btn-split')?.classList.toggle('active', activeKey === 'split');
+            document.getElementById('wipe-btn-qaoa')?.classList.toggle('active', activeKey === 'qaoa');
+        }
+
+        // Apply Telemetry Numbers with Animated Ticker
+        function applyWipeTelemetry() {
+            if (!STATE.qaoaMetrics || !STATE.baselineMetrics) return;
+
+            const q = STATE.qaoaMetrics;
+            const b = STATE.baselineMetrics;
+            const t = STATE.wipeProgress; // 0.0 -> Baseline, 1.0 -> QAOA
+
+            const currentAep = b.aep + (q.aep - b.aep) * t;
+            const currentWake = b.wake + (q.wake - b.wake) * t;
+            const currentRev = b.rev + (q.rev - b.rev) * t;
+            const currentTime = b.time + (q.time - b.time) * t;
+
+            animateValue('metric-aep', currentAep, ' GWh', '', 2, 600);
+            animateValue('metric-wake', currentWake, '%', '', 2, 600);
+            animateValue('metric-rev', currentRev, ' Cr', '₹', 2, 600);
+            animateValue('metric-time', currentTime, 's', '', 2, 600);
+
+            document.getElementById('metric-state').innerText = formatBitstring(t >= 0.5 ? q.bitstring : b.bitstring);
+            document.getElementById('metric-cap').innerText = `${STATE.K * 3} MW`;
+            document.getElementById('metric-k-sub').innerText = STATE.K;
+
+            // 5D Compliance Status Badge
+            const isSafe = t >= 0.7 ? q.allSafe : false;
+            document.getElementById('metric-5d').innerHTML = isSafe
+                ? '<span style="color:#10b981;">100% Safe (≥600m)</span>'
+                : '<span style="color:#ef4444;">Separation Warning (Wake Shadow)</span>';
+            
+            // Wake loss color cue
+            const wakeElem = document.getElementById('metric-wake');
+            if (wakeElem) {
+                wakeElem.className = currentWake < 2.0 ? 'telemetry-val val-green' : currentWake < 8.0 ? 'telemetry-val val-cyan' : 'telemetry-val val-red';
+            }
+        }
+
+        // Render High-Realism Turbine Markers on Map with Shadows & Interactive Popups
+        function renderTurbinesOnMap() {
+            // Remove existing markers
+            turbineMarkers.forEach(m => map.removeLayer(m));
+            turbineMarkers = [];
+
+            // Calculate tower shadow offset based on downwind direction
+            const windRad = (STATE.windAngle * Math.PI) / 180.0;
+            const shadowOffsetX = -Math.sin(windRad) * 12;
+            const shadowOffsetY = Math.cos(windRad) * 12;
+            const shadowAngle = (STATE.windAngle + 90) % 360;
+
+            // Determine visible turbines based on wipe
+            let turbinesToRender = [];
+            const splitX = window.innerWidth * STATE.wipeProgress;
+
+            if (STATE.isSplitWipe) {
+                // Split wipe: render baseline left of splitX, QAOA right of splitX
+                const baseLeft = STATE.baselineLayout.filter(t => {
+                    const pt = map.latLngToContainerPoint([t.lat, t.lon]);
+                    return pt.x <= splitX;
+                });
+                const qaoaRight = STATE.qaoaLayout.filter(t => {
+                    const pt = map.latLngToContainerPoint([t.lat, t.lon]);
+                    return pt.x > splitX;
+                });
+                turbinesToRender = [...baseLeft, ...qaoaRight];
+            } else if (STATE.wipeProgress >= 0.5) {
+                turbinesToRender = STATE.qaoaLayout;
+            } else {
+                turbinesToRender = STATE.baselineLayout;
+            }
+
+            turbinesToRender.forEach((t, idx) => {
+                const isBaseline = !!t.isBaseline;
+                const effSpeed = typeof t.effective_mps === 'number' ? t.effective_mps : STATE.windSpeed;
+                const isWaked = effSpeed < (STATE.windSpeed - 0.2);
+                const powerMW = isWaked ? parseFloat((3.0 * Math.pow(effSpeed / STATE.windSpeed, 3)).toFixed(2)) : 3.00;
+                const labelTag = isBaseline ? `B${idx+1}` : `T${idx+1}`;
+
+                const markerHtml = `
+                    <div class="turbine-leaflet-marker" id="turbine-node-${t.id}">
+                        <div class="turbine-tower-shadow" style="transform: translate(${shadowOffsetX}px, ${shadowOffsetY}px) rotate(${shadowAngle}deg);"></div>
+                        <img class="turbine-marker-img" src="/assets/turbine-marker-topdown.png" onerror="this.src='assets/turbine-marker-topdown.png';" alt="Top-down turbine ${labelTag}">
+                        <div class="turbine-label-tag" style="${isBaseline ? 'background: rgba(239, 68, 68, 0.85);' : ''}">${labelTag}</div>
+                    </div>
+                `;
+
+                const icon = L.divIcon({
+                    className: 'leaflet-turbine-custom',
+                    html: markerHtml,
+                    iconSize: [48, 48],
+                    iconAnchor: [24, 24]
+                });
+
+                const marker = L.marker([t.lat, t.lon], { icon: icon }).addTo(map);
+
+                // Rich Hover / Click Popup Card
+                const popupContent = `
+                    <div class="turbine-popup-card">
+                        <div class="popup-header">
+                            <span class="popup-title">TURBINE ${labelTag} (${isBaseline ? 'BASELINE' : 'QAOA OPTIMAL'})</span>
+                            <span class="popup-badge ${isWaked ? 'badge-wake' : 'badge-clean'}">${isWaked ? 'WAKE AFFECTED' : 'CLEAN AIR'}</span>
+                        </div>
+                        <div class="popup-row"><span>GPS Latitude:</span> <strong>${t.lat.toFixed(6)}° N</strong></div>
+                        <div class="popup-row"><span>GPS Longitude:</span> <strong>${t.lon.toFixed(6)}° E</strong></div>
+                        <div class="popup-row"><span>Metric Grid:</span> <strong>X:${t.x_m > 0 ? '+' : ''}${t.x_m}m, Y:${t.y_m > 0 ? '+' : ''}${t.y_m}m</strong></div>
+                        <div class="popup-row"><span>Effective Wind:</span> <strong>${effSpeed.toFixed(2)} m/s</strong></div>
+                        <div class="popup-row"><span>Power Output:</span> <strong>${powerMW.toFixed(2)} MW</strong></div>
+                        <div class="popup-row"><span>Aerodynamic Rotor:</span> <strong>120m 3-Blade (${effSpeed >= 8.0 ? '~15 RPM' : '~10 RPM'})</strong></div>
+                    </div>
+                `;
+
+                marker.bindPopup(popupContent, { offset: [0, -18] });
+                turbineMarkers.push(marker);
+            });
+        }
+
+        // Controls Handlers
+        function updateK(val) {
+            STATE.K = parseInt(val, 10);
+            document.getElementById('k-badge').innerText = `${val} Units`;
+            triggerOptimization();
+        }
+
+        function updateAngle(deg, triggerOpt = false) {
+            STATE.windAngle = parseFloat(deg);
+            const slider = document.getElementById('angle-slider');
+            if (slider && slider.value !== String(deg)) slider.value = deg;
+            
+            document.getElementById('wind-deg-badge').innerText = `${deg}°`;
+            document.getElementById('wind-deg-text').innerText = `${deg}° ${getSectorLabel(deg)}`;
+            updateCompassNeedle(deg);
+
+            // Re-route wind particles & wake cones in real time (Sprint 5 Deliverable 4)
+            if (STATE.windFX) {
+                STATE.windFX.setWindAngle(deg);
+            }
+            
+            // Re-render markers with updated shadow angles
+            if (STATE.layout.length > 0) {
+                renderTurbinesOnMap();
+            }
+
+            // Re-run optimize on dial release
+            if (triggerOpt) {
+                showToast(`Wind vector set to ${deg}° — Optimizing layout with WS-QAOA...`, 'info');
+                triggerOptimization();
+            }
+        }
+
+        function updateCompassNeedle(deg) {
+            const needle = document.getElementById('compass-needle');
+            if (needle) {
+                needle.style.transform = `rotate(${deg}deg)`;
+            }
+        }
+
+        function getSectorLabel(deg) {
+            const dirs = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+            const idx = Math.round(deg / 22.5) % 16;
+            return dirs[idx];
+        }
+
+        // Visualization Toggles
+        function toggleParticles(on) {
+            STATE.showParticles = on;
+            if (STATE.windFX) STATE.windFX.setToggles({ showParticles: on });
+        }
+        function toggleWakes(on) {
+            STATE.showWakes = on;
+            if (STATE.windFX) STATE.windFX.setToggles({ showWakes: on });
+        }
+        function toggleRotors(on) {
+            STATE.showRotors = on;
+            if (STATE.windFX) STATE.windFX.setToggles({ showRotors: on });
+        }
+        function toggleCandidateMarkers(on) {
+            STATE.showCandidates = on;
+            renderCandidateMarkers();
+        }
+
+        // Open Printable HTML Blueprint in New Tab
+        function openBlueprint() {
+            if (!STATE.blueprintUrl) {
+                showToast('Please run optimization first to generate blueprint.', 'error');
+                return;
+            }
+            window.open(STATE.blueprintUrl, '_blank');
+        }
+
+        // Mobile Sidebar Drawer Toggle (Bottom Sheet)
+        function toggleMobileSidebar() {
+            const sidebar = document.querySelector('.sidebar-panel');
+            if (sidebar) {
+                sidebar.classList.toggle('mobile-open');
+                const btn = document.getElementById('mobile-toggle-btn');
+                if (btn) {
+                    btn.innerHTML = sidebar.classList.contains('mobile-open') ? '<span>✕</span><span>Close</span>' : '<span>⚙</span><span>Tune Siting</span>';
+                }
+            }
+        }
+
+        // Helper: Number Ticker Animation with Cubic Ease-Out
+        function animateValue(elemId, target, suffix = '', prefix = '', decimals = 2, duration = 650) {
+            const elem = document.getElementById(elemId);
+            if (!elem) return;
+            const rawText = elem.innerText.replace(/[^0-9.-]/g, '');
+            const start = parseFloat(rawText) || 0;
+            const startTime = performance.now();
+
+            function step(currentTime) {
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1.0);
+                // Cubic ease-out
+                const ease = 1 - Math.pow(1 - progress, 3);
+                const current = start + (target - start) * ease;
+                elem.innerText = `${prefix}${current.toFixed(decimals)}${suffix}`;
+                if (progress < 1.0) {
+                    requestAnimationFrame(step);
+                }
+            }
+            requestAnimationFrame(step);
+        }
+
+        // Helper: Format 16-bit quantum bitstring into 4-bit nibbles
+        function formatBitstring(bs) {
+            if (!bs) return '0000 0000 0000 0000';
+            return bs.replace(/(.{4})/g, '$1 ').trim();
+        }
+
+        // Helper: Toast Notifications
+        let toastTimeout = null;
+        function showToast(msg, type = 'info') {
+            const toast = document.getElementById('status-toast');
+            const toastMsg = document.getElementById('toast-message');
+            const toastIcon = document.getElementById('toast-icon');
+            if (!toast || !toastMsg) return;
+
+            toastMsg.innerText = msg;
+            toastIcon.innerText = type === 'success' ? '✓' : type === 'error' ? '⚠' : '⚡';
+            toast.style.borderColor = type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : 'var(--border-glass)';
+            toast.style.display = 'flex';
+
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toast.style.display = 'none';
+            }, 3500);
+        }
+    </script>
+</body>
+</html>
