@@ -15,7 +15,7 @@ import time
 from typing import Optional
 
 from fastapi import APIRouter, Header, HTTPException, status
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 
 from backend.app.db import get_db_connection, hash_password, verify_password
 
