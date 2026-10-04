@@ -57,6 +57,12 @@
     inset 0 1px 1px 0 rgba(255, 255, 255, 0.85);
 }
 
+/* Leaflet container isolation: trap Leaflet's internal high z-indexes so HUD and drawers render on top */
+#map, .leaflet-container {
+  isolation: isolate;
+  z-index: 1 !important;
+}
+
 /* Subtle custom scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
@@ -77,6 +83,48 @@
 }
 
 /* GIS Map Markers & Badges */
+.site-unified-badge-wrapper {
+  background: transparent !important;
+  border: none !important;
+}
+
+.site-unified-badge {
+  background: rgba(15, 23, 42, 0.94);
+  border: 1.5px solid #FFD21F;
+  border-radius: 12px;
+  padding: 6px 14px;
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  text-align: center;
+  white-space: nowrap;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.site-unified-badge .badge-title {
+  font-size: 12px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.02em;
+}
+
+.site-unified-badge .badge-sub {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.site-unified-badge .badge-sub strong {
+  color: #FFD21F;
+  font-weight: 800;
+}
+
 .selected-area-badge {
   background: rgba(15, 23, 42, 0.90);
   border: 1.5px solid #FFD21F;

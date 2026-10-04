@@ -71,7 +71,9 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
   const [manualLat, setManualLat] = useState(site.lat.toString());
   const [manualLon, setManualLon] = useState(site.lon.toString());
   const [activeBaseLayer, setActiveBaseLayer] = useState<'satellite' | 'street' | 'terrain'>('satellite');
-  const [isSheetCollapsed, setIsSheetCollapsed] = useState(false);
+  const [isSheetCollapsed, setIsSheetCollapsed] = useState(() => {
+    return typeof window !== 'undefined' ? window.innerWidth < 768 : false;
+  });
 
   // Drawing state
   const [isDrawing, setIsDrawing] = useState(false);
@@ -275,9 +277,18 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
     const L = window.L;
     if (!map || !L) return;
 
-    if (polygonLayerRef.current) map.removeLayer(polygonLayerRef.current);
-    if (areaBadgeRef.current) map.removeLayer(areaBadgeRef.current);
-    if (locationLabelRef.current) map.removeLayer(locationLabelRef.current);
+    if (polygonLayerRef.current) {
+      try { map.removeLayer(polygonLayerRef.current); } catch (_) {}
+      polygonLayerRef.current = null;
+    }
+    if (areaBadgeRef.current) {
+      try { map.removeLayer(areaBadgeRef.current); } catch (_) {}
+      areaBadgeRef.current = null;
+    }
+    if (locationLabelRef.current) {
+      try { map.removeLayer(locationLabelRef.current); } catch (_) {}
+      locationLabelRef.current = null;
+    }
 
     const vertices: [number, number][] =
       customBoundary && customBoundary.length >= 3
@@ -286,38 +297,52 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
 
     const calcArea = calculatePolygonAreaKm2(vertices);
 
-    // Blue/cyan geodesic boundary polygon
+    // High-contrast, bold concession boundary polygon with drop shadow & fill
     polygonLayerRef.current = L.polygon(vertices, {
       color: '#FFD21F',
-      weight: 2.5,
-      opacity: 0.95,
+      weight: 3.5,
+      opacity: 1.0,
       fillColor: '#FFD21F',
-      fillOpacity: 0.15,
+      fillOpacity: 0.18,
       smoothFactor: 1,
     }).addTo(map);
+
+    // Add crisp vertex circle markers at each boundary corner so borders are vivid
+    drawnMarkersRef.current.forEach((m) => {
+      try { map.removeLayer(m); } catch (_) {}
+    });
+    drawnMarkersRef.current = [];
+
+    vertices.forEach((pt: [number, number]) => {
+      const dot = L.circleMarker(pt, {
+        radius: 4,
+        color: '#0f172a',
+        weight: 1.5,
+        fillColor: '#FFD21F',
+        fillOpacity: 1.0,
+      }).addTo(map);
+      drawnMarkersRef.current.push(dot);
+    });
 
     map.fitBounds(polygonLayerRef.current.getBounds(), {
       padding: [40, 40],
       maxZoom: 15,
     });
 
-    // Concession Area Badge
-    const badgeIcon = L.divIcon({
-      className: 'badge-div-wrapper',
-      html: `<div class="selected-area-badge">Concession Area<br><strong>${calcArea.toFixed(1)} km²</strong></div>`,
-      iconSize: [120, 40],
-      iconAnchor: [60, 20],
+    // Single unified concession badge - NO OVERLAPPING TEXT
+    const siteTitle = site.shortName || site.name.split(',')[0] || 'Selected Site';
+    const unifiedBadgeIcon = L.divIcon({
+      className: 'site-unified-badge-wrapper',
+      html: `
+        <div class="site-unified-badge">
+          <div class="badge-title">${siteTitle}</div>
+          <div class="badge-sub">Concession Area: <strong>${calcArea.toFixed(1)} km²</strong></div>
+        </div>
+      `,
+      iconSize: [160, 48],
+      iconAnchor: [80, 24],
     });
-    areaBadgeRef.current = L.marker([lat, lon], { icon: badgeIcon }).addTo(map);
-
-    // Location Label Tag
-    const nameIcon = L.divIcon({
-      className: 'label-div-wrapper',
-      html: `<div class="location-anchor-tag">${site.shortName || 'Selected Site'}</div>`,
-      iconSize: [140, 24],
-      iconAnchor: [70, -25],
-    });
-    locationLabelRef.current = L.marker([lat, lon], { icon: nameIcon }).addTo(map);
+    areaBadgeRef.current = L.marker([lat, lon], { icon: unifiedBadgeIcon }).addTo(map);
   };
 
   // 4. Drawing Mode Sync
@@ -547,266 +572,396 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
   ];
 
   return (
-    <div id="screen-1-container" className="relative w-full h-[calc(100dvh-53px)] overflow-hidden flex flex-col bg-slate-100">
+    <div id="screen-1-container" className="relative w-full h-[calc(100dvh-53px)] overflow-hidden flex flex-col md:flex-row bg-slate-100">
       
-      {/* ── TOP CONTROL HUD (Liquid Glass Floating Panel) ─────────── */}
-      <div className="absolute top-3 left-3 right-3 md:right-[404px] z-30 flex flex-col gap-2 pointer-events-none">
-        
-        {/* ROW 1: Mode Tabs + Map Layer Switches */}
-        <div className="flex flex-wrap items-center justify-between gap-2 pointer-events-auto">
-          {/* Boundary Selection Mode Tabs */}
-          <div className="flex items-center gap-1 bg-white/95 backdrop-blur-2xl border border-slate-200/90 p-1 rounded-2xl shadow-glass">
-            <button
-              id="tab-mode-search"
-              onClick={() => { setMode('search'); onToggleDrawMode(false); }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                mode === 'search' ? 'bg-[#FFD21F] text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-            >
-              <Search className="w-3.5 h-3.5" />
-              <span>Search</span>
-            </button>
-
-            <button
-              id="tab-mode-radius"
-              onClick={() => { setMode('radius'); onToggleDrawMode(false); }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                mode === 'radius' ? 'bg-[#FFD21F] text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-            >
-              <CircleDot className="w-3.5 h-3.5" />
-              <span>Radius</span>
-            </button>
-
-            <button
-              id="tab-mode-draw"
-              onClick={() => { setMode('draw'); onToggleDrawMode(true); setIsDrawing(true); }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                mode === 'draw' ? 'bg-[#FFD21F] text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-            >
-              <Edit3 className="w-3.5 h-3.5" />
-              <span>Freeform Polygon</span>
-            </button>
+      {/* ── DESKTOP FIXED SIDEBAR / MOBILE COLLAPSIBLE DRAWER ──────── */}
+      <aside
+        id="site-info-panel"
+        className={`fixed md:relative bottom-14 md:bottom-auto left-0 md:left-auto right-0 md:right-auto md:w-[410px] md:h-full bg-white/95 backdrop-blur-2xl md:bg-white border-t md:border-t-0 md:border-r border-slate-200/90 z-[1100] md:z-20 flex flex-col shrink-0 transition-transform duration-300 shadow-2xl md:shadow-none ${
+          isSheetCollapsed ? 'translate-y-[calc(100%-60px)] md:translate-y-0' : 'translate-y-0'
+        } max-h-[82vh] md:max-h-full`}
+      >
+        {/* Mobile Drag Handle & Peek Bar Header */}
+        <div
+          id="site-info-header"
+          onClick={() => setIsSheetCollapsed(!isSheetCollapsed)}
+          className="p-3 sm:p-3.5 flex items-center justify-between cursor-pointer border-b border-slate-100 flex-shrink-0 bg-white/95"
+        >
+          <div className="flex items-center gap-2">
+            <span className="p-1.5 rounded-xl bg-[#FFD21F]/20 text-slate-900">
+              <MapPin className="w-4 h-4 text-amber-600" />
+            </span>
+            <div>
+              <h3 className="text-xs font-bold text-slate-900 leading-tight">
+                {site.shortName || site.name.split(',')[0]}
+              </h3>
+              <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3" /> Geotechnical Verified
+              </span>
+            </div>
           </div>
 
-          {/* Map Layer Switcher & 3D Globe */}
-          <div className="flex items-center gap-1.5 bg-white/95 backdrop-blur-2xl border border-slate-200/90 p-1 rounded-2xl shadow-glass">
+          <div className="flex items-center gap-2.5">
+            <div className="text-right">
+              <div className="text-[9px] text-slate-400 font-bold uppercase">Area</div>
+              <div id="meta-area" className="text-xs font-black text-slate-900 font-mono">
+                {(site.areaKm2 || 24.8).toFixed(1)} km²
+              </div>
+            </div>
+
+            {/* Quick Confirm Button on Mobile Peek State */}
             <button
-              onClick={() => switchBaseLayer('street')}
-              className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-                activeBaseLayer === 'street' && !is3DActive ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
-              }`}
+              type="button"
+              id="btn-confirm-site-peek"
+              onClick={(e) => {
+                e.stopPropagation();
+                onConfirmSite();
+              }}
+              className="md:hidden flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[#FFD21F] text-slate-950 text-xs font-black shadow-sm active:scale-95 transition-all"
             >
-              Map
+              <span>Continue</span>
+              <ArrowRight className="w-3.5 h-3.5 stroke-[2.5]" />
             </button>
+
             <button
-              onClick={() => switchBaseLayer('satellite')}
-              className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-                activeBaseLayer === 'satellite' && !is3DActive ? 'bg-[#FFD21F] text-slate-950 font-bold' : 'text-slate-600 hover:bg-slate-100'
-              }`}
+              type="button"
+              className="p-1 text-slate-400 hover:text-slate-700 hidden md:block"
             >
-              Satellite
-            </button>
-            <button
-              onClick={() => switchBaseLayer('terrain')}
-              className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-                activeBaseLayer === 'terrain' && !is3DActive ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              Terrain
-            </button>
-            <button
-              id="btn-s1-toggle-3d"
-              onClick={onToggle3D}
-              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                is3DActive ? 'bg-[#FFD21F] text-slate-950 shadow-sm' : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              <Box className="w-3.5 h-3.5" />
-              <span>3D Globe</span>
+              {isSheetCollapsed ? <Plus className="w-4 h-4" /> : <Minus className="w-4 h-4" />}
             </button>
           </div>
         </div>
 
-        {/* ROW 2: Contextual Toolbar Based on Mode */}
-        {mode === 'search' && (
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pointer-events-auto">
-            <form onSubmit={handleSearchSubmit} className="relative flex-1 flex items-center">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 pointer-events-none" />
-              <input
-                id="map-search-input"
-                type="text"
-                value={searchVal}
-                onChange={(e) => setSearchVal(e.target.value)}
-                placeholder="Where do you want to build? Search location..."
-                className="w-full pl-9 pr-12 py-2.5 rounded-2xl bg-white/98 backdrop-blur-2xl border border-slate-200/90 shadow-glass text-xs font-semibold text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#FFD21F]"
-              />
+        {/* Scrollable Content Body (Desktop always, Mobile when expanded) */}
+        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3.5 text-xs">
+          
+          {/* Section: Mode Tabs (Search, Radius, Draw) */}
+          <div className="flex flex-col gap-2">
+            <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+              Site Selection Mode
+            </div>
+            <div className="grid grid-cols-3 gap-1 bg-slate-100 p-1 rounded-2xl">
               <button
-                type="submit"
-                disabled={isSearching}
-                className="absolute right-1.5 p-2 rounded-xl bg-[#FFD21F] text-slate-950 font-bold hover:bg-[#F2C50F] transition-all disabled:opacity-50"
-                title="Search Location"
-              >
-                {isSearching ? (
-                  <span className="w-3.5 h-3.5 border-2 border-slate-900/30 border-t-slate-900 rounded-full animate-spin block" />
-                ) : (
-                  <ArrowRight className="w-3.5 h-3.5 stroke-[2.5]" />
-                )}
-              </button>
-            </form>
-
-            {/* GPS Button */}
-            <button
-              type="button"
-              id="btn-map-gps"
-              onClick={handleUseGps}
-              disabled={isGpsLocating}
-              className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-2xl bg-white/95 backdrop-blur-xl border border-white/90 shadow-glass text-xs font-bold text-slate-700 hover:text-slate-950 hover:bg-white active:scale-95 transition-all"
-            >
-              <Crosshair className={`w-3.5 h-3.5 text-amber-500 ${isGpsLocating ? 'animate-spin' : ''}`} />
-              <span className="whitespace-nowrap">GPS Location</span>
-            </button>
-          </div>
-        )}
-
-        {/* Preset Location Chips */}
-        {mode === 'search' && (
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pointer-events-auto no-scrollbar">
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider pl-1">Presets:</span>
-            {PRESET_LOCATIONS.map((loc) => (
-              <button
-                key={loc.name}
-                type="button"
-                onClick={() => {
-                  onSiteChange({
-                    name: loc.name,
-                    shortName: loc.name.split(',')[0],
-                    lat: loc.lat,
-                    lon: loc.lon,
-                    areaKm2: loc.areaKm2,
-                    terrainType: loc.terrain,
-                  });
-                  renderBoundary(loc.lat, loc.lon, loc.areaKm2);
-                }}
-                className={`flex-shrink-0 px-2.5 py-1 rounded-xl text-xs font-semibold backdrop-blur-md transition-all ${
-                  site.name.includes(loc.name.split(',')[0])
-                    ? 'bg-[#FFD21F] text-slate-950 shadow-sm font-bold'
-                    : 'bg-white/80 text-slate-700 hover:bg-white border border-white/60'
+                id="tab-mode-search"
+                onClick={() => { setMode('search'); onToggleDrawMode(false); }}
+                className={`flex items-center justify-center gap-1 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  mode === 'search' ? 'bg-[#FFD21F] text-slate-950 shadow-sm' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                {loc.name.split(',')[0]}
+                <Search className="w-3.5 h-3.5" />
+                <span>Search</span>
               </button>
-            ))}
-          </div>
-        )}
 
-        {/* Radius Mode Toolbar */}
-        {mode === 'radius' && (
-          <div
-            id="radius-mode-container"
-            className="flex flex-wrap items-center gap-2 bg-white/95 backdrop-blur-xl border border-white/90 p-2 rounded-2xl shadow-glass pointer-events-auto"
-          >
-            <span className="text-xs font-bold text-slate-600 mr-1">Concession Radius:</span>
-            {[1, 5, 10, 25, 50, 100].map((r) => (
               <button
-                key={r}
-                type="button"
-                onClick={() => handleApplyRadius(r)}
-                className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
-                  selectedRadius === r
-                    ? 'bg-[#FFD21F] text-slate-950 shadow-sm'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                id="tab-mode-radius"
+                onClick={() => { setMode('radius'); onToggleDrawMode(false); }}
+                className={`flex items-center justify-center gap-1 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  mode === 'radius' ? 'bg-[#FFD21F] text-slate-950 shadow-sm' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                {r} km
+                <CircleDot className="w-3.5 h-3.5" />
+                <span>Radius</span>
               </button>
-            ))}
-            <div className="flex items-center gap-1.5 ml-auto">
-              <input
-                id="custom-radius-input"
-                type="number"
-                min="0.5"
-                max="200"
-                step="0.5"
-                value={customRadius}
-                onChange={(e) => setCustomRadius(e.target.value)}
-                placeholder="Custom km"
-                className="w-20 px-2 py-1 text-xs rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:ring-1 focus:ring-[#FFD21F]"
-              />
+
               <button
-                type="button"
-                id="btn-apply-custom-radius"
-                onClick={() => {
-                  const r = parseFloat(customRadius);
-                  if (!isNaN(r) && r > 0) handleApplyRadius(r);
-                }}
-                className="px-3 py-1 rounded-xl bg-[#FFD21F] text-slate-950 text-xs font-bold hover:bg-[#F2C50F]"
+                id="tab-mode-draw"
+                onClick={() => { setMode('draw'); onToggleDrawMode(true); setIsDrawing(true); }}
+                className={`flex items-center justify-center gap-1 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  mode === 'draw' ? 'bg-[#FFD21F] text-slate-950 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                }`}
               >
-                Apply
+                <Edit3 className="w-3.5 h-3.5" />
+                <span>Draw</span>
               </button>
             </div>
           </div>
-        )}
 
-        {/* Draw Mode Toolbar */}
-        {mode === 'draw' && (
-          <div
-            id="draw-mode-hint"
-            className="flex flex-wrap items-center justify-between gap-2 bg-white/95 backdrop-blur-xl border border-white/90 p-2.5 rounded-2xl shadow-glass pointer-events-auto"
-          >
-            <div className="flex items-center gap-2 text-xs text-slate-800">
-              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse flex-shrink-0" />
-              <span id="draw-status-label" className="font-medium">
-                {drawnPoints.length === 0
-                  ? 'Click satellite map to place boundary vertices.'
-                  : `${drawnPoints.length} vertices placed. ${drawStats ? `Area: ${drawStats.areaKm2.toFixed(1)} km²` : 'Place 3+ points.'}`}
+          {/* Contextual Mode Controls */}
+          {mode === 'search' && (
+            <div className="flex flex-col gap-2">
+              <form onSubmit={handleSearchSubmit} className="relative flex items-center">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 pointer-events-none" />
+                <input
+                  id="map-search-input"
+                  type="text"
+                  value={searchVal}
+                  onChange={(e) => setSearchVal(e.target.value)}
+                  placeholder="Search city, district, coordinates..."
+                  className="w-full pl-9 pr-11 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#FFD21F]"
+                />
+                <button
+                  type="submit"
+                  id="btn-search-arrow"
+                  disabled={isSearching}
+                  className="absolute right-1 p-1.5 rounded-lg bg-[#FFD21F] text-slate-950 font-bold hover:bg-[#F2C50F] transition-all disabled:opacity-50"
+                  title="Search"
+                >
+                  {isSearching ? (
+                    <span className="w-3 h-3 border-2 border-slate-900/30 border-t-slate-900 rounded-full animate-spin block" />
+                  ) : (
+                    <ArrowRight className="w-3.5 h-3.5 stroke-[2.5]" />
+                  )}
+                </button>
+              </form>
+
+              {/* GPS Button */}
+              <button
+                type="button"
+                id="btn-use-current-location"
+                onClick={handleUseGps}
+                disabled={isGpsLocating}
+                className="flex items-center justify-center gap-1.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 hover:text-slate-950 hover:bg-slate-100 active:scale-95 transition-all"
+              >
+                <Crosshair className={`w-3.5 h-3.5 text-amber-500 ${isGpsLocating ? 'animate-spin' : ''}`} />
+                <span>Use Current Location (GPS)</span>
+              </button>
+
+              {/* Presets */}
+              <div className="flex flex-col gap-1 mt-1">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Preset Sites</span>
+                <div className="flex flex-wrap gap-1">
+                  {PRESET_LOCATIONS.map((loc) => (
+                    <button
+                      key={loc.name}
+                      type="button"
+                      onClick={() => {
+                        onSiteChange({
+                          name: loc.name,
+                          shortName: loc.name.split(',')[0],
+                          lat: loc.lat,
+                          lon: loc.lon,
+                          areaKm2: loc.areaKm2,
+                          terrainType: loc.terrain,
+                        });
+                        renderBoundary(loc.lat, loc.lon, loc.areaKm2);
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                        site.name.includes(loc.name.split(',')[0])
+                          ? 'bg-[#FFD21F] text-slate-950 shadow-xs font-bold'
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      }`}
+                    >
+                      {loc.name.split(',')[0]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {mode === 'radius' && (
+            <div id="radius-mode-container" className="flex flex-col gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+              <span className="text-[11px] font-bold text-slate-600">Concession Radius:</span>
+              <div className="flex flex-wrap gap-1.5">
+                {[1, 5, 10, 25, 50, 100].map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => handleApplyRadius(r)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                      selectedRadius === r
+                        ? 'bg-[#FFD21F] text-slate-950 shadow-xs'
+                        : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                    }`}
+                  >
+                    {r} km
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-1.5 mt-1">
+                <input
+                  id="custom-radius-input"
+                  type="number"
+                  min="0.5"
+                  max="200"
+                  step="0.5"
+                  value={customRadius}
+                  onChange={(e) => setCustomRadius(e.target.value)}
+                  placeholder="Custom km"
+                  className="w-24 px-2 py-1 text-xs rounded-lg bg-white border border-slate-200 focus:outline-none focus:ring-1 focus:ring-[#FFD21F]"
+                />
+                <button
+                  type="button"
+                  id="btn-apply-custom-radius"
+                  onClick={() => {
+                    const r = parseFloat(customRadius);
+                    if (!isNaN(r) && r > 0) handleApplyRadius(r);
+                  }}
+                  className="px-3 py-1 rounded-lg bg-[#FFD21F] text-slate-950 text-xs font-bold hover:bg-[#F2C50F]"
+                >
+                  Apply
+                </button>
+              </div>
+            </div>
+          )}
+
+          {mode === 'draw' && (
+            <div id="draw-mode-hint" className="flex flex-col gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+              <div className="flex items-center gap-1.5 text-xs text-slate-800">
+                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse flex-shrink-0" />
+                <span id="draw-status-label" className="font-medium text-[11px]">
+                  {drawnPoints.length === 0
+                    ? 'Click satellite map to place vertices.'
+                    : `${drawnPoints.length} vertices. ${drawStats ? `Area: ${drawStats.areaKm2.toFixed(1)} km²` : 'Place 3+ points.'}`}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 mt-1">
+                <button
+                  type="button"
+                  id="btn-close-polygon-draw"
+                  disabled={drawnPoints.length < 3}
+                  onClick={handleClosePolygon}
+                  className="flex-1 py-1.5 rounded-lg bg-[#FFD21F] text-slate-950 text-xs font-bold hover:bg-[#F2C50F] disabled:opacity-40 transition-all text-center"
+                >
+                  Close Polygon
+                </button>
+                <button
+                  type="button"
+                  id="btn-clear-polygon-draw"
+                  onClick={() => setDrawnPoints([])}
+                  className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-100"
+                >
+                  Clear
+                </button>
+                <button
+                  type="button"
+                  id="btn-fit-drawn-polygon"
+                  onClick={handleFitSite}
+                  className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-100"
+                >
+                  Fit Site
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Real Terrain Photo Card */}
+          <div className="relative rounded-2xl overflow-hidden border border-slate-200 shadow-xs h-24">
+            <img
+              src="/assets/real-turbines-photo.jpg"
+              alt="Selected site terrain profile"
+              onError={(e) => { (e.currentTarget as any).src = 'https://images.unsplash.com/photo-1466611653911-95081537e5b7?w=500'; }}
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent flex items-end p-2.5">
+              <span id="meta-location-name" className="text-white font-bold text-xs truncate">
+                {site.name}
               </span>
             </div>
+          </div>
 
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                id="btn-close-polygon-draw"
-                disabled={drawnPoints.length < 3}
-                onClick={handleClosePolygon}
-                className="px-3 py-1.5 rounded-xl bg-[#FFD21F] text-slate-950 text-xs font-bold hover:bg-[#F2C50F] disabled:opacity-40 transition-all"
-              >
-                Close Polygon
-              </button>
-              <button
-                type="button"
-                id="btn-clear-polygon-draw"
-                onClick={() => setDrawnPoints([])}
-                className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold hover:bg-slate-200"
-              >
-                Clear
-              </button>
-              <button
-                type="button"
-                id="btn-fit-drawn-polygon"
-                onClick={handleFitSite}
-                className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold hover:bg-slate-200"
-              >
-                Fit Site
-              </button>
+          {/* 9-Point Geotechnical Checklist */}
+          <div id="site-intelligence-card" className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80">
+            <div className="flex items-center justify-between mb-2">
+              <span className="font-bold text-slate-800 text-[11px] uppercase tracking-wider">Site Checks</span>
+              <span id="intel-overall-pill" className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                ✓ Verified
+              </span>
+            </div>
+            <div id="intel-checks-list" className="flex flex-col gap-1.5">
+              {intelItems.map((item, idx) => (
+                <div key={idx} className="flex items-start justify-between gap-1 text-[11px] text-slate-600">
+                  <div className="flex items-center gap-1.5">
+                    {item.status === 'verified' ? (
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                    ) : (
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+                    )}
+                    <span>{item.label}</span>
+                  </div>
+                  <span className="text-[10px] font-mono text-slate-500 text-right truncate max-w-[130px]">
+                    {item.source}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
-        )}
 
-        {/* Error Notification */}
-        {searchError && (
-          <div className="bg-red-500/90 text-white text-xs px-3.5 py-1.5 rounded-xl backdrop-blur-md shadow-md flex items-center justify-between pointer-events-auto">
-            <span>{searchError}</span>
-            <button onClick={() => setSearchError('')} className="p-0.5 hover:opacity-75">
-              <X className="w-3.5 h-3.5" />
-            </button>
+          {/* Metadata Table */}
+          <div className="p-3 rounded-2xl bg-white border border-slate-200/80 flex flex-col gap-1.5 font-mono text-[11px]">
+            <div className="flex justify-between text-slate-600">
+              <span className="font-sans text-slate-400">Latitude</span>
+              <strong id="meta-latitude" className="text-slate-900">{site.lat.toFixed(4)}° N</strong>
+            </div>
+            <div className="flex justify-between text-slate-600">
+              <span className="font-sans text-slate-400">Longitude</span>
+              <strong id="meta-longitude" className="text-slate-900">{site.lon.toFixed(4)}° E</strong>
+            </div>
+            <div className="flex justify-between text-slate-600">
+              <span className="font-sans text-slate-400">Elevation</span>
+              <strong id="meta-elevation" className="text-slate-900">{site.elevationM || 42} m</strong>
+            </div>
+            <div className="flex justify-between text-slate-600">
+              <span className="font-sans text-slate-400">Terrain</span>
+              <strong id="meta-terrain" className="text-slate-900 truncate max-w-[140px]">{site.terrainType || 'Coastal'}</strong>
+            </div>
+            <div className="flex justify-between text-slate-600">
+              <span className="font-sans text-slate-400">Coast Distance</span>
+              <strong id="meta-coast" className="text-slate-900">{site.distanceToCoastKm || 0.2} km</strong>
+            </div>
+            <div className="pt-1 border-t border-slate-100 flex flex-col gap-0.5">
+              <span className="font-sans text-[10px] text-slate-400">5-Class Feasibility</span>
+              <span id="meta-land-feasibility" className="text-[10px] text-emerald-700">
+                ✓ 8 Preferred · 12 Buildable · 4 Excluded
+              </span>
+            </div>
           </div>
-        )}
-      </div>
 
-      {/* ── MAP CONTAINER ────────────────────────────────────────── */}
-      <div className="relative flex-1 w-full h-full">
+          {/* Live Wind Telemetry Card */}
+          <div className="p-3 rounded-2xl bg-amber-50/60 border border-amber-200/60">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="font-bold text-amber-950 text-[11px] uppercase tracking-wider">Wind Resource</span>
+              <span id="meta-source-badge" onClick={onOpenDataSources} className="text-[10px] font-bold text-amber-700 underline cursor-pointer">
+                ECMWF / SRTM ⓘ
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-[11px]">
+              <div>
+                <span className="text-slate-500 text-[10px]">Speed (100m)</span>
+                <div id="meta-wind-speed" className="font-black text-slate-900 font-mono">
+                  {(site.windSpeedMps || 7.1).toFixed(1)} m/s
+                </div>
+              </div>
+              <div>
+                <span className="text-slate-500 text-[10px]">Power Density</span>
+                <div id="meta-wind-density" className="font-black text-slate-900 font-mono">
+                  ~ {site.windPowerDensity || 320} W/m²
+                </div>
+              </div>
+              <div>
+                <span className="text-slate-500 text-[10px]">Direction</span>
+                <div id="meta-wind-dir" className="font-black text-slate-900 font-mono">
+                  {site.windDirectionDeg || 300}°
+                </div>
+              </div>
+              <div>
+                <span className="text-slate-500 text-[10px]">Air Density</span>
+                <div id="meta-air-density" className="font-black text-slate-900 font-mono">
+                  {site.airDensityKgpm3 || 1.18} kg/m³
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Action Button */}
+          <div className="flex flex-col gap-2 pt-1 mt-auto">
+            <Button
+              id="btn-confirm-site"
+              variant="energy"
+              size="md"
+              onClick={onConfirmSite}
+              className="w-full bg-[#FFD21F] hover:bg-[#F2C50F] text-slate-950 font-black shadow-md py-3 text-xs"
+            >
+              <span>Confirm Site Boundary</span>
+              <ArrowRight className="w-4 h-4 stroke-[2.5]" />
+            </Button>
+          </div>
+        </div>
+      </aside>
+
+      {/* ── MAP CONTAINER (Fills Right on Desktop, Full on Mobile) ── */}
+      <div className="flex-1 w-full h-full relative overflow-hidden">
+        
         {/* Leaflet 2D Map */}
         <div
           ref={mapContainerRef}
@@ -820,8 +975,147 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
           className={`w-full h-full absolute inset-0 ${is3DActive ? 'block' : 'hidden'}`}
         />
 
-        {/* Floating Map Utility Buttons (Right Column) */}
-        <div className="absolute top-28 right-3 md:right-[404px] z-20 flex flex-col gap-1.5 pointer-events-auto">
+        {/* Mobile Top Floating Search & Layer Bar */}
+        <div className="md:hidden absolute top-2 left-2 right-2 z-[1050] flex flex-col gap-1.5 pointer-events-none">
+          <div className="flex items-center gap-1.5 pointer-events-auto">
+            <form onSubmit={handleSearchSubmit} className="relative flex-1 flex items-center">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 pointer-events-none" />
+              <input
+                id="search-input-field"
+                type="text"
+                value={searchVal}
+                onChange={(e) => setSearchVal(e.target.value)}
+                placeholder="Search site..."
+                className="w-full pl-8 pr-9 py-2 rounded-xl bg-white/95 backdrop-blur-xl border border-slate-200/90 shadow-md text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#FFD21F]"
+              />
+              <button
+                type="submit"
+                disabled={isSearching}
+                className="absolute right-1 p-1 rounded-lg bg-[#FFD21F] text-slate-950 font-bold"
+              >
+                <ArrowRight className="w-3.5 h-3.5 stroke-[2.5]" />
+              </button>
+            </form>
+
+            <button
+              type="button"
+              id="btn-map-gps"
+              onClick={handleUseGps}
+              disabled={isGpsLocating}
+              className="p-2 rounded-xl bg-white/95 backdrop-blur-xl border border-slate-200/90 shadow-md text-slate-800 active:scale-95 transition-all"
+              title="GPS Location"
+            >
+              <Crosshair className={`w-4 h-4 text-amber-500 ${isGpsLocating ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+
+          {/* Mobile Layer Pills */}
+          <div className="flex items-center justify-between gap-1 pointer-events-auto overflow-x-auto no-scrollbar py-0.5">
+            <div className="flex items-center gap-1 bg-white/90 backdrop-blur-xl border border-white/80 p-0.5 rounded-xl shadow-xs">
+              <button
+                onClick={() => switchBaseLayer('street')}
+                className={`px-2 py-1 rounded-lg text-[10px] font-semibold ${
+                  activeBaseLayer === 'street' && !is3DActive ? 'bg-slate-900 text-white' : 'text-slate-600'
+                }`}
+              >
+                Map
+              </button>
+              <button
+                onClick={() => switchBaseLayer('satellite')}
+                className={`px-2 py-1 rounded-lg text-[10px] font-bold ${
+                  activeBaseLayer === 'satellite' && !is3DActive ? 'bg-[#FFD21F] text-slate-950' : 'text-slate-600'
+                }`}
+              >
+                Sat
+              </button>
+              <button
+                onClick={() => switchBaseLayer('terrain')}
+                className={`px-2 py-1 rounded-lg text-[10px] font-semibold ${
+                  activeBaseLayer === 'terrain' && !is3DActive ? 'bg-slate-900 text-white' : 'text-slate-600'
+                }`}
+              >
+                Terrain
+              </button>
+              <button
+                onClick={onToggle3D}
+                className={`flex items-center gap-0.5 px-2 py-1 rounded-lg text-[10px] font-bold ${
+                  is3DActive ? 'bg-[#FFD21F] text-slate-950' : 'text-slate-600'
+                }`}
+              >
+                <Box className="w-3 h-3" />
+                <span>3D</span>
+              </button>
+            </div>
+
+            {/* Presets Quick Dropdown / Chips on Mobile */}
+            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+              {PRESET_LOCATIONS.slice(0, 3).map((loc) => (
+                <button
+                  key={loc.name}
+                  onClick={() => {
+                    onSiteChange({
+                      name: loc.name,
+                      shortName: loc.name.split(',')[0],
+                      lat: loc.lat,
+                      lon: loc.lon,
+                      areaKm2: loc.areaKm2,
+                      terrainType: loc.terrain,
+                    });
+                    renderBoundary(loc.lat, loc.lon, loc.areaKm2);
+                  }}
+                  className={`px-2 py-1 rounded-lg text-[10px] font-semibold whitespace-nowrap shadow-xs ${
+                    site.name.includes(loc.name.split(',')[0])
+                      ? 'bg-[#FFD21F] text-slate-950 font-bold'
+                      : 'bg-white/90 text-slate-700'
+                  }`}
+                >
+                  {loc.name.split(',')[0]}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Desktop Top Right Layer Switcher */}
+        <div className="hidden md:flex absolute top-3 right-3 z-[1020] items-center gap-1.5 bg-white/95 backdrop-blur-2xl border border-slate-200/90 p-1 rounded-2xl shadow-glass pointer-events-auto">
+          <button
+            onClick={() => switchBaseLayer('street')}
+            className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+              activeBaseLayer === 'street' && !is3DActive ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            Map
+          </button>
+          <button
+            onClick={() => switchBaseLayer('satellite')}
+            className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+              activeBaseLayer === 'satellite' && !is3DActive ? 'bg-[#FFD21F] text-slate-950 font-bold' : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            Satellite
+          </button>
+          <button
+            onClick={() => switchBaseLayer('terrain')}
+            className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+              activeBaseLayer === 'terrain' && !is3DActive ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            Terrain
+          </button>
+          <button
+            id="btn-s1-toggle-3d"
+            onClick={onToggle3D}
+            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              is3DActive ? 'bg-[#FFD21F] text-slate-950 shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <Box className="w-3.5 h-3.5" />
+            <span>3D Globe</span>
+          </button>
+        </div>
+
+        {/* Floating Map Utility Buttons (Zoom & Recenter) */}
+        <div className="absolute top-24 md:top-16 right-3 z-[1020] flex flex-col gap-1.5 pointer-events-auto">
           <button
             id="btn-map-zoom-in"
             onClick={() => mapRef.current?.zoomIn()}
@@ -851,7 +1145,7 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
         {/* Bottom Floating Map Contextual Bar */}
         <div
           id="map-contextual-bar"
-          className="absolute bottom-24 sm:bottom-6 left-3 right-3 sm:left-6 sm:right-auto z-20 flex flex-wrap items-center gap-1.5 pointer-events-auto"
+          className="absolute bottom-20 md:bottom-6 left-3 right-3 md:left-6 md:right-auto z-[1020] flex flex-wrap items-center gap-1.5 pointer-events-auto"
         >
           <button
             id="btn-ctx-fit"
@@ -865,14 +1159,14 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
             onClick={handleUseGps}
             className="flex items-center gap-1 px-3 py-1.5 rounded-2xl bg-white/90 backdrop-blur-xl border border-white/80 shadow-glass text-xs font-bold text-slate-700 hover:bg-white active:scale-95 transition-all"
           >
-            <span>⌖ Current Location</span>
+            <span>⌖ GPS</span>
           </button>
           <button
             id="btn-ctx-coords"
             onClick={() => setShowCoordsPopup(!showCoordsPopup)}
             className="flex items-center gap-1 px-3 py-1.5 rounded-2xl bg-white/90 backdrop-blur-xl border border-white/80 shadow-glass text-xs font-bold text-slate-700 hover:bg-white active:scale-95 transition-all"
           >
-            <span>📍 Coordinates</span>
+            <span>📍 Coords</span>
           </button>
           <button
             id="btn-ctx-circle"
@@ -900,7 +1194,7 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
             onClick={onOpenDataSources}
             className="flex items-center gap-1 px-3 py-1.5 rounded-2xl bg-white/90 backdrop-blur-xl border border-white/80 shadow-glass text-xs font-bold text-slate-700 hover:bg-white active:scale-95 transition-all"
           >
-            <span>🌐 Data Sources</span>
+            <span>🌐 Sources</span>
           </button>
         </div>
 
@@ -908,7 +1202,7 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
         {showCoordsPopup && (
           <div
             id="ctx-coords-popup"
-            className="absolute bottom-36 left-4 z-30 bg-white/95 backdrop-blur-2xl border border-white/90 rounded-3xl p-4 shadow-glass w-72 pointer-events-auto"
+            className="absolute bottom-32 md:bottom-20 left-4 z-30 bg-white/95 backdrop-blur-2xl border border-white/90 rounded-3xl p-4 shadow-glass w-72 pointer-events-auto"
           >
             <div className="flex items-center justify-between pb-2 border-b border-slate-100 mb-3">
               <span className="text-xs font-bold text-slate-800">Enter Coordinates</span>
@@ -954,175 +1248,17 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
             </div>
           </div>
         )}
+
+        {/* Error Notification */}
+        {searchError && (
+          <div className="absolute top-16 md:top-3 left-4 right-4 md:right-auto md:w-96 z-30 bg-red-500/90 text-white text-xs px-3.5 py-2 rounded-xl backdrop-blur-md shadow-md flex items-center justify-between pointer-events-auto">
+            <span>{searchError}</span>
+            <button onClick={() => setSearchError('')} className="p-0.5 hover:opacity-75">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
       </div>
-
-      {/* ── BOTTOM/RIGHT SITE INTELLIGENCE INSPECTOR (Liquid Glass) ── */}
-      <aside
-        id="site-info-panel"
-        className={`fixed md:absolute bottom-16 right-0 left-0 md:left-auto md:top-3 md:bottom-3 md:w-96 z-20 pointer-events-auto flex flex-col transition-all duration-300 ${
-          isSheetCollapsed ? 'translate-y-[calc(100%-54px)] md:translate-y-0 md:w-14' : 'translate-y-0'
-        }`}
-      >
-        <div className="h-full bg-white/95 backdrop-blur-2xl border-t md:border border-white/90 md:rounded-3xl shadow-glass flex flex-col overflow-hidden max-h-[80vh] md:max-h-full">
-          
-          {/* Sheet Header / Drag Handle */}
-          <div
-            id="site-info-header"
-            onClick={() => setIsSheetCollapsed(!isSheetCollapsed)}
-            className="p-3.5 flex items-center justify-between cursor-pointer border-b border-slate-100 flex-shrink-0"
-          >
-            <div className="flex items-center gap-2">
-              <span className="p-1.5 rounded-xl bg-[#FFD21F]/20 text-slate-900">
-                <MapPin className="w-4 h-4 text-amber-600" />
-              </span>
-              <div>
-                <h3 className="text-xs font-bold text-slate-900 leading-tight">Site Intelligence</h3>
-                <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
-                  <CheckCircle2 className="w-3 h-3" /> Real-time Geotechnical
-                </span>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <div className="text-right">
-                <div className="text-[10px] text-slate-400 font-bold uppercase">Area</div>
-                <div id="meta-area" className="text-xs font-black text-slate-900 font-mono">
-                  {(site.areaKm2 || 24.8).toFixed(1)} km²
-                </div>
-              </div>
-              <button className="p-1 text-slate-400 hover:text-slate-700">
-                {isSheetCollapsed ? <Plus className="w-4 h-4" /> : <Minus className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
-
-          {/* Scrollable Content Body */}
-          <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3.5 text-xs">
-            
-            {/* Real Terrain Photo Card */}
-            <div className="relative rounded-2xl overflow-hidden border border-slate-200 shadow-xs h-24">
-              <img
-                src="/assets/real-turbines-photo.jpg"
-                alt="Selected site terrain profile"
-                onError={(e) => { (e.currentTarget as any).src = 'https://images.unsplash.com/photo-1466611653911-95081537e5b7?w=500'; }}
-                className="w-full h-full object-cover"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent flex items-end p-2.5">
-                <span id="meta-location-name" className="text-white font-bold text-xs truncate">
-                  {site.name}
-                </span>
-              </div>
-            </div>
-
-            {/* 9-Point Geotechnical Checklist */}
-            <div id="site-intelligence-card" className="p-3 rounded-2xl bg-slate-50/80 border border-slate-200/80">
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-bold text-slate-800 text-[11px] uppercase tracking-wider">Site Checks</span>
-                <span id="intel-overall-pill" className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                  ✓ Verified
-                </span>
-              </div>
-              <div id="intel-checks-list" className="flex flex-col gap-1.5">
-                {intelItems.map((item, idx) => (
-                  <div key={idx} className="flex items-start justify-between gap-1 text-[11px] text-slate-600">
-                    <div className="flex items-center gap-1.5">
-                      {item.status === 'verified' ? (
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
-                      ) : (
-                        <AlertTriangle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
-                      )}
-                      <span>{item.label}</span>
-                    </div>
-                    <span className="text-[10px] font-mono text-slate-500 text-right truncate max-w-[130px]">
-                      {item.source}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Metadata Table */}
-            <div className="p-3 rounded-2xl bg-white border border-slate-200/80 flex flex-col gap-1.5 font-mono text-[11px]">
-              <div className="flex justify-between text-slate-600">
-                <span className="font-sans text-slate-400">Latitude</span>
-                <strong id="meta-latitude" className="text-slate-900">{site.lat.toFixed(4)}° N</strong>
-              </div>
-              <div className="flex justify-between text-slate-600">
-                <span className="font-sans text-slate-400">Longitude</span>
-                <strong id="meta-longitude" className="text-slate-900">{site.lon.toFixed(4)}° E</strong>
-              </div>
-              <div className="flex justify-between text-slate-600">
-                <span className="font-sans text-slate-400">Elevation</span>
-                <strong id="meta-elevation" className="text-slate-900">{site.elevationM || 42} m</strong>
-              </div>
-              <div className="flex justify-between text-slate-600">
-                <span className="font-sans text-slate-400">Terrain</span>
-                <strong id="meta-terrain" className="text-slate-900 truncate max-w-[140px]">{site.terrainType || 'Coastal'}</strong>
-              </div>
-              <div className="flex justify-between text-slate-600">
-                <span className="font-sans text-slate-400">Coast Distance</span>
-                <strong id="meta-coast" className="text-slate-900">{site.distanceToCoastKm || 0.2} km</strong>
-              </div>
-              <div className="pt-1 border-t border-slate-100 flex flex-col gap-0.5">
-                <span className="font-sans text-[10px] text-slate-400">5-Class Feasibility</span>
-                <span id="meta-land-feasibility" className="text-[10px] text-emerald-700">
-                  ✓ 8 Preferred · 12 Buildable · 4 Excluded
-                </span>
-              </div>
-            </div>
-
-            {/* Live Wind Telemetry Card */}
-            <div className="p-3 rounded-2xl bg-amber-50/60 border border-amber-200/60">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="font-bold text-amber-950 text-[11px] uppercase tracking-wider">Wind Resource</span>
-                <span id="meta-source-badge" onClick={onOpenDataSources} className="text-[10px] font-bold text-amber-700 underline cursor-pointer">
-                  ECMWF / SRTM ⓘ
-                </span>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-[11px]">
-                <div>
-                  <span className="text-slate-500 text-[10px]">Speed (100m)</span>
-                  <div id="meta-wind-speed" className="font-black text-slate-900 font-mono">
-                    {(site.windSpeedMps || 7.1).toFixed(1)} m/s
-                  </div>
-                </div>
-                <div>
-                  <span className="text-slate-500 text-[10px]">Power Density</span>
-                  <div id="meta-wind-density" className="font-black text-slate-900 font-mono">
-                    ~ {site.windPowerDensity || 320} W/m²
-                  </div>
-                </div>
-                <div>
-                  <span className="text-slate-500 text-[10px]">Direction</span>
-                  <div id="meta-wind-dir" className="font-black text-slate-900 font-mono">
-                    {site.windDirectionDeg || 300}°
-                  </div>
-                </div>
-                <div>
-                  <span className="text-slate-500 text-[10px]">Air Density</span>
-                  <div id="meta-air-density" className="font-black text-slate-900 font-mono">
-                    {site.airDensityKgpm3 || 1.18} kg/m³
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex flex-col gap-2 pt-1 mt-auto">
-              <Button
-                id="btn-confirm-site"
-                variant="energy"
-                size="md"
-                onClick={onConfirmSite}
-                className="w-full bg-[#FFD21F] hover:bg-[#F2C50F] text-slate-950 font-black shadow-md py-3 text-xs"
-              >
-                <span>Confirm Site Boundary</span>
-                <ArrowRight className="w-4 h-4 stroke-[2.5]" />
-              </Button>
-            </div>
-          </div>
-        </div>
-      </aside>
     </div>
   );
 };

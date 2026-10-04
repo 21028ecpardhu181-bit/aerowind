@@ -13,7 +13,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   onNewProject,
 }) => {
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 liquid-glass border-t border-slate-200/80 px-4 py-2 flex items-center justify-around shadow-glass">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-[1200] liquid-glass border-t border-slate-200/80 px-4 py-2 flex items-center justify-around shadow-glass">
       <button
         id="btn-mobile-nav-home"
         onClick={() => onTabChange('dashboard')}

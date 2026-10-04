@@ -23,7 +23,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   user,
 }) => {
   return (
-    <header className="sticky top-0 z-40 w-full bg-white/80 backdrop-blur-md border-b border-slate-200/80 px-4 md:px-6 py-2.5 flex items-center justify-between gap-4 transition-all">
+    <header className="sticky top-0 z-[1300] w-full bg-white/80 backdrop-blur-md border-b border-slate-200/80 px-4 md:px-6 py-2.5 flex items-center justify-between gap-4 transition-all">
       {/* Brand & Wordmark */}
       <div className="flex items-center gap-3">
         <button
