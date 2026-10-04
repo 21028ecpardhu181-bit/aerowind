@@ -1955,4 +1955,415 @@ body {
     font-family: var(--font-mono);
 }
 
+/* ==========================================================================
+   SCREEN 4: QAOA QUANTUM OPTIMIZATION STYLES
+   ========================================================================== */
+
+.screen-4-view {
+    display: none;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    position: relative;
+    overflow: hidden;
+    background: var(--bg-main);
+}
+
+.screen-4-scroll-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 20px 140px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    max-width: 900px;
+    margin: 0 auto;
+    width: 100%;
+    -webkit-overflow-scrolling: touch;
+    scroll-padding-bottom: 120px;
+}
+
+/* Optimization Status Banner */
+.opt-status-card {
+    border-radius: var(--radius-lg);
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    transition: all 0.3s ease;
+}
+
+.opt-status-card.running {
+    background: rgba(56, 189, 248, 0.12);
+    border-color: rgba(56, 189, 248, 0.4);
+}
+
+.opt-status-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 16px;
+    background: rgba(16, 185, 129, 0.2);
+    color: #10b981;
+}
+
+.opt-status-card.running .opt-status-icon {
+    background: rgba(56, 189, 248, 0.2);
+    color: var(--primary-cyan);
+    animation: spin-pulse 2s infinite linear;
+}
+
+@keyframes spin-pulse {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.opt-status-text-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.opt-status-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #ffffff;
+}
+
+.opt-status-desc {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+/* Optimization Progress Bar */
+.opt-progress-card {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.opt-progress-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+}
+
+.opt-progress-label {
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.opt-progress-counter {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    color: var(--primary-cyan);
+}
+
+.opt-progress-track {
+    width: 100%;
+    height: 8px;
+    background: var(--bg-surface-elevated);
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+}
+
+.opt-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #3b82f6, #06b6d4, #10b981);
+    border-radius: 4px;
+    width: 0%;
+    transition: width 0.4s ease;
+}
+
+/* KPI Stats Trio */
+.opt-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-top: 4px;
+}
+
+.opt-kpi-card {
+    background: var(--bg-surface-elevated);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.opt-kpi-label {
+    font-size: 10px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.opt-kpi-val {
+    font-size: 14px;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.opt-kpi-val.improvement {
+    color: #10b981;
+}
+
+/* Segmented Engine Tabs */
+.engine-tabs-bar {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+}
+
+.engine-tab-btn {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: var(--bg-surface-elevated);
+    border: 1px solid var(--border-light);
+    color: var(--text-secondary);
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    touch-action: manipulation;
+}
+
+.engine-tab-btn.active {
+    background: var(--primary-blue);
+    border-color: var(--primary-blue);
+    color: #ffffff;
+    box-shadow: 0 0 12px rgba(37, 99, 235, 0.4);
+}
+
+/* QUBO Binary Decision Grid */
+.qubo-section-card {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    flex-shrink: 0;
+}
+
+.s4-tab-content {
+    flex-shrink: 0;
+}
+
+.qubo-layout-row {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+}
+
+@media (max-width: 600px) {
+    .qubo-layout-row {
+        flex-direction: column;
+    }
+}
+
+.qubo-grid-container {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 6px;
+    width: 100%;
+    max-width: 220px;
+    background: var(--bg-surface-elevated);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    padding: 10px;
+}
+
+.qubo-bit-box {
+    aspect-ratio: 1 / 1;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    transition: all 0.2s ease;
+}
+
+.qubo-bit-box.empty {
+    border: 1px dashed rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text-dim);
+}
+
+.qubo-bit-box.active {
+    background: var(--primary-cyan);
+    border: 1px solid #38bdf8;
+    color: #0f172a;
+    box-shadow: 0 0 8px rgba(56, 189, 248, 0.6);
+}
+
+/* Objective Components List */
+.objective-components-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1;
+    width: 100%;
+}
+
+.objective-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    background: var(--bg-surface-elevated);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+}
+
+.objective-item-icon {
+    font-size: 13px;
+    width: 22px;
+    height: 22px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.objective-item-text {
+    flex: 1;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.objective-item-weight {
+    font-family: var(--font-mono);
+    color: var(--text-dim);
+    font-size: 10px;
+}
+
+/* QAOA Circuit Diagram Container */
+.circuit-diagram-card {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow-x: auto;
+    flex-shrink: 0;
+}
+
+.circuit-svg-wrapper {
+    width: 100%;
+    min-width: 480px;
+    height: 180px;
+    min-height: 180px;
+    flex-shrink: 0;
+    background: rgba(11, 17, 32, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+#s4-circuit-svg {
+    width: 100%;
+    height: 180px;
+    min-height: 180px;
+    display: block;
+}
+
+/* Constraint Checks Card */
+.constraints-card {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.constraint-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: rgba(16, 185, 129, 0.08);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+}
+
+.constraint-name-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.constraint-check-badge {
+    color: #10b981;
+    font-weight: 700;
+    font-size: 14px;
+}
+
+.constraint-status-text {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: #a7f3d0;
+}
+
+/* Desktop Responsive Layout for Screen 4 */
+@media (min-width: 1024px) {
+    .screen-4-desktop-grid {
+        display: grid;
+        grid-template-columns: 1fr 380px;
+        gap: 20px;
+        max-width: 1140px;
+        margin: 0 auto;
+        width: 100%;
+    }
+
+    .screen-4-left-col {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    .screen-4-right-col {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+}
+
 
