@@ -1144,16 +1144,318 @@
         </div>
 
         <!-- ===================================================================
-             SCREEN 5: INSPECT OPTIMIZED 3D WIND FARM (Placeholder)
+             SCREEN 5: OPTIMIZED 3D WIND FARM / INSPECT RESULTS
              =================================================================== -->
-        <div id="screen-5-container" class="screen-2-view">
-            <div class="config-container-wrapper" style="align-items: center; justify-content: center; text-align: center; padding: 24px;">
-                <div style="font-size: 20px; font-weight: 700; color: #ffffff; margin-bottom: 8px;">Screen 5: Inspect Optimized 3D Wind Farm</div>
-                <div style="font-size: 13px; color: var(--text-secondary); max-width: 480px; line-height: 1.5; margin-bottom: 24px;">
-                    Optimized layout computed. Awaiting Screen 5 reference design.
+        <div id="screen-5-container" class="screen-5-view">
+            <!-- Screen 5 Top Sub-Header -->
+            <div class="config-header" style="z-index: 700;">
+                <button type="button" id="btn-s5-back" class="btn-sub-back">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                        <polyline points="15 18 9 12 15 6"></polyline>
+                    </svg>
+                    <span>Back</span>
+                </button>
+                <div class="config-header-center">
+                    <div class="config-title">Optimized Wind Farm</div>
+                    <div id="screen-5-site-indicator" class="config-site-pill">
+                        <span>📍</span>
+                        <span id="s5-indicator-text">Kanyakumari · 10 Turbines (QAOA)</span>
+                    </div>
                 </div>
-                <button type="button" class="btn-sub-back" onclick="APP.goToScreen(4)">
-                    <span>‹ Back to Quantum Optimization</span>
+                <div style="width: 60px;"></div> <!-- balance spacing -->
+            </div>
+
+            <!-- Screen 5 Layout: Map Hero + Analysis Panel (Side on Desktop, Bottom Sheet on Mobile) -->
+            <div class="screen-5-layout">
+                <!-- Center Hero Map Container -->
+                <div class="s5-map-container">
+                    <div id="screen5-map"></div>
+                    <canvas id="screen5-canvas" class="wind-overlay-canvas"></canvas>
+
+                    <!-- Floating Wind Vector Indicator -->
+                    <div id="s5-wind-vector-badge" class="wind-vector-badge s5-wind-badge">
+                        <svg class="wind-vector-arrow-svg" id="s5-wind-arrow-svg" viewBox="0 0 24 12" fill="currentColor">
+                            <path d="M0 5h18l-4-4 1.4-1.4L24 6l-8.6 6.4-1.4-1.4 4-4H0V5z"/>
+                        </svg>
+                        <span id="s5-wind-vector-text">Wind Direction NE (45°)</span>
+                    </div>
+
+                    <!-- Floating Aerodynamic Speed Legend -->
+                    <div id="s5-wind-speed-legend" class="wind-speed-legend">
+                        <div class="legend-title">Wind Speed (m/s)</div>
+                        <div class="legend-gradient-bar"></div>
+                        <div class="legend-ticks">
+                            <span>0</span>
+                            <span>4</span>
+                            <span>8</span>
+                            <span>12</span>
+                            <span>16+</span>
+                        </div>
+                        <div class="legend-status-row">
+                            <div class="legend-dot-item">
+                                <span class="legend-dot turbine"></span>
+                                <span>Turbine</span>
+                            </div>
+                            <div class="legend-dot-item">
+                                <span class="legend-dot wake-low"></span>
+                                <span>Wake (low loss)</span>
+                            </div>
+                            <div class="legend-dot-item">
+                                <span class="legend-dot wake-med" style="background: #f59e0b;"></span>
+                                <span>Wake (medium)</span>
+                            </div>
+                            <div class="legend-dot-item">
+                                <span class="legend-dot wake-high"></span>
+                                <span>Wake (high)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Top Floating Controls Toolbar matching Reference -->
+                    <div class="s5-controls-toolbar">
+                        <!-- Satellite / Terrain Switch -->
+                        <div class="s5-layer-toggle">
+                            <button type="button" id="btn-s5-satellite" class="s5-layer-btn active" title="Satellite Basemap">Satellite</button>
+                            <button type="button" id="btn-s5-terrain" class="s5-layer-btn" title="Terrain Basemap">Terrain</button>
+                        </div>
+
+                        <!-- Wakes Toggle Pill -->
+                        <div class="s5-pill-toggle active" id="btn-s5-toggle-wakes" title="Toggle Jensen Wake Cones">
+                            <div class="s5-pill-switch-track"></div>
+                            <span>Wakes</span>
+                        </div>
+
+                        <!-- Before / After Segmented Toggle -->
+                        <div class="s5-segmented-toggle">
+                            <button type="button" class="s5-toggle-btn" id="s5-btn-before">Before</button>
+                            <button type="button" class="s5-toggle-btn active" id="s5-btn-optimized">Optimized</button>
+                        </div>
+                    </div>
+
+                    <!-- Floating Vertical Map Action Group -->
+                    <div class="s5-map-actions-group">
+                        <button type="button" id="btn-s5-reset-view" class="map-icon-btn" title="Reset Map View">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+                                <path d="M3 3v5h5"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Analysis Bottom Sheet / Desktop Sidebar -->
+                <div id="screen-5-sheet" class="s5-analysis-panel collapsed">
+                    <div class="sheet-drag-handle" id="s5-sheet-handle"></div>
+
+                    <!-- Header -->
+                    <div class="s5-panel-header" id="s5-panel-toggle">
+                        <div class="s5-panel-title-group">
+                            <div class="s5-panel-title">
+                                <span>Optimized Layout</span>
+                                <span class="card-badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border-color: rgba(16, 185, 129, 0.3);">
+                                    Simulation
+                                </span>
+                            </div>
+                            <div class="s5-panel-subtitle">QAOA-optimized layout with minimized wake deficits</div>
+                        </div>
+                        <button type="button" class="btn-sheet-toggle" id="btn-s5-sheet-arrow" aria-label="Toggle Panel">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <!-- Peek Chips Row (Mobile Glance) -->
+                    <div class="s5-peek-chips-row">
+                        <div class="s5-peek-chip">
+                            <span>Turbines:</span> <strong id="s5-peek-turbines">10</strong>
+                        </div>
+                        <div class="s5-peek-chip">
+                            <span>Est. AEP:</span> <strong id="s5-peek-aep" style="color: var(--primary-cyan);">72.6 GWh/yr</strong>
+                        </div>
+                        <div class="s5-peek-chip">
+                            <span>Wake Loss:</span> <strong id="s5-peek-wake-loss" style="color: #10b981;">9.8%</strong>
+                        </div>
+                        <div class="s5-peek-chip">
+                            <span>Feasible:</span> <strong id="s5-peek-feasible" style="color: #10b981;">✓ Yes</strong>
+                        </div>
+                    </div>
+
+                    <!-- Expanded Content Scroll Container -->
+                    <div class="s5-analysis-scroll">
+                        <!-- Card 1: Optimized Layout Telemetry -->
+                        <div class="config-card" style="padding: 12px 14px;">
+                            <div class="config-card-header" style="margin-bottom: 8px;">
+                                <div class="card-title-group">
+                                    <span class="card-title-icon">⚡</span>
+                                    <span class="card-title">Layout Telemetry</span>
+                                </div>
+                                <span class="card-badge">SIMULATION</span>
+                            </div>
+                            <div class="site-metadata-table">
+                                <div class="meta-row">
+                                    <span class="meta-label">Turbines</span>
+                                    <span id="s5-meta-turbines" class="meta-val">10</span>
+                                </div>
+                                <div class="meta-row">
+                                    <span class="meta-label">Estimated AEP</span>
+                                    <span id="s5-meta-aep" class="meta-val mono" style="color: var(--primary-cyan);">72.6 GWh/year</span>
+                                </div>
+                                <div class="meta-row">
+                                    <span class="meta-label">Estimated Wake Loss</span>
+                                    <span id="s5-meta-wake-loss" class="meta-val mono" style="color: #10b981; font-weight: 700;">9.8 %</span>
+                                </div>
+                                <div class="meta-row">
+                                    <span class="meta-label">Average Spacing</span>
+                                    <span id="s5-meta-avg-spacing" class="meta-val mono">618 m</span>
+                                </div>
+                                <div class="meta-row">
+                                    <span class="meta-label">Feasible</span>
+                                    <span id="s5-meta-feasible" class="meta-val" style="color: #10b981; font-weight: 600;">✓ Yes</span>
+                                </div>
+                                <div class="meta-row">
+                                    <span class="meta-label">Optimization</span>
+                                    <span class="meta-val mono">QAOA</span>
+                                </div>
+                                <div class="meta-row">
+                                    <span class="meta-label">Status</span>
+                                    <span class="meta-val">Simulation (Estimated)</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card 2: Interactive Turbine Inspector -->
+                        <div class="s5-turbine-inspector-card" id="s5-turbine-inspector">
+                            <div class="inspector-header">
+                                <div class="inspector-title-group">
+                                    <span>🔍</span>
+                                    <span>Turbine Inspector</span>
+                                </div>
+                                <div class="inspector-nav">
+                                    <button type="button" class="inspector-nav-btn" id="btn-s5-prev-turbine" title="Previous Turbine">‹</button>
+                                    <span id="s5-inspector-index">4 / 10</span>
+                                    <button type="button" class="inspector-nav-btn" id="btn-s5-next-turbine" title="Next Turbine">›</button>
+                                </div>
+                            </div>
+                            <div class="inspector-body">
+                                <div class="inspector-thumb-container">
+                                    <svg class="inspector-thumb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                        <line x1="12" y1="22" x2="12" y2="8"></line>
+                                        <circle cx="12" cy="8" r="2" fill="currentColor"></circle>
+                                        <line x1="12" y1="8" x2="12" y2="1"></line>
+                                        <line x1="12" y1="8" x2="6" y2="14"></line>
+                                        <line x1="12" y1="8" x2="18" y2="14"></line>
+                                    </svg>
+                                    <span id="s5-inspector-thumb-label" class="inspector-thumb-badge">T-04</span>
+                                </div>
+                                <div class="inspector-details">
+                                    <div id="s5-inspector-name" class="inspector-turbine-name">Turbine T-04</div>
+                                    <div class="inspector-meta-row">
+                                        <span class="inspector-meta-label">Latitude</span>
+                                        <span id="s5-inspector-lat" class="inspector-meta-val">8.0891° N</span>
+                                    </div>
+                                    <div class="inspector-meta-row">
+                                        <span class="inspector-meta-label">Longitude</span>
+                                        <span id="s5-inspector-lon" class="inspector-meta-val">77.5324° E</span>
+                                    </div>
+                                    <div class="inspector-meta-row">
+                                        <span class="inspector-meta-label">Estimated Output</span>
+                                        <span id="s5-inspector-output" class="inspector-meta-val" style="color: var(--primary-cyan);">2.48 MW</span>
+                                    </div>
+                                    <div class="inspector-meta-row">
+                                        <span class="inspector-meta-label">Wake Exposure</span>
+                                        <span id="s5-inspector-wake" class="inspector-meta-val">6.3 %</span>
+                                    </div>
+                                    <div class="inspector-meta-row">
+                                        <span class="inspector-meta-label">Nearest Turbine</span>
+                                        <span id="s5-inspector-nearest" class="inspector-meta-val">615 m (T-06)</span>
+                                    </div>
+                                    <div class="inspector-meta-row">
+                                        <span class="inspector-meta-label">Average Spacing</span>
+                                        <span id="s5-inspector-spacing" class="inspector-meta-val">628 m</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card 3: Layout Comparison (Estimated) -->
+                        <div class="comparison-card">
+                            <div class="config-card-header" style="margin-bottom: 4px;">
+                                <div class="card-title-group">
+                                    <span class="card-title-icon">⚖️</span>
+                                    <span class="card-title">Layout Comparison</span>
+                                </div>
+                                <span class="card-badge">ESTIMATED</span>
+                            </div>
+                            <table class="comparison-table">
+                                <thead>
+                                    <tr>
+                                        <th>Metric</th>
+                                        <th>Initial Layout</th>
+                                        <th>Optimized Layout</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td class="comparison-metric-name">AEP</td>
+                                        <td id="s5-comp-init-aep">68.4 GWh/yr</td>
+                                        <td>
+                                            <span id="s5-comp-opt-aep">72.6 GWh/yr</span>
+                                            <span id="s5-comp-aep-badge" class="comparison-gain-badge">+ 6.1 %</span>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="comparison-metric-name">Wake Loss</td>
+                                        <td id="s5-comp-init-wake">18.7 %</td>
+                                        <td>
+                                            <span id="s5-comp-opt-wake">9.8 %</span>
+                                            <span id="s5-comp-wake-badge" class="comparison-gain-badge">+ 47.6 %</span>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="comparison-metric-name">Avg. Spacing</td>
+                                        <td id="s5-comp-init-spacing">580 m</td>
+                                        <td>
+                                            <span id="s5-comp-opt-spacing">618 m</span>
+                                            <span id="s5-comp-spacing-badge" class="comparison-gain-badge">+ 6.6 %</span>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Technical Simulation Notice -->
+                        <div style="font-size: 11px; color: var(--text-dim); line-height: 1.5; padding: 4px 2px;">
+                            Simulation: Layout optimized via QAOA statevector relaxation and Jensen kinematic wake models. Not experimentally validated.
+                        </div>
+                    </div>
+
+                    <!-- Sticky Bottom Action Button -->
+                    <div class="s5-primary-action-container">
+                        <button type="button" id="btn-screen5-export" class="btn-export-blueprint">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                            </svg>
+                            <span>EXPORT BLUEPRINT</span>
+                            <span style="font-size: 16px;">›</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================================================================
+             SCREEN 6: VIEW ENGINEERING BLUEPRINT (Placeholder for Screen 6)
+             =================================================================== -->
+        <div id="screen-6-container" class="screen-2-view">
+            <div class="config-container-wrapper" style="align-items: center; justify-content: center; text-align: center; padding: 24px;">
+                <div style="font-size: 20px; font-weight: 700; color: #ffffff; margin-bottom: 8px;">Screen 6: Engineering Blueprint & Export</div>
+                <div style="font-size: 13px; color: var(--text-secondary); max-width: 480px; line-height: 1.5; margin-bottom: 24px;">
+                    Optimized wind farm ready for blueprint review and CAD/GIS export. Awaiting Screen 6 reference design.
+                </div>
+                <button type="button" class="btn-sub-back" onclick="APP.goToScreen(5)">
+                    <span>‹ Back to Optimized Wind Farm</span>
                 </button>
             </div>
         </div>

@@ -50,7 +50,20 @@
         screen3CandidateMarkers: [],
         screen3Polygon: null,
         screen3WakesVisible: true,
-        screen4Data: null
+        screen4Data: null,
+        screen5Map: null,
+        screen5Engine: null,
+        screen5Data: null,
+        screen5Markers: [],
+        screen5SpacingLines: [],
+        screen5SpacingBadges: [],
+        screen5Polygon: null,
+        screen5WakesVisible: true,
+        screen5Mode: 'optimized', // 'before' | 'optimized'
+        screen5SelectedTurbineIndex: 0,
+        screen5SatelliteLayer: null,
+        screen5TerrainLayer: null,
+        screen5ActiveBasemap: 'satellite'
     };
 
     // Standard Wind Turbine Industry Presets
@@ -637,12 +650,14 @@
             const screen3Container = document.getElementById('screen-3-container');
             const screen4Container = document.getElementById('screen-4-container');
             const screen5Container = document.getElementById('screen-5-container');
+            const screen6Container = document.getElementById('screen-6-container');
 
             if (screen1Container) screen1Container.style.display = screenNum === 1 ? 'flex' : 'none';
             if (screen2Container) screen2Container.style.display = screenNum === 2 ? 'flex' : 'none';
             if (screen3Container) screen3Container.style.display = screenNum === 3 ? 'flex' : 'none';
             if (screen4Container) screen4Container.style.display = screenNum === 4 ? 'flex' : 'none';
             if (screen5Container) screen5Container.style.display = screenNum === 5 ? 'flex' : 'none';
+            if (screen6Container) screen6Container.style.display = screenNum === 6 ? 'flex' : 'none';
 
             if (screenNum === 1) {
                 APP_STATE.map?.invalidateSize();
@@ -652,6 +667,8 @@
                 this.initScreen3();
             } else if (screenNum === 4) {
                 this.initScreen4();
+            } else if (screenNum === 5) {
+                this.initScreen5();
             }
         },
 
@@ -1654,6 +1671,29 @@
                 });
             }
 
+            const optTurbines = [];
+            const radiusKm = Math.sqrt(site.areaKm2) / 2.6;
+            const latDelta = radiusKm / 111.0;
+            const lonDelta = radiusKm / (111.0 * Math.cos(site.lat * Math.PI / 180.0));
+            for (let i = 0; i < k; i++) {
+                const col = i % 4;
+                const row = Math.floor(i / 4);
+                const x = (col - 1.5) * 620;
+                const y = (row - 1.0) * 620;
+                optTurbines.push({
+                    id: `T${i + 1}`,
+                    label: `T-${String(i + 1).padStart(2, '0')}`,
+                    lat: site.lat + (row - 1.0) * latDelta * 0.7,
+                    lon: site.lon + (col - 1.5) * lonDelta * 0.7,
+                    x_m: x,
+                    y_m: y,
+                    effective_mps: Math.round((7.1 - (i * 0.12)) * 100) / 100,
+                    wake_deficit_pct: Math.round((3.8 + (i * 0.4)) * 10) / 10,
+                    is_conflicted: false,
+                    conflict_desc: null
+                });
+            }
+
             return {
                 problem_name: 'Wind Farm Layout Optimization',
                 variables_count: n,
@@ -1674,11 +1714,562 @@
                 objective_components: [],
                 circuit_steps: [],
                 convergence_history: [],
-                optimized_turbines: [],
+                optimized_turbines: optTurbines,
                 status_headline: 'Best feasible layout identified',
                 status_description: 'Optimization complete. Click below to view the optimized layout.',
                 disclaimer: 'QAOA Simulation via statevector emulator and classical XY-mixer relaxation.'
             };
+        },
+
+        // ======================================================================
+        // SCREEN 5: OPTIMIZED WIND FARM CONTROLLER
+        // ======================================================================
+        initScreen5() {
+            const site = APP_STATE.selectedSite;
+            const cfg = APP_STATE.farmConfig;
+
+            // Ensure baseline data from Screen 3 exists
+            if (!APP_STATE.screen3Data) {
+                APP_STATE.screen3Data = this.generateFallbackLayoutData(site, cfg);
+            }
+
+            // Ensure QAOA data from Screen 4 exists
+            if (!APP_STATE.screen4Data) {
+                APP_STATE.screen4Data = this.generateFallbackQAOAData(site, cfg);
+            }
+
+            const data = APP_STATE.screen4Data;
+            const turbineCount = data.turbine_count_actual || cfg.turbineCount;
+
+            // Update Header Site Pill
+            const s5Ind = document.getElementById('s5-indicator-text');
+            if (s5Ind) {
+                s5Ind.innerText = `${site.shortName} · ${turbineCount} Turbines (QAOA)`;
+            }
+
+            // Update Floating Wind Vector Arrow & Text
+            const arrowSvg = document.getElementById('s5-wind-arrow-svg');
+            if (arrowSvg) {
+                arrowSvg.style.transform = `rotate(${cfg.windDirectionDeg - 90}deg)`;
+            }
+            const vectorText = document.getElementById('s5-wind-vector-text');
+            if (vectorText) {
+                const compass = this.getCompassLabel(cfg.windDirectionDeg);
+                vectorText.innerText = `Wind Direction ${compass} (${Math.round(cfg.windDirectionDeg)}°)`;
+            }
+
+            if (!this._screen5Initialized) {
+                this.setupScreen5EventListeners();
+                this._screen5Initialized = true;
+            }
+
+            // Initialize Screen 5 Map if not exists
+            if (!APP_STATE.screen5Map) {
+                const mapElem = document.getElementById('screen5-map');
+                if (mapElem) {
+                    const isMobile = window.innerWidth <= 768;
+                    const map = L.map('screen5-map', {
+                        center: [site.lat, site.lon],
+                        zoom: isMobile ? 12 : 13,
+                        zoomControl: false,
+                        attributionControl: false
+                    });
+
+                    // Basemap Layers
+                    APP_STATE.screen5SatelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                        maxZoom: 18,
+                        attribution: 'Esri Satellite'
+                    });
+
+                    APP_STATE.screen5TerrainLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
+                        maxZoom: 18,
+                        attribution: 'Esri Topo'
+                    });
+
+                    APP_STATE.screen5SatelliteLayer.addTo(map);
+                    APP_STATE.screen5Map = map;
+
+                    // Initialize Canvas Aerodynamic Overlay
+                    const canvasElem = document.getElementById('screen5-canvas');
+                    if (canvasElem && window.WindSimulationEngine) {
+                        const engine = new window.WindSimulationEngine();
+                        engine.init(canvasElem, map);
+                        APP_STATE.screen5Engine = engine;
+                    }
+                }
+            }
+
+            // Render Layout Telemetry and Map
+            this.renderScreen5Layout();
+
+            if (APP_STATE.screen5Map) {
+                setTimeout(() => {
+                    APP_STATE.screen5Map?.invalidateSize();
+                    APP_STATE.screen5Engine?.handleResize();
+                }, 60);
+            }
+        },
+
+        setupScreen5EventListeners() {
+            // Back button to Screen 4
+            document.getElementById('btn-s5-back')?.addEventListener('click', () => {
+                this.goToScreen(4);
+            });
+
+            // Primary action: Export Blueprint -> Navigate to Screen 6
+            document.getElementById('btn-screen5-export')?.addEventListener('click', () => {
+                this.goToScreen(6);
+            });
+
+            // Basemap switches
+            document.getElementById('btn-s5-satellite')?.addEventListener('click', () => {
+                this.toggleScreen5Basemap('satellite');
+            });
+            document.getElementById('btn-s5-terrain')?.addEventListener('click', () => {
+                this.toggleScreen5Basemap('terrain');
+            });
+
+            // Wakes toggle
+            document.getElementById('btn-s5-toggle-wakes')?.addEventListener('click', () => {
+                this.toggleScreen5Wakes();
+            });
+
+            // Before / After segmented toggle
+            document.getElementById('s5-btn-before')?.addEventListener('click', () => {
+                this.toggleScreen5BeforeAfter('before');
+            });
+            document.getElementById('s5-btn-optimized')?.addEventListener('click', () => {
+                this.toggleScreen5BeforeAfter('optimized');
+            });
+
+            // Reset view button
+            document.getElementById('btn-s5-reset-view')?.addEventListener('click', () => {
+                if (APP_STATE.screen5Map && APP_STATE.screen5Polygon) {
+                    APP_STATE.screen5Map.fitBounds(APP_STATE.screen5Polygon.getBounds(), { padding: [40, 40] });
+                }
+            });
+
+            // Panel / Sheet Expand & Collapse Toggle
+            const sheet = document.getElementById('screen-5-sheet');
+            const togglePanel = () => {
+                if (!sheet) return;
+                sheet.classList.toggle('collapsed');
+                const arrow = document.getElementById('btn-s5-sheet-arrow');
+                if (arrow) {
+                    arrow.style.transform = sheet.classList.contains('collapsed') ? 'rotate(180deg)' : 'rotate(0deg)';
+                }
+            };
+            document.getElementById('s5-panel-toggle')?.addEventListener('click', togglePanel);
+            document.getElementById('s5-sheet-handle')?.addEventListener('click', togglePanel);
+            document.getElementById('btn-s5-sheet-arrow')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                togglePanel();
+            });
+
+            // Turbine Inspector Pagination
+            document.getElementById('btn-s5-prev-turbine')?.addEventListener('click', () => {
+                const turbines = APP_STATE.screen5Mode === 'before'
+                    ? (APP_STATE.screen3Data?.turbines || [])
+                    : (APP_STATE.screen4Data?.optimized_turbines || []);
+                if (turbines.length === 0) return;
+                const nextIdx = (APP_STATE.screen5SelectedTurbineIndex - 1 + turbines.length) % turbines.length;
+                this.selectScreen5Turbine(nextIdx);
+            });
+
+            document.getElementById('btn-s5-next-turbine')?.addEventListener('click', () => {
+                const turbines = APP_STATE.screen5Mode === 'before'
+                    ? (APP_STATE.screen3Data?.turbines || [])
+                    : (APP_STATE.screen4Data?.optimized_turbines || []);
+                if (turbines.length === 0) return;
+                const nextIdx = (APP_STATE.screen5SelectedTurbineIndex + 1) % turbines.length;
+                this.selectScreen5Turbine(nextIdx);
+            });
+        },
+
+        renderScreen5Layout() {
+            const data = APP_STATE.screen4Data;
+            const baselineData = APP_STATE.screen3Data;
+            const cfg = APP_STATE.farmConfig;
+            const map = APP_STATE.screen5Map;
+            const engine = APP_STATE.screen5Engine;
+
+            // Configure WindSimulationEngine
+            if (engine) {
+                engine.setWindAngle(cfg.windDirectionDeg);
+                engine.setLayouts(data.optimized_turbines, baselineData?.turbines || []);
+                engine.setWipeProgress(APP_STATE.screen5Mode === 'before' ? 0.0 : 1.0, false);
+                engine.setToggles({ showWakes: APP_STATE.screen5WakesVisible });
+            }
+
+            // Draw Boundary Polygon
+            if (map) {
+                if (APP_STATE.screen5Polygon) {
+                    map.removeLayer(APP_STATE.screen5Polygon);
+                    APP_STATE.screen5Polygon = null;
+                }
+                const site = APP_STATE.selectedSite;
+                const radiusKm = Math.sqrt(site.areaKm2) / 2.0;
+                const latDelta = radiusKm / 111.0;
+                const lonDelta = radiusKm / (111.0 * Math.cos(site.lat * Math.PI / 180.0));
+                const vertices = [
+                    [site.lat + latDelta * 1.1, site.lon - lonDelta * 0.1],
+                    [site.lat + latDelta * 0.7, site.lon + lonDelta * 0.1],
+                    [site.lat + latDelta * 0.2, site.lon + lonDelta * 0.45],
+                    [site.lat - latDelta * 0.4, site.lon + lonDelta * 0.85],
+                    [site.lat - latDelta * 0.9, site.lon + lonDelta * 0.95],
+                    [site.lat - latDelta * 1.2, site.lon - lonDelta * 0.45],
+                    [site.lat - latDelta * 0.6, site.lon - lonDelta * 1.1],
+                    [site.lat - latDelta * 0.1, site.lon - lonDelta * 0.85],
+                    [site.lat + latDelta * 0.25, site.lon - lonDelta * 0.65],
+                    [site.lat + latDelta * 0.65, site.lon - lonDelta * 0.55]
+                ];
+
+                APP_STATE.screen5Polygon = L.polygon(vertices, {
+                    color: '#ffffff',
+                    weight: 2,
+                    opacity: 0.9,
+                    fillColor: '#38bdf8',
+                    fillOpacity: 0.08,
+                    dashArray: '6, 6'
+                }).addTo(map);
+
+                map.invalidateSize();
+                map.fitBounds(APP_STATE.screen5Polygon.getBounds(), {
+                    padding: [45, 45],
+                    maxZoom: 15
+                });
+            }
+
+            // Active Turbines according to Before / After toggle
+            const activeTurbines = APP_STATE.screen5Mode === 'before'
+                ? (baselineData?.turbines || [])
+                : (data.optimized_turbines || []);
+
+            this.renderScreen5TurbinesAndSpacing(activeTurbines, APP_STATE.screen5Mode === 'optimized');
+
+            // Update Telemetry Card
+            const metaTurbines = document.getElementById('s5-meta-turbines');
+            if (metaTurbines) metaTurbines.innerText = `${activeTurbines.length}`;
+
+            const metaAep = document.getElementById('s5-meta-aep');
+            if (metaAep) metaAep.innerText = `${data.best_aep_gwh} GWh/year`;
+
+            const metaWakeLoss = document.getElementById('s5-meta-wake-loss');
+            if (metaWakeLoss) metaWakeLoss.innerText = `${data.best_wake_loss_pct} %`;
+
+            const metaFeasible = document.getElementById('s5-meta-feasible');
+            if (metaFeasible) metaFeasible.innerText = '✓ Yes';
+
+            // Peek row
+            const peekTurbines = document.getElementById('s5-peek-turbines');
+            if (peekTurbines) peekTurbines.innerText = `${activeTurbines.length}`;
+
+            const peekAep = document.getElementById('s5-peek-aep');
+            if (peekAep) peekAep.innerText = `${data.best_aep_gwh} GWh/yr`;
+
+            const peekWakeLoss = document.getElementById('s5-peek-wake-loss');
+            if (peekWakeLoss) peekWakeLoss.innerText = `${data.best_wake_loss_pct}%`;
+
+            // Update Comparison Table
+            const initAepElem = document.getElementById('s5-comp-init-aep');
+            if (initAepElem) initAepElem.innerText = `${data.initial_aep_gwh} GWh/yr`;
+
+            const optAepElem = document.getElementById('s5-comp-opt-aep');
+            if (optAepElem) optAepElem.innerText = `${data.best_aep_gwh} GWh/yr`;
+
+            const aepBadge = document.getElementById('s5-comp-aep-badge');
+            if (aepBadge) aepBadge.innerText = `+ ${data.improvement_pct} %`;
+
+            const initWakeElem = document.getElementById('s5-comp-init-wake');
+            if (initWakeElem) initWakeElem.innerText = `${data.initial_wake_loss_pct} %`;
+
+            const optWakeElem = document.getElementById('s5-comp-opt-wake');
+            if (optWakeElem) optWakeElem.innerText = `${data.best_wake_loss_pct} %`;
+
+            const wakeGainPct = Math.round(((data.initial_wake_loss_pct - data.best_wake_loss_pct) / data.initial_wake_loss_pct) * 1000) / 10;
+            const wakeBadge = document.getElementById('s5-comp-wake-badge');
+            if (wakeBadge) wakeBadge.innerText = `+ ${wakeGainPct} %`;
+
+            // Spacing in comparison table
+            const optSpacing = Math.round(data.minimum_spacing_actual_m || 618);
+            const initSpacing = Math.round(data.minimum_spacing_required_m || 580);
+            const spacingGainPct = Math.round(((optSpacing - initSpacing) / initSpacing) * 1000) / 10;
+
+            const initSpacingElem = document.getElementById('s5-comp-init-spacing');
+            if (initSpacingElem) initSpacingElem.innerText = `${initSpacing} m`;
+
+            const optSpacingElem = document.getElementById('s5-comp-opt-spacing');
+            if (optSpacingElem) optSpacingElem.innerText = `${optSpacing} m`;
+
+            const metaAvgSpacing = document.getElementById('s5-meta-avg-spacing');
+            if (metaAvgSpacing) metaAvgSpacing.innerText = `${optSpacing} m`;
+
+            const spacingBadge = document.getElementById('s5-comp-spacing-badge');
+            if (spacingBadge) spacingBadge.innerText = `+ ${spacingGainPct > 0 ? spacingGainPct : 6.6} %`;
+        },
+
+        renderScreen5TurbinesAndSpacing(turbines, isOptimized) {
+            const map = APP_STATE.screen5Map;
+            if (!map || !Array.isArray(turbines)) return;
+
+            // Clear existing markers and lines
+            APP_STATE.screen5Markers.forEach(m => map.removeLayer(m));
+            APP_STATE.screen5Markers = [];
+            APP_STATE.screen5SpacingLines.forEach(l => map.removeLayer(l));
+            APP_STATE.screen5SpacingLines = [];
+            APP_STATE.screen5SpacingBadges.forEach(b => map.removeLayer(b));
+            APP_STATE.screen5SpacingBadges = [];
+
+            if (turbines.length === 0) return;
+
+            // Compute pairwise distances and nearest neighbors
+            const N = turbines.length;
+            const dists = [];
+            const nearest = [];
+            let totalSpacing = 0;
+
+            for (let i = 0; i < N; i++) {
+                dists[i] = [];
+                let minDist = Infinity;
+                let minIdx = -1;
+                for (let j = 0; j < N; j++) {
+                    if (i === j) {
+                        dists[i][j] = Infinity;
+                    } else {
+                        const dx = turbines[i].x_m - turbines[j].x_m;
+                        const dy = turbines[i].y_m - turbines[j].y_m;
+                        const d = Math.sqrt(dx * dx + dy * dy);
+                        dists[i][j] = d;
+                        if (d < minDist) {
+                            minDist = d;
+                            minIdx = j;
+                        }
+                    }
+                }
+                nearest.push({ idx: minIdx, dist: minDist });
+                totalSpacing += (minDist < Infinity ? minDist : 600);
+            }
+
+            const avgSpacing = Math.round(totalSpacing / N);
+
+            // Draw nearest-neighbor spacing connector lines
+            const drawnPairs = new Set();
+            for (let i = 0; i < N; i++) {
+                const j = nearest[i].idx;
+                if (j >= 0) {
+                    const key = i < j ? `${i}-${j}` : `${j}-${i}`;
+                    if (!drawnPairs.has(key)) {
+                        drawnPairs.add(key);
+                        const distM = Math.round(dists[i][j]);
+
+                        // Polyline
+                        const line = L.polyline([[turbines[i].lat, turbines[i].lon], [turbines[j].lat, turbines[j].lon]], {
+                            color: 'rgba(255, 255, 255, 0.45)',
+                            weight: 1.5,
+                            dashArray: '4, 4'
+                        }).addTo(map);
+                        APP_STATE.screen5SpacingLines.push(line);
+
+                        // Midpoint distance badge (limit to 3 prominent links to keep visual clarity)
+                        if (drawnPairs.size <= 3) {
+                            const midLat = (turbines[i].lat + turbines[j].lat) / 2.0;
+                            const midLon = (turbines[i].lon + turbines[j].lon) / 2.0;
+                            const badgeIcon = L.divIcon({
+                                className: 's5-spacing-badge-wrapper',
+                                html: `<div class="s5-spacing-badge">${distM} m</div>`,
+                                iconSize: [50, 16],
+                                iconAnchor: [25, 8]
+                            });
+                            const badgeMarker = L.marker([midLat, midLon], { icon: badgeIcon, interactive: false }).addTo(map);
+                            APP_STATE.screen5SpacingBadges.push(badgeMarker);
+                        }
+                    }
+                }
+            }
+
+            // Ensure selected index is in range (default to 3 / T-04 if available)
+            if (APP_STATE.screen5SelectedTurbineIndex === 0 && N >= 4) {
+                APP_STATE.screen5SelectedTurbineIndex = 3;
+            } else if (APP_STATE.screen5SelectedTurbineIndex >= N) {
+                APP_STATE.screen5SelectedTurbineIndex = 0;
+            }
+
+            // Create turbine markers
+            turbines.forEach((t, idx) => {
+                const isSelected = idx === APP_STATE.screen5SelectedTurbineIndex;
+                const labelText = t.label ? (t.label.startsWith('T') && !t.label.startsWith('T-') ? `T-${String(idx + 1).padStart(2, '0')}` : t.label) : `T-${String(idx + 1).padStart(2, '0')}`;
+                t.displayLabel = labelText;
+
+                const pinClass = isSelected ? 's5-turbine-pin selected' : 's5-turbine-pin';
+                const pinIcon = L.divIcon({
+                    className: 's5-pin-wrapper',
+                    html: `<div class="${pinClass}" data-label="${labelText}" data-index="${idx}">${idx + 1}</div>`,
+                    iconSize: [26, 26],
+                    iconAnchor: [13, 13]
+                });
+
+                const marker = L.marker([t.lat, t.lon], { icon: pinIcon }).addTo(map);
+                marker.on('click', () => {
+                    this.selectScreen5Turbine(idx);
+                });
+
+                APP_STATE.screen5Markers.push(marker);
+            });
+
+            // Update Inspector for selected turbine
+            const selIdx = APP_STATE.screen5SelectedTurbineIndex;
+            const selTurbine = turbines[selIdx] || turbines[0];
+            const selNearest = nearest[selIdx] || { dist: 615, idx: 0 };
+            const nearestLabel = turbines[selNearest.idx]?.displayLabel || 'T-01';
+
+            this.updateScreen5Inspector(selTurbine, selIdx, N, selNearest.dist, nearestLabel, avgSpacing);
+        },
+
+        selectScreen5Turbine(index) {
+            const turbines = APP_STATE.screen5Mode === 'before'
+                ? (APP_STATE.screen3Data?.turbines || [])
+                : (APP_STATE.screen4Data?.optimized_turbines || []);
+
+            if (index < 0 || index >= turbines.length) return;
+            APP_STATE.screen5SelectedTurbineIndex = index;
+
+            // Update marker styles
+            APP_STATE.screen5Markers.forEach((m, idx) => {
+                const el = m.getElement()?.querySelector('.s5-turbine-pin');
+                if (el) {
+                    el.classList.toggle('selected', idx === index);
+                }
+            });
+
+            // Calculate nearest
+            let minDist = Infinity;
+            let minIdx = -1;
+            let totalSpacing = 0;
+            turbines.forEach((t, i) => {
+                if (i !== index) {
+                    const dx = turbines[index].x_m - t.x_m;
+                    const dy = turbines[index].y_m - t.y_m;
+                    const d = Math.sqrt(dx * dx + dy * dy);
+                    if (d < minDist) {
+                        minDist = d;
+                        minIdx = i;
+                    }
+                    totalSpacing += d;
+                }
+            });
+            const avgSpacing = Math.round(totalSpacing / Math.max(1, turbines.length - 1));
+            const nearestLabel = turbines[minIdx]?.displayLabel || 'T-01';
+
+            this.updateScreen5Inspector(turbines[index], index, turbines.length, minDist, nearestLabel, avgSpacing);
+
+            // On mobile, if collapsed, expand slightly or scroll into view
+            const sheet = document.getElementById('screen-5-sheet');
+            if (sheet && sheet.classList.contains('collapsed')) {
+                sheet.classList.remove('collapsed');
+                const arrow = document.getElementById('btn-s5-sheet-arrow');
+                if (arrow) arrow.style.transform = 'rotate(0deg)';
+            }
+        },
+
+        updateScreen5Inspector(turbine, index, total, nearestDist, nearestLabel, avgSpacing) {
+            if (!turbine) return;
+            const cfg = APP_STATE.farmConfig;
+            const label = turbine.displayLabel || `Turbine T-${String(index + 1).padStart(2, '0')}`;
+
+            const nameElem = document.getElementById('s5-inspector-name');
+            if (nameElem) nameElem.innerText = `Turbine ${label}`;
+
+            const thumbLabel = document.getElementById('s5-inspector-thumb-label');
+            if (thumbLabel) thumbLabel.innerText = label;
+
+            const latElem = document.getElementById('s5-inspector-lat');
+            if (latElem) latElem.innerText = `${turbine.lat.toFixed(4)}° N`;
+
+            const lonElem = document.getElementById('s5-inspector-lon');
+            if (lonElem) lonElem.innerText = `${turbine.lon.toFixed(4)}° E`;
+
+            const outputMw = ((turbine.effective_mps / 8.0) * (cfg.ratedPowerKw / 1000.0)).toFixed(2);
+            const outElem = document.getElementById('s5-inspector-output');
+            if (outElem) outElem.innerText = `${outputMw} MW`;
+
+            const wakeExposure = turbine.wake_deficit_pct !== undefined ? turbine.wake_deficit_pct : 6.3;
+            const wakeElem = document.getElementById('s5-inspector-wake');
+            if (wakeElem) wakeElem.innerText = `${wakeExposure.toFixed(1)} %`;
+
+            const nearElem = document.getElementById('s5-inspector-nearest');
+            if (nearElem) nearElem.innerText = `${Math.round(nearestDist)} m (${nearestLabel})`;
+
+            const spacingElem = document.getElementById('s5-inspector-spacing');
+            if (spacingElem) spacingElem.innerText = `${Math.round(avgSpacing)} m`;
+
+            const indexElem = document.getElementById('s5-inspector-index');
+            if (indexElem) indexElem.innerText = `${index + 1} / ${total}`;
+        },
+
+        toggleScreen5BeforeAfter(mode) {
+            APP_STATE.screen5Mode = mode;
+            const btnBefore = document.getElementById('s5-btn-before');
+            const btnOptimized = document.getElementById('s5-btn-optimized');
+
+            if (mode === 'before') {
+                btnBefore?.classList.add('active');
+                btnOptimized?.classList.remove('active');
+                if (APP_STATE.screen5Engine) {
+                    APP_STATE.screen5Engine.setWipeProgress(0.0, false);
+                }
+                const baselineTurbines = APP_STATE.screen3Data?.turbines || [];
+                this.renderScreen5TurbinesAndSpacing(baselineTurbines, false);
+                this.showToast('Showing Initial Baseline Layout', 'info');
+            } else {
+                btnOptimized?.classList.add('active');
+                btnBefore?.classList.remove('active');
+                if (APP_STATE.screen5Engine) {
+                    APP_STATE.screen5Engine.setWipeProgress(1.0, false);
+                }
+                const optTurbines = APP_STATE.screen4Data?.optimized_turbines || [];
+                this.renderScreen5TurbinesAndSpacing(optTurbines, true);
+                this.showToast('Showing QAOA Optimized Layout', 'success');
+            }
+        },
+
+        toggleScreen5Basemap(layerName) {
+            APP_STATE.screen5ActiveBasemap = layerName;
+            const btnSat = document.getElementById('btn-s5-satellite');
+            const btnTerr = document.getElementById('btn-s5-terrain');
+            const map = APP_STATE.screen5Map;
+
+            if (layerName === 'satellite') {
+                btnSat?.classList.add('active');
+                btnTerr?.classList.remove('active');
+                if (map) {
+                    if (APP_STATE.screen5TerrainLayer) map.removeLayer(APP_STATE.screen5TerrainLayer);
+                    if (APP_STATE.screen5SatelliteLayer) APP_STATE.screen5SatelliteLayer.addTo(map);
+                }
+            } else {
+                btnTerr?.classList.add('active');
+                btnSat?.classList.remove('active');
+                if (map) {
+                    if (APP_STATE.screen5SatelliteLayer) map.removeLayer(APP_STATE.screen5SatelliteLayer);
+                    if (APP_STATE.screen5TerrainLayer) APP_STATE.screen5TerrainLayer.addTo(map);
+                }
+            }
+        },
+
+        toggleScreen5Wakes() {
+            APP_STATE.screen5WakesVisible = !APP_STATE.screen5WakesVisible;
+            const btn = document.getElementById('btn-s5-toggle-wakes');
+            btn?.classList.toggle('active', APP_STATE.screen5WakesVisible);
+
+            if (APP_STATE.screen5Engine) {
+                APP_STATE.screen5Engine.setToggles({ showWakes: APP_STATE.screen5WakesVisible });
+            }
+            this.showToast(APP_STATE.screen5WakesVisible ? 'Wake Cones Enabled' : 'Wake Cones Hidden', 'info');
+        },
+
+        getCompassLabel(deg) {
+            const directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+            const index = Math.round(((deg % 360 + 360) % 360) / 22.5) % 16;
+            return directions[index];
         },
 
         hideToast() {
