@@ -719,11 +719,26 @@ class HybridWindFarmOptimizer:
         N = len(self.candidates)
         if N == 0:
             return {
-                "optimized_turbines": [],
+                "problem_name": "Wind Farm Layout Optimization",
+                "variables_count": 0,
+                "qubits_count": 0,
+                "iterations_total": 100,
+                "current_iteration": 100,
+                "initial_aep_gwh": 0.0,
+                "best_aep_gwh": 0.0,
+                "initial_wake_loss_pct": 0.0,
+                "best_wake_loss_pct": 0.0,
+                "improvement_pct": 0.0,
                 "turbine_count_target": self.requested_count,
                 "turbine_count_actual": 0,
+                "minimum_spacing_required_m": self.min_dist_m,
+                "minimum_spacing_actual_m": 0.0,
+                "constraints": [],
+                "decision_variables": [],
+                "optimized_turbines": [],
                 "status_headline": "No feasible candidate locations",
                 "status_description": "Project boundary or environmental constraints excluded all candidate sites.",
+                "disclaimer": "Hybrid WS-QAOA quantum statevector & 1-opt classical constraint repair.",
             }
 
         K = min(self.requested_count, N)
