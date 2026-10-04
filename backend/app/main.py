@@ -62,7 +62,11 @@ app.include_router(compare.router, prefix="/api")
 
 # Mount frontend static directory and assets
 FRONTEND_DIR = PROJECT_ROOT / "frontend"
+DIST_DIR = FRONTEND_DIR / "dist"
 ASSETS_DIR = FRONTEND_DIR / "assets"
+
+if DIST_DIR.exists() and (DIST_DIR / "app-assets").exists():
+    app.mount("/app-assets", StaticFiles(directory=str(DIST_DIR / "app-assets")), name="app-assets")
 
 if FRONTEND_DIR.exists():
     app.mount("/map", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="map")
@@ -75,6 +79,12 @@ if FRONTEND_DIR.exists():
         app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
 
 
+def get_frontend_index() -> Path:
+    if DIST_DIR.exists() and (DIST_DIR / "index.html").exists():
+        return DIST_DIR / "index.html"
+    return FRONTEND_DIR / "index.html"
+
+
 @app.get(
     "/",
     summary="Root Health Check & Dashboard Entry",
@@ -82,9 +92,9 @@ if FRONTEND_DIR.exists():
 )
 def root_status(request: Request):
     accept = request.headers.get("accept", "")
-    # If accessed by a web browser expecting HTML, serve interactive satellite map UI
+    # If accessed by a web browser expecting HTML, serve interactive UI
     if "text/html" in accept and not accept.startswith("*/*"):
-        index_file = FRONTEND_DIR / "index.html"
+        index_file = get_frontend_index()
         if index_file.exists():
             return FileResponse(index_file)
     return {
@@ -101,11 +111,23 @@ def root_status(request: Request):
     response_class=HTMLResponse,
     include_in_schema=False,
 )
-def interactive_app():
-    index_file = FRONTEND_DIR / "index.html"
+def interactive_app(request: Request):
+    if request.query_params.get("classic") == "1":
+        return FileResponse(FRONTEND_DIR / "index.html")
+    index_file = get_frontend_index()
     if index_file.exists():
         return FileResponse(index_file)
     return HTMLResponse("<h1>AeroQuantum-Wind UI Loading...</h1>")
+
+
+@app.get(
+    "/classic",
+    summary="Classic Single-File Interactive UI",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+)
+def classic_app():
+    return FileResponse(FRONTEND_DIR / "index.html")
 
 
 @app.get(
