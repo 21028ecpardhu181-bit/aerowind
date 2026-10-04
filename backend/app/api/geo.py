@@ -12,7 +12,8 @@ Endpoints:
 
 from __future__ import annotations
 
-from typing import List
+import math
+from typing import Any, Dict, List, Optional, Union
 from fastapi import APIRouter, HTTPException, Query, status
 
 try:
@@ -224,6 +225,8 @@ class FeasibilityRequest(BaseModel):
     rotor_diameter: float = 120.0
     spacing_multiplier_d: float = 5.0
     requested_turbines: int = 20
+
+FeasibilityRequest.model_rebuild()
 
 
 @router.post(

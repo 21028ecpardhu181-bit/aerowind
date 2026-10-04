@@ -39,7 +39,7 @@
             // Visualization Toggles
             this.showParticles = true;
             this.showWakes = true;
-            this.showRotors = true;
+            this.showRotors = false; // Disabled to prevent duplicate rotors clashing with DOM 3D turbines
 
             // Frame Rate & Dynamic Governor
             this.isRunning = false;
@@ -64,6 +64,8 @@
             if (this.map) {
                 this.map.on('move', this.handleResize);
                 this.map.on('zoom', this.handleResize);
+                this.map.on('zoomend', this.handleResize);
+                this.map.on('moveend', this.handleResize);
                 this.map.on('resize', this.handleResize);
             }
 
@@ -359,7 +361,8 @@
                 const pt = this.map.latLngToContainerPoint([t.lat, t.lon]);
                 // Elevate origin to the nacelle hub at the top of the 3D tower
                 const hubX = pt.x;
-                const hubY = pt.y - 36;
+                const isScreen5 = Boolean((t.displayLabel && t.displayLabel.startsWith('T-')) || (t.label && t.label.startsWith('T-')));
+                const hubY = isScreen5 ? (pt.y - 48) : (pt.y - 8);
                 
                 // Calculate physical pixel length based on map zoom scale
                 // Jensen wake cone extends downwind with half-angle k=0.075

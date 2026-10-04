@@ -93,14 +93,28 @@
                     }
                 });
 
-                // Configure scene rendering
+                // Configure scene rendering with real 3D terrain
                 const scene = this.viewer.scene;
                 scene.globe.enableLighting = false;
-                scene.globe.depthTestAgainstTerrain = false;
+                scene.globe.depthTestAgainstTerrain = true;
                 if (scene.skyAtmosphere) scene.skyAtmosphere.show = true;
                 if (scene.fog) {
                     scene.fog.enabled = true;
                     scene.fog.density = 0.0001;
+                }
+
+                // Load real 3D terrain elevation
+                if (typeof Cesium.createWorldTerrainAsync === 'function') {
+                    Cesium.createWorldTerrainAsync({
+                        requestVertexNormals: true,
+                        requestWaterMask: true
+                    }).then(provider => {
+                        if (this.viewer && !this.viewer.isDestroyed()) {
+                            this.viewer.terrainProvider = provider;
+                        }
+                    }).catch(err => {
+                        console.warn('[CesiumWindMapEngine] World terrain fallback:', err);
+                    });
                 }
 
                 // Configure mobile-friendly camera controls
@@ -429,73 +443,50 @@
 
                 // Compute orientation aligned with prevailing wind direction
                 // Wind heading: in meteorology, wind from deg blows towards deg + 180
-                const windHeadingRad = Cesium.Math.toRadians(windDirectionDeg);
+                const windHeadingRad = Cesium.Math.toRadians((windDirectionDeg + 180) % 360);
+                const groundPos = Cesium.Cartesian3.fromDegrees(t.lon, t.lat, baseElev);
                 const hpr = new Cesium.HeadingPitchRoll(windHeadingRad, 0, 0);
-                const nacellePos = Cesium.Cartesian3.fromDegrees(t.lon, t.lat, baseElev + hubHeight);
-                const orientation = Cesium.Transforms.headingPitchRollQuaternion(nacellePos, hpr);
+                const orientation = Cesium.Transforms.headingPitchRollQuaternion(groundPos, hpr);
 
-                // 1. Ground Foundation Shadow & Target Ring
+                // 1. Real 3D GLB Industrial Wind Turbine Model (110m tubular steel tower + 120m rotor + red tip markers)
+                const turbineModel = this.viewer.entities.add({
+                    turbineIndex: idx,
+                    name: `Turbine ${labelText}`,
+                    position: groundPos,
+                    orientation: orientation,
+                    model: {
+                        uri: '/assets/models/wind_turbine.glb',
+                        minimumPixelSize: 42,
+                        maximumScale: 180,
+                        scale: 1.0,
+                        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+                        shadows: Cesium.ShadowMode.ENABLED,
+                        color: isConflicted 
+                            ? Cesium.Color.fromCssColorString('#ef4444')
+                            : (isSelected ? Cesium.Color.fromCssColorString('#38bdf8') : Cesium.Color.WHITE),
+                        colorBlendMode: isConflicted || isSelected ? Cesium.ColorBlendMode.MIX : Cesium.ColorBlendMode.HIGHLIGHT,
+                        colorBlendAmount: 0.35
+                    }
+                });
+
+                // 2. Ground Foundation Shadow & Target Ring
                 const groundRing = this.viewer.entities.add({
                     turbineIndex: idx,
                     position: Cesium.Cartesian3.fromDegrees(t.lon, t.lat, baseElev + 1.0),
                     ellipse: {
-                        semiMajorAxis: isSelected ? 28.0 : 18.0,
-                        semiMinorAxis: isSelected ? 28.0 : 18.0,
-                        material: Cesium.Color.fromCssColorString(isSelected ? 'rgba(56, 189, 248, 0.45)' : 'rgba(0, 0, 0, 0.4)'),
+                        semiMajorAxis: isSelected ? 32.0 : 20.0,
+                        semiMinorAxis: isSelected ? 32.0 : 20.0,
+                        material: Cesium.Color.fromCssColorString(isSelected ? 'rgba(56, 189, 248, 0.55)' : 'rgba(0, 0, 0, 0.45)'),
                         outline: isSelected,
                         outlineColor: Cesium.Color.fromCssColorString('#38bdf8'),
                         outlineWidth: 2
                     }
                 });
 
-                // 2. Upright Structural Tower (Tapered Cylinder)
-                const tower = this.viewer.entities.add({
-                    turbineIndex: idx,
-                    name: `Tower ${labelText}`,
-                    position: Cesium.Cartesian3.fromDegrees(t.lon, t.lat, baseElev + hubHeight / 2.0),
-                    cylinder: {
-                        length: hubHeight,
-                        topRadius: 2.2,
-                        bottomRadius: 4.8,
-                        material: primaryColor,
-                        shadows: Cesium.ShadowMode.ENABLED
-                    }
-                });
-
-                // 3. Aerodynamic Nacelle atop tower
-                const nacelle = this.viewer.entities.add({
-                    turbineIndex: idx,
-                    name: `Nacelle ${labelText}`,
-                    position: nacellePos,
-                    orientation: orientation,
-                    box: {
-                        dimensions: new Cesium.Cartesian3(5.0, 15.0, 5.0),
-                        material: Cesium.Color.fromCssColorString('#f1f5f9'),
-                        shadows: Cesium.ShadowMode.ENABLED
-                    }
-                });
-
-                // 4. Rotating 3-Blade Rotor Assembly Disk
-                const rotor = this.viewer.entities.add({
-                    turbineIndex: idx,
-                    name: `Rotor ${labelText}`,
-                    position: nacellePos,
-                    orientation: orientation,
-                    cylinder: {
-                        length: 1.5,
-                        topRadius: rotorRadius,
-                        bottomRadius: rotorRadius,
-                        material: Cesium.Color.fromCssColorString(isSelected ? 'rgba(56, 189, 248, 0.4)' : 'rgba(255, 255, 255, 0.45)'),
-                        outline: true,
-                        outlineColor: Cesium.Color.fromCssColorString(isConflicted ? '#ef4444' : '#ffffff'),
-                        outlineWidth: 1.5
-                    }
-                });
-
-                // 5. Floating Label Tag
+                // 3. Floating Engineering Label Tag (Anchored atop the hub)
                 const label = this.viewer.entities.add({
                     turbineIndex: idx,
-                    position: Cesium.Cartesian3.fromDegrees(t.lon, t.lat, baseElev + hubHeight + rotorRadius + 18),
+                    position: Cesium.Cartesian3.fromDegrees(t.lon, t.lat, baseElev + hubHeight + rotorRadius + 16),
                     label: {
                         text: labelText,
                         font: 'bold 11px JetBrains Mono, monospace',
@@ -507,7 +498,7 @@
                     }
                 });
 
-                this.turbineEntities.push(groundRing, tower, nacelle, rotor, label);
+                this.turbineEntities.push(turbineModel, groundRing, label);
             });
         }
 
@@ -578,9 +569,16 @@
                 if (e.turbineIndex !== undefined) {
                     const isSelected = e.turbineIndex === index;
                     if (e.ellipse) {
-                        e.ellipse.semiMajorAxis = isSelected ? 28.0 : 18.0;
-                        e.ellipse.semiMinorAxis = isSelected ? 28.0 : 18.0;
+                        e.ellipse.semiMajorAxis = isSelected ? 32.0 : 20.0;
+                        e.ellipse.semiMinorAxis = isSelected ? 32.0 : 20.0;
                         e.ellipse.outline = isSelected;
+                    }
+                    if (e.model) {
+                        e.model.color = isSelected 
+                            ? Cesium.Color.fromCssColorString('#38bdf8') 
+                            : Cesium.Color.WHITE;
+                        e.model.colorBlendMode = isSelected ? Cesium.ColorBlendMode.MIX : Cesium.ColorBlendMode.HIGHLIGHT;
+                        e.model.colorBlendAmount = isSelected ? 0.45 : 0.0;
                     }
                 }
             });

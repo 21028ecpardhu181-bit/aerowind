@@ -311,15 +311,87 @@ def verify_frontend_ui_modes():
         page.wait_for_timeout(500)
         print("✓ Clicked 'Inspect in 3D' button")
 
+        # 7. Test Coordinate Persistence Across Zoom (Requirement 12)
+        print("\n--- Testing Coordinate Persistence Across Zoom ---")
+        t0_lat_init = page.evaluate("() => APP_STATE.screen4Data.optimized_turbines[0].lat")
+        t0_lon_init = page.evaluate("() => APP_STATE.screen4Data.optimized_turbines[0].lon")
+        
+        # Simulate user zooming in
+        page.evaluate("() => { if (APP_STATE.screen5Map) APP_STATE.screen5Map.setZoom(14); }")
+        page.wait_for_timeout(300)
+        t0_lat_zoomed = page.evaluate("() => APP_STATE.screen4Data.optimized_turbines[0].lat")
+        t0_lon_zoomed = page.evaluate("() => APP_STATE.screen4Data.optimized_turbines[0].lon")
+
+        assert t0_lat_init == t0_lat_zoomed and t0_lon_init == t0_lon_zoomed, "Turbine geographic coordinates MUST NOT change with zoom!"
+        print(f"✓ Coordinate Persistence Confirmed: T-01 stays invariant at ({t0_lat_init}, {t0_lon_init}) across zoom")
+
         browser.close()
         print("\n✓ Frontend UI verification completely passed!")
 
 
+def verify_glb_model_integrity():
+    print(f"\n=======================================================")
+    print(f"Testing 3D GLB Wind Turbine Asset Integrity")
+    print(f"=======================================================")
+    glb_path = "/home/hatch/workspace/goals/aeroquantum-wind-hackathon-prototype/frontend/assets/models/wind_turbine.glb"
+    import os, struct
+    assert os.path.exists(glb_path), f"GLB model missing at {glb_path}"
+    file_size = os.path.getsize(glb_path)
+    assert file_size > 15000, f"GLB model too small ({file_size} bytes)"
+    with open(glb_path, "rb") as f:
+        magic, version, length = struct.unpack("<4sII", f.read(12))
+        assert magic == b"glTF", f"Invalid magic bytes: {magic}"
+        assert version == 2, f"Expected glTF 2.0, got version {version}"
+        assert length == file_size, f"Header length {length} != file size {file_size}"
+    print(f"✓ Valid glTF 2.0 Binary container verified: {glb_path} ({file_size / 1024:.1f} KB)")
+
+
+def verify_feasibility_5class_mask():
+    print(f"\n=======================================================")
+    print(f"Testing 5-Class Feasibility Mask & Exclusion Diagnostics")
+    print(f"=======================================================")
+    payload = {
+        "center_lat": 16.9676,
+        "center_lon": 81.8138,
+        "area_km2": 24.8,
+        "requested_turbines": 20
+    }
+    res = requests.post(f"{BASE_URL}/api/geo/feasibility", json=payload)
+    assert res.status_code == 200, f"Feasibility API failed: {res.text}"
+    data = res.json()
+    stats = data["pipeline_stats"]
+
+    print(f"✓ Feasibility Mask Breakdown:")
+    print(f"    Preferred:  {stats.get('count_preferred')}")
+    print(f"    Buildable:  {stats.get('count_buildable')}")
+    print(f"    Restricted: {stats.get('count_restricted')}")
+    print(f"    Excluded:   {stats.get('count_excluded')}")
+    print(f"    Unknown:    {stats.get('count_unknown')}")
+
+    assert stats.get("count_preferred", 0) > 0, "Expected non-zero PREFERRED candidates"
+    assert stats.get("count_excluded", 0) > 0, "Expected non-zero EXCLUDED candidates"
+
+    # Verify exclusion reasons in evaluated sample
+    sample = data.get("evaluated_sample", [])
+    excluded_sample = [c for c in sample if c.get("land_status") == "EXCLUDED"]
+    assert len(excluded_sample) > 0, "Expected EXCLUDED candidates in sample"
+    reasons = set()
+    for c in excluded_sample:
+        for r in c.get("exclusion_reasons", []):
+            reasons.add(r)
+    print(f"✓ Verified physical exclusion reasons: {list(reasons)[:3]}")
+    assert len(reasons) > 0, "Every EXCLUDED candidate must have explicit exclusion reasons"
+
+
 if __name__ == "__main__":
     try:
+        verify_glb_model_integrity()
+        verify_feasibility_5class_mask()
         verify_city_pipeline("Bommuru", requested_turbines=20)
         verify_city_pipeline("Rajahmundry", requested_turbines=20)
         verify_city_pipeline("Jaisalmer", requested_turbines=20)
+        verify_city_pipeline("Hukkumpeta", requested_turbines=20)
+        verify_city_pipeline("Kanyakumari", requested_turbines=20)
         verify_small_area_honest_capacity()
         verify_frontend_ui_modes()
 

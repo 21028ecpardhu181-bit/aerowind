@@ -1235,6 +1235,37 @@
                     const airElem = document.getElementById('meta-air-density');
                     if (airElem) airElem.innerText = `${data.wind.air_density_kgpm3} kg/m³`;
 
+                    // Fetch 5-Class Geographic Land Feasibility Mask
+                    try {
+                        const feasRes = await fetch('/api/geo/feasibility', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                center_lat: site.lat,
+                                center_lon: site.lon,
+                                area_km2: site.areaKm2 || 24.8,
+                                boundary: this.getSiteBoundaryVertices(site),
+                                requested_turbines: APP_STATE.farmConfig?.turbineCount || 20
+                            })
+                        });
+                        if (feasRes.ok) {
+                            const feasData = await feasRes.json();
+                            APP_STATE.siteFeasibility = feasData;
+                            const stats = feasData.pipeline_stats || {};
+                            const maskElem = document.getElementById('meta-land-feasibility');
+                            if (maskElem) {
+                                maskElem.innerHTML = `
+                                    <span style="color: #10b981; font-weight: 600;">✓ ${stats.count_preferred || 0} Preferred</span> · 
+                                    <span style="color: #38bdf8;">${stats.count_buildable || 0} Buildable</span> · 
+                                    <span style="color: #ef4444;">${stats.count_excluded || 0} Excluded</span> · 
+                                    <span style="color: #94a3b8; font-style: italic;">${stats.count_unknown || 0} Unknown (survey req.)</span>
+                                `;
+                            }
+                        }
+                    } catch (fErr) {
+                        console.warn('[Feasibility] Evaluation deferred:', fErr);
+                    }
+
                     // Update Progressive Site Intelligence Checklist & Suitability Conclusion
                     const checksList = document.getElementById('intel-checks-list');
                     if (checksList) {
