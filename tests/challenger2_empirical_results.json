@@ -1,0 +1,249 @@
+{
+  "boundary_containment": {
+    "Bommuru": {
+      "candidates_outside": 0,
+      "turbines_outside": 0
+    },
+    "Rajahmundry": {
+      "candidates_outside": 0,
+      "turbines_outside": 0
+    },
+    "Jaisalmer": {
+      "candidates_outside": 0,
+      "turbines_outside": 0
+    },
+    "Hukkumpeta": {
+      "candidates_outside": 0,
+      "turbines_outside": 0
+    },
+    "Kanyakumari": {
+      "candidates_outside": 0,
+      "turbines_outside": 0
+    }
+  },
+  "setback_buffer": {
+    "Bommuru": {
+      "min_dist_m": 111.7518389481463,
+      "required_m": 60.0,
+      "violations": 0
+    },
+    "Rajahmundry": {
+      "min_dist_m": 111.7518389480396,
+      "required_m": 60.0,
+      "violations": 0
+    },
+    "Jaisalmer": {
+      "min_dist_m": 111.75183894883894,
+      "required_m": 60.0,
+      "violations": 0
+    },
+    "Hukkumpeta": {
+      "min_dist_m": 111.75183894819486,
+      "required_m": 60.0,
+      "violations": 0
+    },
+    "Kanyakumari": {
+      "min_dist_m": 111.75183894800618,
+      "required_m": 60.0,
+      "violations": 0
+    }
+  },
+  "inter_turbine_spacing": {
+    "Bommuru": {
+      "pairs_checked": 190,
+      "min_euclidean_m": 600.0,
+      "min_haversine_m": 600.0078241741576,
+      "pairs_under_600m": 0,
+      "pairs_under_570m": 0
+    },
+    "Rajahmundry": {
+      "pairs_checked": 190,
+      "min_euclidean_m": 600.0,
+      "min_haversine_m": 600.0078241737625,
+      "pairs_under_600m": 0,
+      "pairs_under_570m": 0
+    },
+    "Jaisalmer": {
+      "pairs_checked": 190,
+      "min_euclidean_m": 600.0,
+      "min_haversine_m": 600.0078241741576,
+      "pairs_under_600m": 0,
+      "pairs_under_570m": 0
+    },
+    "Hukkumpeta": {
+      "pairs_checked": 190,
+      "min_euclidean_m": 600.0,
+      "min_haversine_m": 600.0078241737625,
+      "pairs_under_600m": 0,
+      "pairs_under_570m": 0
+    },
+    "Kanyakumari": {
+      "pairs_checked": 190,
+      "min_euclidean_m": 600.0,
+      "min_haversine_m": 600.00782417396,
+      "pairs_under_600m": 0,
+      "pairs_under_570m": 0
+    }
+  },
+  "diagnostic_reasons": {
+    "Bommuru": {
+      "total_excluded": 114,
+      "with_reasons": 114,
+      "reasons_tally": {
+        "slope": 0,
+        "water": 46,
+        "settlement": 4,
+        "road": 70,
+        "wind": 0
+      }
+    },
+    "Rajahmundry": {
+      "total_excluded": 114,
+      "with_reasons": 114,
+      "reasons_tally": {
+        "slope": 0,
+        "water": 46,
+        "settlement": 4,
+        "road": 70,
+        "wind": 0
+      }
+    },
+    "Jaisalmer": {
+      "total_excluded": 114,
+      "with_reasons": 114,
+      "reasons_tally": {
+        "slope": 0,
+        "water": 46,
+        "settlement": 4,
+        "road": 70,
+        "wind": 0
+      }
+    },
+    "Hukkumpeta": {
+      "total_excluded": 114,
+      "with_reasons": 114,
+      "reasons_tally": {
+        "slope": 0,
+        "water": 46,
+        "settlement": 4,
+        "road": 70,
+        "wind": 0
+      }
+    },
+    "Kanyakumari": {
+      "total_excluded": 114,
+      "with_reasons": 114,
+      "reasons_tally": {
+        "slope": 0,
+        "water": 46,
+        "settlement": 4,
+        "road": 70,
+        "wind": 0
+      }
+    }
+  },
+  "export_precision": {
+    "num_turbines_evaluated": 19,
+    "csv_decimals": [
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6,
+      6
+    ],
+    "table_decimals": [
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5
+    ],
+    "max_diff_live_vs_csv": 0.0,
+    "max_diff_live_vs_geojson": 0.0,
+    "max_diff_live_vs_table": 4.999999999810711e-06,
+    "sample_checks": [
+      {
+        "turbine_id": "T1",
+        "live_lat": 8.084143,
+        "live_lon": 77.53833,
+        "csv_lat": 8.084143,
+        "csv_lon": 77.53833,
+        "csv_lat_decimals": 6,
+        "csv_lon_decimals": 6,
+        "geo_lat": 8.084143,
+        "geo_lon": 77.53833,
+        "tbl_lat_str": "8.08414",
+        "tbl_lon_str": "77.53833",
+        "tbl_lat_decimals": 5,
+        "tbl_lon_decimals": 5,
+        "diff_live_csv": 0.0,
+        "diff_live_geo": 0.0,
+        "diff_live_tbl": 2.9999999995311555e-06
+      },
+      {
+        "turbine_id": "T2",
+        "live_lat": 8.091697,
+        "live_lon": 77.53179,
+        "csv_lat": 8.091697,
+        "csv_lon": 77.53179,
+        "csv_lat_decimals": 6,
+        "csv_lon_decimals": 6,
+        "geo_lat": 8.091697,
+        "geo_lon": 77.53179,
+        "tbl_lat_str": "8.09170",
+        "tbl_lon_str": "77.53179",
+        "tbl_lat_decimals": 5,
+        "tbl_lon_decimals": 5,
+        "diff_live_csv": 0.0,
+        "diff_live_geo": 0.0,
+        "diff_live_tbl": 2.9999999995311555e-06
+      },
+      {
+        "turbine_id": "T3",
+        "live_lat": 8.086301,
+        "live_lon": 77.53179,
+        "csv_lat": 8.086301,
+        "csv_lon": 77.53179,
+        "csv_lat_decimals": 6,
+        "csv_lon_decimals": 6,
+        "geo_lat": 8.086301,
+        "geo_lon": 77.53179,
+        "tbl_lat_str": "8.08630",
+        "tbl_lon_str": "77.53179",
+        "tbl_lat_decimals": 5,
+        "tbl_lon_decimals": 5,
+        "diff_live_csv": 0.0,
+        "diff_live_geo": 0.0,
+        "diff_live_tbl": 1.0000000010279564e-06
+      }
+    ]
+  }
+}
