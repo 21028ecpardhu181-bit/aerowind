@@ -3222,23 +3222,27 @@
             const authForm = document.getElementById('auth-form');
             const headerUserLabel = document.getElementById('header-user-label');
 
+            const authFormSubtitle = document.getElementById('auth-form-subtitle');
+
             let currentMode = 'signup'; // 'signup' | 'login'
 
             const setMode = (mode) => {
                 currentMode = mode;
                 if (authErrorMsg) authErrorMsg.style.display = 'none';
                 if (mode === 'signup') {
-                    if (authFormTitle) authFormTitle.innerText = 'Create Account';
+                    if (authFormTitle) authFormTitle.innerText = 'Create Engineer Account';
+                    if (authFormSubtitle) authFormSubtitle.innerText = 'Join AeroQuantum-Wind to simulate, optimize, and save real turbine projects.';
                     if (authUsernameGroup) authUsernameGroup.style.display = 'flex';
-                    if (btnAuthSubmit) btnAuthSubmit.innerText = 'CREATE ACCOUNT';
-                    if (authTogglePrompt) authTogglePrompt.innerText = 'Already have an account yet?';
-                    if (btnToggleAuthMode) btnToggleAuthMode.innerText = 'Log In';
+                    if (btnAuthSubmit) btnAuthSubmit.innerText = 'CREATE ENGINEER ACCOUNT';
+                    if (authTogglePrompt) authTogglePrompt.innerText = 'Already registered?';
+                    if (btnToggleAuthMode) btnToggleAuthMode.innerText = 'Sign In';
                 } else {
-                    if (authFormTitle) authFormTitle.innerText = 'Log In';
+                    if (authFormTitle) authFormTitle.innerText = 'Engineer Workspace';
+                    if (authFormSubtitle) authFormSubtitle.innerText = 'Sign in to access your projects, terrain GIS models, and quantum layouts.';
                     if (authUsernameGroup) authUsernameGroup.style.display = 'none';
-                    if (btnAuthSubmit) btnAuthSubmit.innerText = 'LOG IN';
-                    if (authTogglePrompt) authTogglePrompt.innerText = "Don't have an account yet?";
-                    if (btnToggleAuthMode) btnToggleAuthMode.innerText = 'Sign Up';
+                    if (btnAuthSubmit) btnAuthSubmit.innerText = 'ENTER WORKSPACE';
+                    if (authTogglePrompt) authTogglePrompt.innerText = 'New to AeroQuantum-Wind?';
+                    if (btnToggleAuthMode) btnToggleAuthMode.innerText = 'Create Account';
                 }
             };
 

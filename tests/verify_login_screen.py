@@ -49,7 +49,7 @@ def verify_login():
         # Toggle to Log In mode
         page.click("#btn-toggle-auth-mode")
         page.wait_for_timeout(300)
-        assert page.inner_text("#auth-form-title") == "Log In", "Title should switch to Log In"
+        assert page.inner_text("#auth-form-title") == "Engineer Workspace", "Title should switch to Engineer Workspace"
 
         # Fill credentials & submit login
         page.fill("#auth-email-input", "engineer1@aeroquantum.com")
