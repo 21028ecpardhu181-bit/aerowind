@@ -590,22 +590,236 @@
         </div>
 
         <!-- ===================================================================
-             SCREEN 3: ANALYZE INITIAL LAYOUT (Preserved Container for Screen 3)
+             SCREEN 3: INITIAL LAYOUT / AERODYNAMIC PROBLEM VIEW
              =================================================================== -->
-        <div id="screen-3-container" class="screen-2-view">
+        <div id="screen-3-container" class="screen-3-view">
+            <!-- Screen 3 Top Sub-Header -->
+            <div class="config-header" style="z-index: 700;">
+                <button type="button" id="btn-s3-back" class="btn-sub-back">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                        <polyline points="15 18 9 12 15 6"></polyline>
+                    </svg>
+                    <span>Back</span>
+                </button>
+                <div class="config-header-center">
+                    <div class="config-title">Initial Layout Analysis</div>
+                    <div id="screen-3-site-indicator" class="config-site-pill">
+                        <span>📍</span>
+                        <span id="s3-indicator-text">Kanyakumari · 12 Turbines (30.0 MW)</span>
+                    </div>
+                </div>
+                <div style="width: 60px;"></div> <!-- balance spacing -->
+            </div>
+
+            <!-- Screen 3 Layout: Map Hero + Analysis Panel (Side on Desktop, Bottom Sheet on Mobile) -->
+            <div class="screen-3-layout">
+                <!-- Center Hero Map Container -->
+                <div class="s3-map-container">
+                    <div id="screen3-map"></div>
+                    <canvas id="screen3-canvas" class="wind-overlay-canvas"></canvas>
+
+                    <!-- Floating Wind Vector Indicator -->
+                    <div id="s3-wind-vector-badge" class="wind-vector-badge">
+                        <svg class="wind-vector-arrow-svg" id="s3-wind-arrow-svg" viewBox="0 0 24 12" fill="currentColor">
+                            <path d="M0 5h18l-4-4 1.4-1.4L24 6l-8.6 6.4-1.4-1.4 4-4H0V5z"/>
+                        </svg>
+                        <span id="s3-wind-vector-text">Wind: 7.1 m/s @ 300° (WNW)</span>
+                    </div>
+
+                    <!-- Floating Aerodynamic Speed Legend -->
+                    <div id="s3-wind-speed-legend" class="wind-speed-legend">
+                        <div class="legend-title">Aerodynamic Flow Velocity</div>
+                        <div class="legend-gradient-bar"></div>
+                        <div class="legend-ticks">
+                            <span>0 m/s</span>
+                            <span>4</span>
+                            <span>8</span>
+                            <span>12</span>
+                            <span>16+ m/s</span>
+                        </div>
+                        <div class="legend-status-row">
+                            <div class="legend-dot-item">
+                                <span class="legend-dot turbine"></span>
+                                <span>Turbine</span>
+                            </div>
+                            <div class="legend-dot-item">
+                                <span class="legend-dot wake-low"></span>
+                                <span>Free Flow</span>
+                            </div>
+                            <div class="legend-dot-item">
+                                <span class="legend-dot wake-high"></span>
+                                <span>Wake Conflict</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Dynamic Floating Conflict Badges Container -->
+                    <div id="s3-conflict-badges-overlay"></div>
+
+                    <!-- Map Floating Controls -->
+                    <div class="map-controls-group" style="position: absolute; top: 68px; right: 20px; z-index: 500; display: flex; flex-direction: column; gap: 8px;">
+                        <button type="button" id="btn-s3-toggle-wakes" class="map-icon-btn active" title="Toggle Jensen Wake Cones">
+                            <span style="font-size: 14px;">💨</span>
+                        </button>
+                        <button type="button" id="btn-s3-reset-view" class="map-icon-btn" title="Reset Map View">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+                                <path d="M3 3v5h5"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Analysis Bottom Sheet / Desktop Sidebar -->
+                <div id="screen-3-sheet" class="s3-analysis-panel collapsed">
+                    <div class="sheet-drag-handle" id="s3-sheet-handle"></div>
+
+                    <!-- Header -->
+                    <div class="s3-panel-header" id="s3-panel-toggle">
+                        <div class="s3-panel-title-group">
+                            <div class="s3-panel-title">
+                                <span>Initial Layout Analysis</span>
+                                <span class="card-badge" style="background: rgba(239, 68, 68, 0.2); color: #fca5a5; border-color: rgba(239, 68, 68, 0.4);">
+                                    SIMULATION
+                                </span>
+                            </div>
+                            <div class="s3-panel-subtitle">Baseline un-optimized arrangement before QAOA</div>
+                        </div>
+                        <button type="button" class="btn-sheet-toggle" id="btn-s3-sheet-arrow" aria-label="Toggle Panel">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <!-- Peek Chips Row (Mobile Glance) -->
+                    <div class="s3-peek-chips-row">
+                        <div class="s3-peek-chip">
+                            <span>Turbines:</span> <strong id="s3-peek-turbines">12</strong>
+                        </div>
+                        <div class="s3-peek-chip">
+                            <span>Est. AEP:</span> <strong id="s3-peek-aep" style="color: var(--primary-cyan);">-- GWh</strong>
+                        </div>
+                        <div class="s3-peek-chip">
+                            <span>Wake Loss:</span> <strong id="s3-peek-wake-loss" style="color: #f59e0b;">--%</strong>
+                        </div>
+                        <div class="s3-peek-chip alert" id="s3-peek-conflicts-chip">
+                            <span id="s3-peek-conflicts">-- Conflicts</span>
+                        </div>
+                    </div>
+
+                    <!-- Expanded Content -->
+                    <div class="s3-expanded-content">
+                        <!-- Key Aerodynamic Metrics Table -->
+                        <div class="config-card" style="padding: 12px 14px;">
+                            <div class="config-card-header" style="margin-bottom: 8px;">
+                                <div class="card-title-group">
+                                    <span class="card-title-icon">📊</span>
+                                    <span class="card-title">Aerodynamic Telemetry</span>
+                                </div>
+                                <span class="card-badge">ESTIMATED</span>
+                            </div>
+                            <div class="site-metadata-table">
+                                <div class="meta-row">
+                                    <span class="meta-label">Selected Turbines</span>
+                                    <span id="s3-meta-turbines" class="meta-val">12 Turbines (30.0 MW)</span>
+                                </div>
+                                <div class="meta-row">
+                                    <span class="meta-label">Gross AEP (Zero Wake)</span>
+                                    <span id="s3-meta-gross-aep" class="meta-val mono">-- GWh/yr</span>
+                                </div>
+                                <div class="meta-row">
+                                    <span class="meta-label">Estimated Net AEP</span>
+                                    <span id="s3-meta-net-aep" class="meta-val mono" style="color: var(--primary-cyan);">-- GWh/yr</span>
+                                </div>
+                                <div class="meta-row">
+                                    <span class="meta-label">Wake Interaction Loss</span>
+                                    <span id="s3-meta-wake-loss" class="meta-val mono" style="color: #ef4444; font-weight: 700;">--%</span>
+                                </div>
+                                <div class="meta-row">
+                                    <span class="meta-label">Minimum Observed Spacing</span>
+                                    <span id="s3-meta-min-spacing" class="meta-val mono">-- m</span>
+                                </div>
+                                <div class="meta-row">
+                                    <span class="meta-label">Wake Conflict Pairs</span>
+                                    <span id="s3-meta-conflicts-count" class="meta-val mono" style="color: #ef4444;">-- pairs</span>
+                                </div>
+                                <div class="meta-row">
+                                    <span class="meta-label">Wake Model Standard</span>
+                                    <span class="meta-val">Jensen N.O. (k=0.075, Ct=0.8)</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Wind Rose Polar Frequency Card -->
+                        <div class="wind-rose-card">
+                            <div class="wind-rose-header">
+                                <span>Wind Rose & Sector Frequency</span>
+                                <span style="font-size: 11px; color: var(--primary-cyan);">16 Sectors</span>
+                            </div>
+                            <div class="wind-rose-body">
+                                <svg id="s3-wind-rose-svg" class="wind-rose-radar" viewBox="-60 -60 120 120"></svg>
+                                <div class="wind-rose-stats">
+                                    <div class="rose-stat-label">Prevailing Sector</div>
+                                    <div id="s3-rose-dominant" class="rose-stat-val">300° (WNW)</div>
+                                    <div class="rose-stat-label">Sector Frequency</div>
+                                    <div id="s3-rose-freq" class="rose-stat-val">30.0%</div>
+                                    <div class="rose-stat-label">Source Telemetry</div>
+                                    <div class="rose-stat-val" style="font-size: 10px; color: var(--text-dim);">ECMWF / Open-Meteo</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Wake Conflict Breakdown -->
+                        <div id="s3-conflicts-list-card" class="config-card" style="padding: 12px 14px;">
+                            <div class="config-card-header" style="margin-bottom: 8px;">
+                                <div class="card-title-group">
+                                    <span class="card-title-icon">⚠️</span>
+                                    <span class="card-title">Downwind Wake Overlaps</span>
+                                </div>
+                                <span id="s3-conflicts-badge" class="card-badge" style="background: rgba(239,68,68,0.2); color: #fca5a5;">-- Overlaps</span>
+                            </div>
+                            <div id="s3-conflicts-container" style="display: flex; flex-direction: column; gap: 6px; font-size: 11px;">
+                                <!-- Dynamically populated -->
+                            </div>
+                        </div>
+
+                        <!-- Simulation Transparency Disclaimer -->
+                        <div class="simulation-disclaimer-card">
+                            <span class="disclaimer-icon">ℹ️</span>
+                            <span>
+                                <strong>Engineering Simulation Notice:</strong> Wake velocity deficits and AEP calculations are modeled using the kinematic Jensen decay model and reanalysis wind statistics. This un-optimized baseline arrangement exhibits severe downwind wake interaction. QAOA quantum optimization will reshuffle positions across candidate sites to minimize mutual wake shadowing.
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Bottom Action Bar -->
+                    <div class="config-sticky-footer" style="position: relative; border-radius: 0;">
+                        <div class="config-summary-group">
+                            <span class="summary-power-label">Initial Wake Penalty</span>
+                            <span id="s3-footer-loss" class="summary-power-val" style="color: #ef4444;">--% Loss</span>
+                        </div>
+                        <button type="button" id="btn-screen3-optimize" class="btn-generate-layout">
+                            <span>OPTIMIZE WITH QAOA</span>
+                            <span>›</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================================================================
+             SCREEN 4: QAOA OPTIMIZATION (Placeholder)
+             =================================================================== -->
+        <div id="screen-4-container" class="screen-2-view">
             <div class="config-container-wrapper" style="align-items: center; justify-content: center; text-align: center; padding: 24px;">
-                <div style="font-size: 20px; font-weight: 700; color: #ffffff; margin-bottom: 8px;">Screen 3: Analyze Initial Layout</div>
+                <div style="font-size: 20px; font-weight: 700; color: #ffffff; margin-bottom: 8px;">Screen 4: QAOA Optimization</div>
                 <div style="font-size: 13px; color: var(--text-secondary); max-width: 480px; line-height: 1.5; margin-bottom: 24px;">
-                    Generated initial candidate layout for <strong id="screen-3-site-tag" style="color: var(--primary-cyan);">Site</strong> with <strong id="screen-3-turbines-tag" style="color: var(--primary-cyan);">12 turbines</strong>. Ready for QAOA quantum optimization.
+                    Ready for QAOA quantum circuit optimization. Awaiting Screen 4 reference design.
                 </div>
-                <div style="display: flex; gap: 12px;">
-                    <button type="button" class="btn-sub-back" onclick="APP.goToScreen(2)">
-                        <span>‹ Back to Configure</span>
-                    </button>
-                    <button type="button" id="btn-screen3-optimize" class="btn-generate-layout" onclick="APP.goToScreen(4)">
-                        <span>OPTIMIZE WITH QAOA ›</span>
-                    </button>
-                </div>
+                <button type="button" class="btn-sub-back" onclick="APP.goToScreen(3)">
+                    <span>‹ Back to Initial Layout</span>
+                </button>
             </div>
         </div>
 
@@ -621,6 +835,9 @@
             document.write('<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>');
         }
     </script>
+
+    <!-- Wind Aerodynamic Canvas Engine -->
+    <script src="js/wind-fx.js"></script>
 
     <!-- Engineering App Core Logic -->
     <script src="js/app.js"></script>

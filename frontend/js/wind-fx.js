@@ -73,8 +73,9 @@
         handleResize() {
             if (!this.canvas) return;
             const dpr = window.devicePixelRatio || 1;
-            const w = window.innerWidth;
-            const h = window.innerHeight;
+            const parent = this.canvas.parentElement;
+            const w = (parent && parent.clientWidth > 0) ? parent.clientWidth : window.innerWidth;
+            const h = (parent && parent.clientHeight > 0) ? parent.clientHeight : window.innerHeight;
 
             this.canvas.width = w * dpr;
             this.canvas.height = h * dpr;
@@ -229,8 +230,9 @@
                 }
             }
 
-            const w = window.innerWidth;
-            const h = window.innerHeight;
+            const dpr = window.devicePixelRatio || 1;
+            const w = this.canvas.width / dpr;
+            const h = this.canvas.height / dpr;
             this.ctx.clearRect(0, 0, w, h);
 
             // Unit vector in wind flow direction

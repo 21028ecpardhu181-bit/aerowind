@@ -42,7 +42,14 @@
         map: null,
         sitePolygon: null,
         areaBadgeMarker: null,
-        locationLabelMarker: null
+        locationLabelMarker: null,
+        screen3Map: null,
+        screen3Engine: null,
+        screen3Data: null,
+        screen3Markers: [],
+        screen3CandidateMarkers: [],
+        screen3Polygon: null,
+        screen3WakesVisible: true
     };
 
     // Standard Wind Turbine Industry Presets
@@ -627,21 +634,18 @@
             const screen1Container = document.getElementById('screen-1-container');
             const screen2Container = document.getElementById('screen-2-container');
             const screen3Container = document.getElementById('screen-3-container');
+            const screen4Container = document.getElementById('screen-4-container');
+
+            if (screen1Container) screen1Container.style.display = screenNum === 1 ? 'flex' : 'none';
+            if (screen2Container) screen2Container.style.display = screenNum === 2 ? 'flex' : 'none';
+            if (screen3Container) screen3Container.style.display = screenNum === 3 ? 'flex' : 'none';
+            if (screen4Container) screen4Container.style.display = screenNum === 4 ? 'flex' : 'none';
 
             if (screenNum === 1) {
-                if (screen1Container) screen1Container.style.display = 'flex';
-                if (screen2Container) screen2Container.style.display = 'none';
-                if (screen3Container) screen3Container.style.display = 'none';
                 APP_STATE.map?.invalidateSize();
             } else if (screenNum === 2) {
-                if (screen1Container) screen1Container.style.display = 'none';
-                if (screen2Container) screen2Container.style.display = 'flex';
-                if (screen3Container) screen3Container.style.display = 'none';
                 this.initScreen2();
             } else if (screenNum === 3) {
-                if (screen1Container) screen1Container.style.display = 'none';
-                if (screen2Container) screen2Container.style.display = 'none';
-                if (screen3Container) screen3Container.style.display = 'flex';
                 this.initScreen3();
             }
         },
@@ -1004,15 +1008,419 @@
             const site = APP_STATE.selectedSite;
             const cfg = APP_STATE.farmConfig;
 
-            const siteTag = document.getElementById('screen-3-site-tag');
-            if (siteTag) {
-                siteTag.innerText = `${site.shortName} (${site.lat.toFixed(4)}°, ${site.lon.toFixed(4)}°)`;
+            // Update header pill
+            const s3Ind = document.getElementById('s3-indicator-text');
+            if (s3Ind) {
+                s3Ind.innerText = `${site.shortName} · ${cfg.turbineCount} Turbines (${(cfg.turbineCount * cfg.ratedPowerKw / 1000).toFixed(1)} MW)`;
             }
 
-            const turbTag = document.getElementById('screen-3-turbines-tag');
-            if (turbTag) {
-                turbTag.innerText = `${cfg.turbineCount} turbines · ${(cfg.turbineCount * cfg.ratedPowerKw / 1000).toFixed(1)} MW`;
+            if (!this._screen3Initialized) {
+                this.setupScreen3EventListeners();
+                this._screen3Initialized = true;
             }
+
+            // Initialize Screen 3 Map if not exists
+            if (!APP_STATE.screen3Map) {
+                const mapElem = document.getElementById('screen3-map');
+                if (mapElem) {
+                    const map = L.map('screen3-map', {
+                        center: [site.lat, site.lon],
+                        zoom: 13,
+                        zoomControl: false,
+                        attributionControl: false
+                    });
+
+                    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                        maxZoom: 18,
+                        attribution: 'Esri Satellite'
+                    }).addTo(map);
+
+                    APP_STATE.screen3Map = map;
+
+                    // Initialize Canvas Aerodynamic Overlay
+                    const canvasElem = document.getElementById('screen3-canvas');
+                    if (canvasElem && window.WindSimulationEngine) {
+                        const engine = new window.WindSimulationEngine();
+                        engine.init(canvasElem, map);
+                        APP_STATE.screen3Engine = engine;
+                    }
+                }
+            } else {
+                APP_STATE.screen3Map.setView([site.lat, site.lon], 13);
+            }
+
+            setTimeout(() => {
+                APP_STATE.screen3Map?.invalidateSize();
+                APP_STATE.screen3Engine?.handleResize();
+            }, 100);
+
+            // Fetch initial layout analysis from backend
+            this.fetchInitialLayout();
+        },
+
+        setupScreen3EventListeners() {
+            // Back button to Screen 2
+            document.getElementById('btn-s3-back')?.addEventListener('click', () => {
+                this.goToScreen(2);
+            });
+
+            // Optimize with QAOA button
+            document.getElementById('btn-screen3-optimize')?.addEventListener('click', () => {
+                this.goToScreen(4);
+            });
+
+            // Panel / Sheet Expand & Collapse Toggle
+            const sheet = document.getElementById('screen-3-sheet');
+            const togglePanel = () => {
+                if (!sheet) return;
+                sheet.classList.toggle('collapsed');
+                const arrow = document.getElementById('btn-s3-sheet-arrow');
+                if (arrow) {
+                    arrow.style.transform = sheet.classList.contains('collapsed') ? 'rotate(180deg)' : 'rotate(0deg)';
+                }
+            };
+
+            document.getElementById('s3-panel-toggle')?.addEventListener('click', togglePanel);
+            document.getElementById('s3-sheet-handle')?.addEventListener('click', togglePanel);
+            document.getElementById('btn-s3-sheet-arrow')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                togglePanel();
+            });
+
+            // Toggle Jensen Wake Cones
+            const toggleWakesBtn = document.getElementById('btn-s3-toggle-wakes');
+            toggleWakesBtn?.addEventListener('click', () => {
+                APP_STATE.screen3WakesVisible = !APP_STATE.screen3WakesVisible;
+                toggleWakesBtn.classList.toggle('active', APP_STATE.screen3WakesVisible);
+                if (APP_STATE.screen3Engine) {
+                    APP_STATE.screen3Engine.setToggles({ showWakes: APP_STATE.screen3WakesVisible });
+                }
+                this.showToast(APP_STATE.screen3WakesVisible ? 'Wake Cones Enabled' : 'Wake Cones Hidden', 'info');
+            });
+
+            // Reset Map View
+            document.getElementById('btn-s3-reset-view')?.addEventListener('click', () => {
+                const site = APP_STATE.selectedSite;
+                APP_STATE.screen3Map?.setView([site.lat, site.lon], 13);
+            });
+        },
+
+        async fetchInitialLayout() {
+            const site = APP_STATE.selectedSite;
+            const cfg = APP_STATE.farmConfig;
+
+            this.showToast('Computing aerodynamic wake matrix...', 'info');
+
+            const payload = {
+                center_lat: site.lat,
+                center_lon: site.lon,
+                area_km2: site.areaKm2,
+                turbine_count: cfg.turbineCount,
+                rotor_diameter: cfg.rotorDiameter,
+                hub_height: cfg.hubHeight,
+                rated_power_kw: cfg.ratedPowerKw,
+                wind_direction_deg: cfg.windDirectionDeg,
+                wind_speed_mps: site.windSpeedMps || 7.1,
+                spacing_multiplier_d: cfg.spacingMultiplierD,
+                grid_n: cfg.gridResolution || 6
+            };
+
+            try {
+                const res = await fetch('/api/geo/initial-layout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!res.ok) {
+                    throw new Error(`Server returned ${res.status}`);
+                }
+
+                const data = await res.json();
+                this.renderScreen3Layout(data);
+                this.showToast(`Initial layout generated (${data.wake_conflicts_count} wake conflicts)`, 'success');
+            } catch (err) {
+                console.warn('Initial layout fetch error, using fallback aerodynamics:', err);
+                const fallbackData = this.generateFallbackLayoutData(site, cfg);
+                this.renderScreen3Layout(fallbackData);
+                this.showToast('Initial layout generated (Local Simulation)', 'info');
+            }
+        },
+
+        renderScreen3Layout(data) {
+            APP_STATE.screen3Data = data;
+            const map = APP_STATE.screen3Map;
+            const engine = APP_STATE.screen3Engine;
+
+            // Configure WindSimulationEngine
+            if (engine) {
+                engine.setWindAngle(data.wind_direction_deg);
+                engine.setLayouts(data.turbines, []);
+                engine.setWipeProgress(1.0, false);
+            }
+
+            // Clear old map layers
+            if (map) {
+                APP_STATE.screen3Markers.forEach(m => map.removeLayer(m));
+                APP_STATE.screen3Markers = [];
+                APP_STATE.screen3CandidateMarkers.forEach(m => map.removeLayer(m));
+                APP_STATE.screen3CandidateMarkers = [];
+                if (APP_STATE.screen3Polygon) {
+                    map.removeLayer(APP_STATE.screen3Polygon);
+                    APP_STATE.screen3Polygon = null;
+                }
+
+                // Render Site Polygon
+                const site = APP_STATE.selectedSite;
+                const radiusKm = Math.sqrt(site.areaKm2) / 2.0;
+                const latDelta = radiusKm / 111.0;
+                const lonDelta = radiusKm / (111.0 * Math.cos(site.lat * Math.PI / 180.0));
+                const vertices = [
+                    [site.lat + latDelta * 1.1, site.lon - lonDelta * 0.1],
+                    [site.lat + latDelta * 0.7, site.lon + lonDelta * 0.1],
+                    [site.lat + latDelta * 0.2, site.lon + lonDelta * 0.45],
+                    [site.lat - latDelta * 0.4, site.lon + lonDelta * 0.85],
+                    [site.lat - latDelta * 0.9, site.lon + lonDelta * 0.95],
+                    [site.lat - latDelta * 1.2, site.lon - lonDelta * 0.45],
+                    [site.lat - latDelta * 0.6, site.lon - lonDelta * 1.1],
+                    [site.lat - latDelta * 0.1, site.lon - lonDelta * 0.85],
+                    [site.lat + latDelta * 0.25, site.lon - lonDelta * 0.65],
+                    [site.lat + latDelta * 0.65, site.lon - lonDelta * 0.55]
+                ];
+
+                APP_STATE.screen3Polygon = L.polygon(vertices, {
+                    color: '#3b82f6',
+                    weight: 2,
+                    opacity: 0.85,
+                    fillColor: '#2563eb',
+                    fillOpacity: 0.12,
+                    dashArray: '4, 4'
+                }).addTo(map);
+
+                // Render Candidate Grid Dots
+                if (Array.isArray(data.candidate_positions)) {
+                    data.candidate_positions.forEach(c => {
+                        const dotIcon = L.divIcon({
+                            className: 'candidate-dot-wrapper',
+                            html: '<div class="candidate-grid-dot"></div>',
+                            iconSize: [10, 10],
+                            iconAnchor: [5, 5]
+                        });
+                        const dotMarker = L.marker([c.lat, c.lon], { icon: dotIcon, interactive: false }).addTo(map);
+                        APP_STATE.screen3CandidateMarkers.push(dotMarker);
+                    });
+                }
+
+                // Render Turbine Pins
+                if (Array.isArray(data.turbines)) {
+                    data.turbines.forEach(t => {
+                        const pinClass = t.is_conflicted ? 'turbine-map-pin conflicted' : 'turbine-map-pin';
+                        const pinIcon = L.divIcon({
+                            className: 'turbine-pin-wrapper',
+                            html: `<div class="${pinClass}">${t.id}</div>`,
+                            iconSize: [24, 24],
+                            iconAnchor: [12, 12]
+                        });
+
+                        const marker = L.marker([t.lat, t.lon], { icon: pinIcon }).addTo(map);
+                        marker.bindPopup(`
+                            <div style="font-family: var(--font-sans); font-size: 12px; line-height: 1.4; color: #0f172a;">
+                                <strong style="font-size: 13px;">Turbine ${t.id}</strong><br>
+                                Effective Wind: <strong>${t.effective_mps} m/s</strong><br>
+                                Wake Deficit: <span style="color: ${t.wake_deficit_pct > 10 ? '#ef4444' : '#f59e0b'}; font-weight: 700;">-${t.wake_deficit_pct}%</span><br>
+                                ${t.conflict_desc ? `<div style="color: #ef4444; font-weight: 600; margin-top: 4px;">⚠️ ${t.conflict_desc}</div>` : '<div style="color: #10b981; font-weight: 600; margin-top: 4px;">✓ Free Stream Flow</div>'}
+                            </div>
+                        `);
+
+                        APP_STATE.screen3Markers.push(marker);
+                    });
+                }
+            }
+
+            // Update Floating Wind Vector Arrow & Text
+            const arrowSvg = document.getElementById('s3-wind-arrow-svg');
+            if (arrowSvg) {
+                arrowSvg.style.transform = `rotate(${data.wind_direction_deg - 90}deg)`;
+            }
+            const vectorText = document.getElementById('s3-wind-vector-text');
+            if (vectorText) {
+                vectorText.innerText = `Wind: ${data.wind_speed_mps} m/s @ ${data.wind_direction_label}`;
+            }
+
+            // Update Peek Chips
+            const peekTurbines = document.getElementById('s3-peek-turbines');
+            if (peekTurbines) peekTurbines.innerText = `${data.turbines.length}`;
+
+            const peekAep = document.getElementById('s3-peek-aep');
+            if (peekAep) peekAep.innerText = `${data.estimated_aep_gwh} GWh`;
+
+            const peekWakeLoss = document.getElementById('s3-peek-wake-loss');
+            if (peekWakeLoss) peekWakeLoss.innerText = `${data.estimated_wake_loss_pct}%`;
+
+            const peekConflicts = document.getElementById('s3-peek-conflicts');
+            if (peekConflicts) peekConflicts.innerText = `${data.wake_conflicts_count} Overlaps`;
+
+            // Update Telemetry Table
+            const cfg = APP_STATE.farmConfig;
+            const metaTurbines = document.getElementById('s3-meta-turbines');
+            if (metaTurbines) {
+                metaTurbines.innerText = `${data.turbines.length} Turbines (${(data.turbines.length * cfg.ratedPowerKw / 1000).toFixed(1)} MW)`;
+            }
+
+            const grossAep = ((data.turbines.length * cfg.ratedPowerKw * 8760 * 0.35) / 1e6).toFixed(1);
+            const metaGrossAep = document.getElementById('s3-meta-gross-aep');
+            if (metaGrossAep) metaGrossAep.innerText = `${grossAep} GWh/yr`;
+
+            const metaNetAep = document.getElementById('s3-meta-net-aep');
+            if (metaNetAep) metaNetAep.innerText = `${data.estimated_aep_gwh} GWh/yr`;
+
+            const metaWakeLoss = document.getElementById('s3-meta-wake-loss');
+            if (metaWakeLoss) metaWakeLoss.innerText = `-${data.estimated_wake_loss_pct}%`;
+
+            const metaMinSpacing = document.getElementById('s3-meta-min-spacing');
+            if (metaMinSpacing) metaMinSpacing.innerText = `${Math.round(data.minimum_spacing_m)} m`;
+
+            const metaConflictsCount = document.getElementById('s3-meta-conflicts-count');
+            if (metaConflictsCount) metaConflictsCount.innerText = `${data.wake_conflicts_count} pairs`;
+
+            // Update Sticky Footer
+            const footerLoss = document.getElementById('s3-footer-loss');
+            if (footerLoss) footerLoss.innerText = `${data.estimated_wake_loss_pct}% Loss`;
+
+            // Render SVG Wind Rose Radar Chart
+            this.renderWindRoseSvg(data.wind_rose, data.wind_direction_deg);
+
+            // Populate Conflicts List Card
+            this.renderConflictsList(data.wake_conflicts);
+        },
+
+        renderWindRoseSvg(bins, prevailingDeg) {
+            const svg = document.getElementById('s3-wind-rose-svg');
+            if (!svg || !Array.isArray(bins)) return;
+
+            let html = `
+                <!-- Background Circles -->
+                <circle cx="0" cy="0" r="45" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+                <circle cx="0" cy="0" r="30" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+                <circle cx="0" cy="0" r="15" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+                <!-- Cardinal Cross Axes -->
+                <line x1="-50" y1="0" x2="50" y2="0" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+                <line x1="0" y1="-50" x2="0" y2="50" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+            `;
+
+            let maxFreq = 0;
+            let dominantBin = null;
+
+            bins.forEach(b => {
+                if (b.frequency_pct > maxFreq) {
+                    maxFreq = b.frequency_pct;
+                    dominantBin = b;
+                }
+                const rad = (b.angle_deg - 90) * (Math.PI / 180.0);
+                const r = Math.min(50, Math.max(8, (b.frequency_pct / 35.0) * 48));
+                const x = r * Math.cos(rad);
+                const y = r * Math.sin(rad);
+
+                const isPrevailing = Math.abs((b.angle_deg - prevailingDeg + 180) % 360 - 180) < 15;
+                const fill = isPrevailing ? 'rgba(56, 189, 248, 0.85)' : 'rgba(59, 130, 246, 0.4)';
+                const stroke = isPrevailing ? '#38bdf8' : 'rgba(59, 130, 246, 0.6)';
+
+                // Petal polygon from center
+                const radL = rad - 0.12;
+                const radR = rad + 0.12;
+                const xL = (r * 0.9) * Math.cos(radL);
+                const yL = (r * 0.9) * Math.sin(radL);
+                const xR = (r * 0.9) * Math.cos(radR);
+                const yR = (r * 0.9) * Math.sin(radR);
+
+                html += `<polygon points="0,0 ${xL.toFixed(1)},${yL.toFixed(1)} ${x.toFixed(1)},${y.toFixed(1)} ${xR.toFixed(1)},${yR.toFixed(1)}" fill="${fill}" stroke="${stroke}" stroke-width="0.8"/>`;
+            });
+
+            svg.innerHTML = html;
+
+            if (dominantBin) {
+                const domElem = document.getElementById('s3-rose-dominant');
+                if (domElem) domElem.innerText = `${dominantBin.angle_deg}° (${dominantBin.direction})`;
+                const freqElem = document.getElementById('s3-rose-freq');
+                if (freqElem) freqElem.innerText = `${dominantBin.frequency_pct}%`;
+            }
+        },
+
+        renderConflictsList(conflicts) {
+            const container = document.getElementById('s3-conflicts-container');
+            const badge = document.getElementById('s3-conflicts-badge');
+            if (!container) return;
+
+            if (!Array.isArray(conflicts) || conflicts.length === 0) {
+                container.innerHTML = '<div style="color: #10b981; padding: 6px 0;">✓ No severe wake conflicts identified at standard spacing.</div>';
+                if (badge) {
+                    badge.innerText = '0 Overlaps';
+                    badge.style.background = 'rgba(16, 185, 129, 0.2)';
+                    badge.style.color = '#a7f3d0';
+                }
+                return;
+            }
+
+            if (badge) {
+                badge.innerText = `${conflicts.length} Overlaps`;
+            }
+
+            container.innerHTML = conflicts.map(c => `
+                <div class="conflict-list-item">
+                    <div class="conflict-pair-tag">
+                        <span>${c.upstream_id}</span>
+                        <span style="color: var(--text-dim);">➔</span>
+                        <span>${c.downstream_id}</span>
+                        <span style="font-size: 10px; color: var(--text-dim); font-weight: normal;">(${c.distance_m}m)</span>
+                    </div>
+                    <div class="conflict-loss-badge">-${c.deficit_pct}% wake loss</div>
+                </div>
+            `).join('');
+        },
+
+        generateFallbackLayoutData(site, cfg) {
+            const k = cfg.turbineCount;
+            const turbines = [];
+            const radiusKm = Math.sqrt(site.areaKm2) / 2.5;
+            const latDelta = radiusKm / 111.0;
+            const lonDelta = radiusKm / (111.0 * Math.cos(site.lat * Math.PI / 180.0));
+
+            for (let i = 0; i < k; i++) {
+                const row = Math.floor(i / 3);
+                const col = i % 3;
+                const lat = site.lat + (row - 1) * latDelta * 0.6;
+                const lon = site.lon + (col - 1) * lonDelta * 0.6;
+                const isConf = i >= 3 && i % 2 === 0;
+                turbines.push({
+                    id: `T${i + 1}`,
+                    label: `T${i + 1}`,
+                    lat: lat,
+                    lon: lon,
+                    x_m: col * 600,
+                    y_m: row * 600,
+                    effective_mps: isConf ? 5.8 : 7.1,
+                    wake_deficit_pct: isConf ? 14.2 : 0.0,
+                    is_conflicted: isConf,
+                    conflict_desc: isConf ? 'Wake Overlap' : null
+                });
+            }
+
+            return {
+                turbines: turbines,
+                candidate_positions: turbines,
+                estimated_aep_gwh: Math.round(((k * cfg.ratedPowerKw * 8760 * 0.35 * 0.85) / 1e6) * 10) / 10,
+                estimated_wake_loss_pct: 14.8,
+                minimum_spacing_m: 600.0,
+                wake_conflicts_count: 2,
+                wake_conflicts: [
+                    { upstream_id: 'T1', downstream_id: 'T4', deficit_pct: 14.2, distance_m: 600, warning_label: 'Wake Overlap' }
+                ],
+                wind_direction_deg: cfg.windDirectionDeg,
+                wind_direction_label: `${cfg.windDirectionDeg}°`,
+                wind_speed_mps: site.windSpeedMps || 7.1,
+                wind_rose: [],
+                status: 'Local Simulation'
+            };
         },
 
         hideToast() {

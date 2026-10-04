@@ -26,9 +26,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 try:
-    from backend.app.api import compare, geo, optimize, telemetry
+    from backend.app.api import compare, geo, layout, optimize, telemetry
 except ImportError:
-    from app.api import compare, geo, optimize, telemetry
+    from app.api import compare, geo, layout, optimize, telemetry
 
 app = FastAPI(
     title="AeroQuantum-Wind API",
@@ -54,6 +54,7 @@ from fastapi.staticfiles import StaticFiles
 # Register routers
 app.include_router(geo.router, prefix="/api/geo")
 app.include_router(telemetry.router, prefix="/api/geo")
+app.include_router(layout.router, prefix="/api/geo")
 app.include_router(optimize.router, prefix="/api")
 app.include_router(compare.router, prefix="/api")
 
