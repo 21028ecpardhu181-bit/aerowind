@@ -597,6 +597,234 @@ body {
     color: #ffffff;
 }
 
+/* GPS Inline Button inside search pill */
+.btn-map-gps-inline {
+    background: transparent;
+    border: none;
+    color: var(--primary-cyan);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    margin-left: 6px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-map-gps-inline:hover {
+    background: rgba(255, 255, 255, 0.1);
+    transform: scale(1.05);
+}
+
+/* Contextual Location & Boundary Tools (Apple Liquid Glass) */
+.map-contextual-bar {
+    position: absolute;
+    top: 60px;
+    left: 20px;
+    z-index: 400;
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.ctx-pill-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(13, 17, 28, 0.82);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: var(--foreground);
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+    transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ctx-pill-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.25);
+    transform: translateY(-1px);
+}
+
+.ctx-pill-btn:active {
+    transform: scale(0.96);
+}
+
+.ctx-pill-btn.secondary {
+    color: var(--text-secondary);
+    background: rgba(13, 17, 28, 0.65);
+}
+
+/* Floating Coordinates Input Popup */
+.ctx-coords-popup {
+    position: absolute;
+    top: 104px;
+    left: 20px;
+    z-index: 450;
+    pointer-events: auto;
+    width: 280px;
+    background: rgba(15, 20, 32, 0.95);
+    backdrop-filter: blur(24px) saturate(190%);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: var(--radius-lg);
+    padding: 14px;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    animation: popupFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes popupFadeIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.coords-popup-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--foreground);
+}
+
+.btn-coords-close {
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    font-size: 14px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+}
+
+.btn-coords-close:hover {
+    color: var(--foreground);
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.coords-popup-inputs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.coords-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.coords-field label {
+    font-size: 10px;
+    color: var(--text-dim);
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.coords-field input {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-sm);
+    color: #ffffff;
+    padding: 6px 8px;
+    font-size: 12px;
+    font-family: monospace;
+    outline: none;
+}
+
+.coords-field input:focus {
+    border-color: var(--primary-cyan);
+}
+
+.btn-apply-coords {
+    background: var(--primary-blue);
+    color: #ffffff;
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 8px 12px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity 0.15s ease;
+}
+
+.btn-apply-coords:hover {
+    opacity: 0.9;
+}
+
+/* Review Site & Continue Action Buttons */
+.btn-review-site {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: var(--foreground);
+    padding: 10px 14px;
+    border-radius: var(--radius-md);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.15s ease;
+}
+
+.btn-review-site:hover {
+    background: rgba(255, 255, 255, 0.14);
+    border-color: rgba(255, 255, 255, 0.25);
+}
+
+.btn-change-cfg {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: var(--text-secondary);
+    padding: 8px 12px;
+    border-radius: var(--radius-md);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-change-cfg:hover {
+    color: var(--foreground);
+    background: rgba(255, 255, 255, 0.14);
+}
+
+/* Compare Layout Button in Screen 5 Inspector */
+.btn-inspector-compare {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    color: var(--primary-cyan);
+    padding: 9px 14px;
+    border-radius: var(--radius-md);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-inspector-compare:hover {
+    background: rgba(0, 240, 255, 0.12);
+    border-color: var(--primary-cyan);
+    color: #ffffff;
+}
+
 /* Map Right Floating Controls */
 .map-floating-controls {
     position: absolute;
@@ -925,7 +1153,7 @@ body {
     .brand-divider,
     .brand-tag,
     .stepper-nav,
-    .header-actions .project-badge {
+    .btn-auth-header {
         display: none;
     }
 
@@ -935,7 +1163,8 @@ body {
         gap: 6px;
     }
 
-    .btn-auth-header {
+    .header-actions .project-badge {
+        display: inline-flex;
         padding: 4px 8px;
         font-size: 11px;
     }
@@ -1000,9 +1229,40 @@ body {
         flex-shrink: 0;
     }
 
+    /* Mobile Contextual Location & Boundary Bar */
+    .map-contextual-bar {
+        top: 92px;
+        left: 10px;
+        right: 10px;
+        gap: 4px;
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        scrollbar-width: none;
+        padding-bottom: 2px;
+    }
+
+    .map-contextual-bar::-webkit-scrollbar {
+        display: none;
+    }
+
+    .ctx-pill-btn {
+        padding: 5px 10px;
+        font-size: 10px;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    .ctx-coords-popup {
+        top: 136px;
+        left: 10px;
+        right: 10px;
+        width: calc(100% - 20px);
+        max-width: 340px;
+    }
+
     .map-floating-controls {
         right: 12px;
-        top: 96px;
+        top: 140px;
         transform: none;
         gap: 6px;
     }

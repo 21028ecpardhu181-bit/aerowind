@@ -1241,6 +1241,15 @@
                 this.showToast(`Turbine count adjusted to site capacity (${maxCapacity} turbines)`, 'info');
             });
 
+            // Change configuration button
+            document.getElementById('btn-change-config')?.addEventListener('click', () => {
+                const input = document.getElementById('cfg-turbines-count');
+                if (input) {
+                    input.focus();
+                    input.select();
+                }
+            });
+
             // Primary Action: GENERATE INITIAL LAYOUT
             document.getElementById('btn-generate-layout')?.addEventListener('click', () => {
                 this.validateAndGenerateLayout();
@@ -1353,6 +1362,7 @@
             const headline = document.getElementById('capacity-status-headline');
             const desc = document.getElementById('capacity-status-desc');
             const clampBtn = document.getElementById('btn-clamp-capacity');
+            const changeConfigBtn = document.getElementById('btn-change-config');
             const utilBadge = document.getElementById('badge-capacity-utilization');
 
             const currentCount = cfg.turbineCount;
@@ -1372,6 +1382,7 @@
                 if (headline) headline.innerText = 'Site Capacity Optimal';
                 if (desc) desc.innerText = `${currentCount} turbines comfortably fit within the ${site.areaKm2.toFixed(1)} km² site with standard ${cfg.spacingMultiplierD}D aerodynamic wake buffer spacing.`;
                 if (clampBtn) clampBtn.style.display = 'none';
+                if (changeConfigBtn) changeConfigBtn.style.display = 'none';
                 if (utilBadge) {
                     utilBadge.innerText = `${Math.round((currentCount / maxCapacity) * 100)}% Capacity`;
                     utilBadge.style.color = 'var(--primary-cyan)';
@@ -1384,6 +1395,9 @@
                 if (clampBtn) {
                     clampBtn.style.display = 'inline-block';
                     clampBtn.innerText = `Optimize ${maxCapacity} Feasible Turbines`;
+                }
+                if (changeConfigBtn) {
+                    changeConfigBtn.style.display = 'inline-block';
                 }
                 if (utilBadge) {
                     utilBadge.innerText = `Exceeds Capacity (${currentCount}/${maxCapacity})`;
@@ -2263,12 +2277,16 @@
                 this.toggleScreen5Wakes();
             });
 
-            // Before / After segmented toggle
+            // Before / After segmented toggle & compare button
             document.getElementById('s5-btn-before')?.addEventListener('click', () => {
                 this.toggleScreen5BeforeAfter('before');
             });
             document.getElementById('s5-btn-optimized')?.addEventListener('click', () => {
                 this.toggleScreen5BeforeAfter('optimized');
+            });
+            document.getElementById('btn-s5-compare-layout')?.addEventListener('click', () => {
+                const target = APP_STATE.screen5Mode === 'optimized' ? 'before' : 'optimized';
+                this.toggleScreen5BeforeAfter(target);
             });
 
             // Reset view button
@@ -2635,6 +2653,9 @@
 
             const lonElem = document.getElementById('s5-inspector-lon');
             if (lonElem) lonElem.innerText = `${turbine.lon.toFixed(4)}° E`;
+
+            const elevElem = document.getElementById('s5-inspector-elevation');
+            if (elevElem) elevElem.innerText = `${turbine.elevation !== undefined ? turbine.elevation : Math.round(APP_STATE.selectedSite.elevationM || 42)} m`;
 
             const outputMw = ((turbine.effective_mps / 8.0) * (cfg.ratedPowerKw / 1000.0)).toFixed(2);
             const outElem = document.getElementById('s5-inspector-output');
