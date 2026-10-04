@@ -269,6 +269,57 @@ class NominatimClient:
 
     NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 
+    FALLBACKS: Dict[str, Dict[str, Any]] = {
+        "bommuru": {
+            "lat": 16.9675853,
+            "lon": 81.8137778,
+            "display_name": "Bommuru, Rajahmundry Rural, East Godavari, Andhra Pradesh, India",
+            "boundingbox": [16.94, 17.03, 81.77, 81.86],
+        },
+        "rajahmundry": {
+            "lat": 17.0050454,
+            "lon": 81.7804732,
+            "display_name": "Rajahmundry, East Godavari, Andhra Pradesh, India",
+            "boundingbox": [16.95, 17.06, 81.72, 81.84],
+        },
+        "hukkumpeta": {
+            "lat": 18.1499330,
+            "lon": 82.6945842,
+            "display_name": "Hukkumpeta, Alluri Sitharama Raju, Andhra Pradesh, India",
+            "boundingbox": [18.10, 18.20, 82.64, 82.75],
+        },
+        "anantapur": {
+            "lat": 14.6818877,
+            "lon": 77.6005911,
+            "display_name": "Anantapur, Anantapuram, Andhra Pradesh, India",
+            "boundingbox": [14.52, 14.84, 77.44, 77.76],
+        },
+        "muppandal": {
+            "lat": 8.2570,
+            "lon": 77.5484,
+            "display_name": "Muppandal Wind Farm, Kanyakumari, Tamil Nadu, India",
+            "boundingbox": [8.20, 8.30, 77.50, 77.60],
+        },
+        "kanyakumari": {
+            "lat": 8.2570,
+            "lon": 77.5484,
+            "display_name": "Kanyakumari Wind Energy Concession, Tamil Nadu, India",
+            "boundingbox": [8.15, 8.35, 77.45, 77.65],
+        },
+        "jaisalmer": {
+            "lat": 26.9157,
+            "lon": 70.9083,
+            "display_name": "Jaisalmer Wind Park, Rajasthan, India",
+            "boundingbox": [26.85, 26.98, 70.85, 70.98],
+        },
+        "kutch": {
+            "lat": 23.2420,
+            "lon": 69.6669,
+            "display_name": "Kutch Wind Complex, Gujarat, India",
+            "boundingbox": [23.10, 23.40, 69.50, 69.80],
+        },
+    }
+
     def __init__(
         self,
         user_agent: str = "AeroQuantumWind/1.0 (hackathon-prototype; contact: hatch@local)",
@@ -370,56 +421,7 @@ class NominatimClient:
                 self._last_request_time = time.time()
 
             # Fallback for key project locations if Nominatim is rate-limited, offline, or returns 404
-            FALLBACKS = {
-                "bommuru": {
-                    "lat": 16.9818,
-                    "lon": 81.8158,
-                    "display_name": "Bommuru, Rajahmundry, East Godavari, Andhra Pradesh, India",
-                    "boundingbox": [16.94, 17.03, 81.77, 81.86],
-                },
-                "rajahmundry": {
-                    "lat": 17.0050,
-                    "lon": 81.7805,
-                    "display_name": "Rajahmundry, East Godavari, Andhra Pradesh, India",
-                    "boundingbox": [16.95, 17.06, 81.72, 81.84],
-                },
-                "hukkumpeta": {
-                    "lat": 18.1499,
-                    "lon": 82.6946,
-                    "display_name": "Hukkumpeta, Alluri Sitharama Raju, Andhra Pradesh, India",
-                    "boundingbox": [18.10, 18.20, 82.64, 82.75],
-                },
-                "anantapur": {
-                    "lat": 14.6818877,
-                    "lon": 77.6005911,
-                    "display_name": "Anantapur, Anantapuram, Andhra Pradesh, India",
-                    "boundingbox": [14.52, 14.84, 77.44, 77.76],
-                },
-                "muppandal": {
-                    "lat": 8.2570,
-                    "lon": 77.5484,
-                    "display_name": "Muppandal Wind Farm, Kanyakumari, Tamil Nadu, India",
-                    "boundingbox": [8.20, 8.30, 77.50, 77.60],
-                },
-                "kanyakumari": {
-                    "lat": 8.2570,
-                    "lon": 77.5484,
-                    "display_name": "Kanyakumari Wind Energy Concession, Tamil Nadu, India",
-                    "boundingbox": [8.15, 8.35, 77.45, 77.65],
-                },
-                "jaisalmer": {
-                    "lat": 26.9157,
-                    "lon": 70.9083,
-                    "display_name": "Jaisalmer Wind Park, Rajasthan, India",
-                    "boundingbox": [26.85, 26.98, 70.85, 70.98],
-                },
-                "kutch": {
-                    "lat": 23.2420,
-                    "lon": 69.6669,
-                    "display_name": "Kutch Wind Complex, Gujarat, India",
-                    "boundingbox": [23.10, 23.40, 69.50, 69.80],
-                },
-            }
+            FALLBACKS = self.FALLBACKS
             for key, val in FALLBACKS.items():
                 if key in normalized_query:
                     self._cache[normalized_query] = val

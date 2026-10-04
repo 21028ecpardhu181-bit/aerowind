@@ -402,16 +402,23 @@
 
         calculatePolygonPerimeterKm(vertices) {
             if (!vertices || vertices.length < 2) return 0.0;
-            const R = 6371.0;
-            const refLat = vertices[0][0];
-            const cosLat = Math.cos(refLat * Math.PI / 180.0);
+            const R = 6371.0; // Mean Earth radius in km
+            const toRad = Math.PI / 180.0;
             let perim = 0.0;
             const n = vertices.length;
             for (let i = 0; i < n; i++) {
                 const j = (i + 1) % n;
-                const dx = ((vertices[j][1] - vertices[i][1]) * Math.PI / 180.0) * R * cosLat;
-                const dy = ((vertices[j][0] - vertices[i][0]) * Math.PI / 180.0) * R;
-                perim += Math.hypot(dx, dy);
+                const lat1 = vertices[i][0] * toRad;
+                const lon1 = vertices[i][1] * toRad;
+                const lat2 = vertices[j][0] * toRad;
+                const lon2 = vertices[j][1] * toRad;
+                const dLat = lat2 - lat1;
+                const dLon = lon2 - lon1;
+                const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                          Math.cos(lat1) * Math.cos(lat2) *
+                          Math.sin(dLon / 2) * Math.sin(dLon / 2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                perim += R * c;
             }
             return perim;
         },
@@ -604,7 +611,9 @@
                 } else {
                     const areaKm2 = this.calculatePolygonAreaKm2(APP_STATE.drawnVertices);
                     const perimKm = this.calculatePolygonPerimeterKm(APP_STATE.drawnVertices);
-                    label.innerText = `${count} points placed (~${areaKm2.toFixed(1)} km², perimeter ${perimKm.toFixed(1)} km). Drag markers to edit, right-click to delete. Click "Close Polygon" to finish.`;
+                    const centerLat = APP_STATE.drawnVertices.reduce((sum, v) => sum + v[0], 0) / count;
+                    const centerLon = APP_STATE.drawnVertices.reduce((sum, v) => sum + v[1], 0) / count;
+                    label.innerText = `${count} points placed (Area: ${areaKm2.toFixed(2)} km², Perimeter: ${perimKm.toFixed(2)} km, Centroid: ${centerLat.toFixed(4)}°, ${centerLon.toFixed(4)}°). Drag markers to edit, right-click to delete. Click "Close Polygon" to finish.`;
                 }
             }
         },
@@ -627,6 +636,8 @@
             const centerLon = vertices.reduce((sum, v) => sum + v[1], 0) / vertices.length;
             site.lat = centerLat;
             site.lon = centerLon;
+
+            site.centroid = [centerLat, centerLon];
 
             this.stopPolygonDraw(true);
 
@@ -659,15 +670,20 @@
 
                 const badgeIcon = L.divIcon({
                     className: 'badge-div-wrapper',
-                    html: `<div class="selected-area-badge">Concession Area<br><strong>${areaKm2.toFixed(1)} km²</strong> <span style="font-size:10px;opacity:0.8;">(${perimKm.toFixed(1)} km perim)</span></div>`,
-                    iconSize: [120, 44],
-                    iconAnchor: [60, 22]
+                    html: `<div class="selected-area-badge">Concession Area<br><strong>${areaKm2.toFixed(1)} km²</strong> <span style="font-size:10px;opacity:0.8;">(Perimeter: ${perimKm.toFixed(2)} km)</span></div>`,
+                    iconSize: [130, 44],
+                    iconAnchor: [65, 22]
                 });
                 APP_STATE.areaBadgeMarker = L.marker([centerLat, centerLon], { icon: badgeIcon }).addTo(map);
             }
 
             const areaElem = document.getElementById('meta-area');
-            if (areaElem) areaElem.innerText = `${areaKm2.toFixed(1)} km²`;
+            if (areaElem) areaElem.innerText = `${areaKm2.toFixed(1)} km² · Perimeter: ${perimKm.toFixed(2)} km`;
+
+            const drawStatusLabel = document.getElementById('draw-status-label');
+            if (drawStatusLabel) {
+                drawStatusLabel.innerText = `Polygon closed: Area: ${areaKm2.toFixed(2)} km², Perimeter: ${perimKm.toFixed(2)} km, Centroid: ${centerLat.toFixed(4)}°, ${centerLon.toFixed(4)}°`;
+            }
 
             if (APP_STATE.screen1CesiumActive && APP_STATE.screen1CesiumEngine) {
                 APP_STATE.screen1CesiumEngine.setSiteBoundary(vertices);
@@ -675,7 +691,7 @@
             }
 
             this.updateScreen2Capacity();
-            this.showToast(`Custom polygon closed: ${areaKm2.toFixed(1)} km² concession (${perimKm.toFixed(1)} km perimeter)`, 'success');
+            this.showToast(`Custom polygon closed: Area: ${areaKm2.toFixed(1)} km², Perimeter: ${perimKm.toFixed(2)} km, Centroid: ${centerLat.toFixed(4)}°, ${centerLon.toFixed(4)}°`, 'success');
         },
 
         clearPolygonDraw() {

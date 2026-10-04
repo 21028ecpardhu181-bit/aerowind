@@ -451,7 +451,7 @@ class CandidateGenerationEngine:
         # Retain candidate diversity while enforcing sub-spacing threshold
         feasible_raw = [c for c in geo_filtered_candidates if c["feasibility"] == "FEASIBLE"]
         if not feasible_raw:
-            feasible_raw = geo_filtered_candidates[:10]  # Fallback gracefully if site is highly restricted
+            feasible_raw = []  # Defensive: never leak EXCLUDED or UNKNOWN candidates into feasible pool
 
         # Spatial thinning with half-spacing
         spacing_sub_threshold = max(180.0, self.min_dist_m * 0.45)
