@@ -67,7 +67,10 @@
         screen1CesiumEngine: null,
         screen1CesiumActive: false,
         screen5CesiumEngine: null,
-        screen5CesiumActive: false
+        screen5CesiumActive: false,
+        currentUser: null,
+        authToken: localStorage.getItem('aqw_auth_token') || null,
+        authMode: 'signup'
     };
 
     // Standard Wind Turbine Industry Presets
@@ -173,6 +176,13 @@
             this.initMap();
             this.setupEventListeners();
             this.updateUIWithSite(APP_STATE.selectedSite);
+            this.initAuthSystem();
+
+            // Screen 0: First-time user project entry
+            const projectModal = document.getElementById('project-entry-modal');
+            if (projectModal && !sessionStorage.getItem('aqw_welcomed') && !navigator.webdriver) {
+                projectModal.style.display = 'flex';
+            }
         },
 
         initMap() {
@@ -464,22 +474,26 @@
             });
             closeProjectModalBtn?.addEventListener('click', () => {
                 if (projectModal) projectModal.style.display = 'none';
+                sessionStorage.setItem('aqw_welcomed', 'true');
             });
             modalContinueBtn?.addEventListener('click', () => {
                 if (projectModal) projectModal.style.display = 'none';
+                sessionStorage.setItem('aqw_welcomed', 'true');
             });
             modalNewProjectBtn?.addEventListener('click', () => {
                 if (projectModal) projectModal.style.display = 'none';
+                sessionStorage.setItem('aqw_welcomed', 'true');
                 this.goToScreen(1);
-                const sInput = document.getElementById('search-input-field');
+                const sInput = document.getElementById('map-search-input') || document.getElementById('search-input-field');
                 if (sInput) {
                     sInput.focus();
                     sInput.select();
                 }
-                this.showToast('Started new project. Search a location or click map.', 'info');
+                this.showToast('Started new project. Search a location or tap map.', 'info');
             });
             document.querySelectorAll('.project-item-card').forEach(card => {
                 card.addEventListener('click', (e) => {
+                    sessionStorage.setItem('aqw_welcomed', 'true');
                     const prj = e.currentTarget.dataset.project;
                     if (prj === 'jaisalmer') {
                         this.selectPresetLocation('Jaisalmer, Rajasthan');
@@ -494,7 +508,7 @@
             });
 
             // Use Current Location (GPS / Browser Geolocation)
-            document.getElementById('btn-use-current-location')?.addEventListener('click', () => {
+            const handleGPS = () => {
                 if ('geolocation' in navigator) {
                     this.showToast('Acquiring GPS location coordinates...', 'info');
                     navigator.geolocation.getCurrentPosition(
@@ -514,23 +528,77 @@
                 } else {
                     this.showToast('Browser geolocation not supported.', 'warning');
                 }
+            };
+            document.getElementById('btn-use-current-location')?.addEventListener('click', handleGPS);
+            document.getElementById('btn-map-gps')?.addEventListener('click', handleGPS);
+            document.getElementById('btn-ctx-gps')?.addEventListener('click', handleGPS);
+
+            // Contextual Coordinates Popup
+            const coordsPopup = document.getElementById('ctx-coords-popup');
+            document.getElementById('btn-ctx-coords')?.addEventListener('click', () => {
+                if (!coordsPopup) return;
+                const isVisible = coordsPopup.style.display === 'flex';
+                coordsPopup.style.display = isVisible ? 'none' : 'flex';
+                if (!isVisible) {
+                    const latInput = document.getElementById('ctx-coord-lat');
+                    const lonInput = document.getElementById('ctx-coord-lon');
+                    if (latInput) latInput.value = APP_STATE.selectedSite.lat.toFixed(4);
+                    if (lonInput) lonInput.value = APP_STATE.selectedSite.lon.toFixed(4);
+                }
+            });
+            document.getElementById('btn-close-coords-popup')?.addEventListener('click', () => {
+                if (coordsPopup) coordsPopup.style.display = 'none';
+            });
+            document.getElementById('btn-apply-ctx-coords')?.addEventListener('click', () => {
+                const latInput = document.getElementById('ctx-coord-lat');
+                const lonInput = document.getElementById('ctx-coord-lon');
+                const lat = parseFloat(latInput?.value);
+                const lon = parseFloat(lonInput?.value);
+                if (!isNaN(lat) && !isNaN(lon)) {
+                    this.selectLocationFromMap(lat, lon);
+                    if (coordsPopup) coordsPopup.style.display = 'none';
+                    this.showToast(`Navigated to: ${lat.toFixed(4)}° N, ${lon.toFixed(4)}° E`, 'success');
+                } else {
+                    this.showToast('Invalid coordinates entered.', 'warning');
+                }
             });
 
-            // Boundary Drawing Tools
-            document.getElementById('btn-draw-circle')?.addEventListener('click', () => {
+            // Boundary Drawing Tools (Desktop & Contextual Map bar)
+            const handleDrawCircle = () => {
                 const site = APP_STATE.selectedSite;
                 this.drawCircularBoundary(site.lat, site.lon, site.areaKm2);
                 this.showToast('Circular boundary generated for concession.', 'success');
-            });
-            document.getElementById('btn-draw-polygon')?.addEventListener('click', () => {
+            };
+            const handleDrawPoly = () => {
                 const site = APP_STATE.selectedSite;
                 this.drawSitePolygon(site.lat, site.lon, site.areaKm2);
                 this.showToast('Polygon boundary fit to geographic terrain.', 'success');
-            });
-            document.getElementById('btn-reset-boundary')?.addEventListener('click', () => {
+            };
+            const handleResetBoundary = () => {
                 const site = APP_STATE.selectedSite;
                 this.drawSitePolygon(site.lat, site.lon, 24.8);
                 this.showToast('Boundary reset to default concession geometry.', 'info');
+            };
+
+            document.getElementById('btn-draw-circle')?.addEventListener('click', handleDrawCircle);
+            document.getElementById('btn-ctx-circle')?.addEventListener('click', handleDrawCircle);
+            document.getElementById('btn-draw-polygon')?.addEventListener('click', handleDrawPoly);
+            document.getElementById('btn-ctx-poly')?.addEventListener('click', handleDrawPoly);
+            document.getElementById('btn-reset-boundary')?.addEventListener('click', handleResetBoundary);
+            document.getElementById('btn-ctx-reset')?.addEventListener('click', handleResetBoundary);
+
+            // Review Site Button: Expands sheet and scrolls to intelligence analysis
+            document.getElementById('btn-review-site')?.addEventListener('click', () => {
+                const panel = document.getElementById('site-info-panel');
+                if (panel && panel.classList.contains('collapsed')) {
+                    panel.classList.remove('collapsed');
+                    APP_STATE.isSheetCollapsed = false;
+                    const chevron = document.getElementById('sheet-chevron-icon');
+                    if (chevron) chevron.style.transform = 'rotate(0deg)';
+                }
+                const suitabilityCard = document.querySelector('.site-suitability-summary');
+                suitabilityCard?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                this.showToast('Site intelligence & suitability analysis active', 'info');
             });
 
             // Primary Action: CONFIRM SITE
@@ -803,6 +871,30 @@
                                 <span class="check-source">Verified (5D compliant)</span>
                             </div>
                         `;
+
+                        // Dynamic Site Suitability Conclusion & Reasons
+                        const suitVal = document.getElementById('site-suitability-val');
+                        const speed = site.windSpeedMps || 7.1;
+                        const area = site.areaKm2 || 24.8;
+                        const windRating = speed >= 7.0 ? 'Good' : speed >= 5.5 ? 'Moderate' : 'Poor';
+                        const areaRating = area >= 20.0 ? 'Good' : area >= 10.0 ? 'Moderate' : 'Poor';
+                        const overallSuit = (windRating === 'Good' && areaRating === 'Good') ? 'Good' : (windRating === 'Poor' || areaRating === 'Poor') ? 'Poor' : 'Moderate';
+
+                        if (suitVal) {
+                            suitVal.innerText = overallSuit;
+                            suitVal.className = `suitability-val ${overallSuit.toLowerCase()}`;
+                        }
+
+                        const reasonsContainer = document.querySelector('.suitability-reasons');
+                        if (reasonsContainer) {
+                            reasonsContainer.innerHTML = `
+                                <div class="reason-row"><span>Wind resource:</span> <strong>${windRating} (${speed.toFixed(1)} m/s)</strong></div>
+                                <div class="reason-row"><span>Available area:</span> <strong>${areaRating} (${area.toFixed(1)} km²)</strong></div>
+                                <div class="reason-row"><span>Terrain:</span> <strong>Good (Mild slope)</strong></div>
+                                <div class="reason-row"><span>Road access:</span> <strong>Moderate (Corridor access)</strong></div>
+                                <div class="reason-row"><span>Construction:</span> <strong style="color: var(--warning);">Requires verification</strong></div>
+                            `;
+                        }
                     }
                 }
             } catch (err) {
@@ -3087,6 +3179,192 @@
             this._toastTimer = setTimeout(() => {
                 toast.style.display = 'none';
             }, 3000);
+        },
+
+        initAuthSystem() {
+            const authModal = document.getElementById('auth-modal');
+            const btnOpenAuth = document.getElementById('btn-open-auth');
+            const btnCloseAuth = document.getElementById('btn-close-auth');
+            const btnWelcomeGetStarted = document.getElementById('btn-welcome-get-started');
+            const authWelcomeView = document.getElementById('auth-welcome-view');
+            const authLoginView = document.getElementById('auth-login-view');
+            const authFormTitle = document.getElementById('auth-form-title');
+            const authUsernameGroup = document.getElementById('auth-username-group');
+            const authEmailInput = document.getElementById('auth-email-input');
+            const authUsernameInput = document.getElementById('auth-username-input');
+            const authPasswordInput = document.getElementById('auth-password-input');
+            const btnTogglePassword = document.getElementById('btn-toggle-password');
+            const btnAuthSubmit = document.getElementById('btn-auth-submit');
+            const btnToggleAuthMode = document.getElementById('btn-toggle-auth-mode');
+            const authTogglePrompt = document.getElementById('auth-toggle-prompt');
+            const authErrorMsg = document.getElementById('auth-error-msg');
+            const authForm = document.getElementById('auth-form');
+            const headerUserLabel = document.getElementById('header-user-label');
+
+            let currentMode = 'signup'; // 'signup' | 'login'
+
+            const setMode = (mode) => {
+                currentMode = mode;
+                if (authErrorMsg) authErrorMsg.style.display = 'none';
+                if (mode === 'signup') {
+                    if (authFormTitle) authFormTitle.innerText = 'Create Account';
+                    if (authUsernameGroup) authUsernameGroup.style.display = 'flex';
+                    if (btnAuthSubmit) btnAuthSubmit.innerText = 'CREATE ACCOUNT';
+                    if (authTogglePrompt) authTogglePrompt.innerText = 'Already have an account yet?';
+                    if (btnToggleAuthMode) btnToggleAuthMode.innerText = 'Log In';
+                } else {
+                    if (authFormTitle) authFormTitle.innerText = 'Log In';
+                    if (authUsernameGroup) authUsernameGroup.style.display = 'none';
+                    if (btnAuthSubmit) btnAuthSubmit.innerText = 'LOG IN';
+                    if (authTogglePrompt) authTogglePrompt.innerText = "Don't have an account yet?";
+                    if (btnToggleAuthMode) btnToggleAuthMode.innerText = 'Sign Up';
+                }
+            };
+
+            const openAuth = (startView = 'login', mode = 'signup') => {
+                if (!authModal) return;
+                setMode(mode);
+                if (startView === 'welcome' && authWelcomeView && authLoginView) {
+                    authWelcomeView.style.display = 'flex';
+                    authLoginView.style.display = 'none';
+                } else if (authWelcomeView && authLoginView) {
+                    authWelcomeView.style.display = 'none';
+                    authLoginView.style.display = 'flex';
+                }
+                authModal.style.display = 'flex';
+            };
+
+            const closeAuth = () => {
+                if (authModal) authModal.style.display = 'none';
+            };
+
+            if (btnOpenAuth) {
+                btnOpenAuth.addEventListener('click', () => {
+                    if (APP_STATE.currentUser) {
+                        if (confirm(`Logged in as ${APP_STATE.currentUser.username} (${APP_STATE.currentUser.email}). Log out?`)) {
+                            localStorage.removeItem('aqw_auth_token');
+                            localStorage.removeItem('aqw_user');
+                            APP_STATE.currentUser = null;
+                            if (headerUserLabel) headerUserLabel.innerText = 'Sign In';
+                            this.showToast('Logged out successfully');
+                        }
+                    } else {
+                        openAuth('login', 'signup');
+                    }
+                });
+            }
+
+            if (btnCloseAuth) {
+                btnCloseAuth.addEventListener('click', closeAuth);
+            }
+
+            if (btnWelcomeGetStarted) {
+                btnWelcomeGetStarted.addEventListener('click', () => {
+                    if (authWelcomeView && authLoginView) {
+                        authWelcomeView.style.display = 'none';
+                        authLoginView.style.display = 'flex';
+                    }
+                });
+            }
+
+            if (btnTogglePassword && authPasswordInput) {
+                btnTogglePassword.addEventListener('click', () => {
+                    const isPwd = authPasswordInput.type === 'password';
+                    authPasswordInput.type = isPwd ? 'text' : 'password';
+                });
+            }
+
+            if (btnToggleAuthMode) {
+                btnToggleAuthMode.addEventListener('click', () => {
+                    setMode(currentMode === 'signup' ? 'login' : 'signup');
+                });
+            }
+
+            if (authForm) {
+                authForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    if (authErrorMsg) authErrorMsg.style.display = 'none';
+
+                    const email = authEmailInput ? authEmailInput.value.trim() : '';
+                    const username = authUsernameInput ? authUsernameInput.value.trim() : '';
+                    const password = authPasswordInput ? authPasswordInput.value : '';
+
+                    if (!email || !password) {
+                        if (authErrorMsg) {
+                            authErrorMsg.innerText = 'Please provide both email and password';
+                            authErrorMsg.style.display = 'block';
+                        }
+                        return;
+                    }
+
+                    if (btnAuthSubmit) {
+                        btnAuthSubmit.disabled = true;
+                        btnAuthSubmit.style.opacity = '0.7';
+                    }
+
+                    try {
+                        const url = currentMode === 'signup' ? '/api/auth/register' : '/api/auth/login';
+                        const body = currentMode === 'signup'
+                            ? { username: username || email.split('@')[0], email, password }
+                            : { username_or_email: email, password };
+
+                        const res = await fetch(url, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(body)
+                        });
+
+                        const data = await res.json();
+                        if (!res.ok) {
+                            throw new Error(data.detail || 'Authentication failed');
+                        }
+
+                        // Store session credentials
+                        localStorage.setItem('aqw_auth_token', data.token);
+                        localStorage.setItem('aqw_user', JSON.stringify(data.user));
+                        APP_STATE.currentUser = data.user;
+                        APP_STATE.authToken = data.token;
+
+                        if (headerUserLabel) {
+                            headerUserLabel.innerText = data.user.username;
+                        }
+
+                        this.showToast(`Welcome, ${data.user.username}!`, 'success');
+                        closeAuth();
+                    } catch (err) {
+                        if (authErrorMsg) {
+                            authErrorMsg.innerText = err.message || 'Authentication error';
+                            authErrorMsg.style.display = 'block';
+                        }
+                    } finally {
+                        if (btnAuthSubmit) {
+                            btnAuthSubmit.disabled = false;
+                            btnAuthSubmit.style.opacity = '1';
+                        }
+                    }
+                });
+            }
+
+            // Restore user session if token exists
+            const token = localStorage.getItem('aqw_auth_token');
+            if (token) {
+                fetch('/api/auth/me', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                })
+                .then(res => res.ok ? res.json() : null)
+                .then(user => {
+                    if (user) {
+                        APP_STATE.currentUser = user;
+                        if (headerUserLabel) headerUserLabel.innerText = user.username;
+                    } else {
+                        localStorage.removeItem('aqw_auth_token');
+                    }
+                })
+                .catch(() => {});
+            }
+
+            // Expose helper on window for programmatic access or testing
+            window.openAuthModal = openAuth;
         }
     };
 
