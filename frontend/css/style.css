@@ -2589,52 +2589,181 @@ body {
     white-space: nowrap;
 }
 
-/* Turbine Map Pin on Screen 5 */
-.s5-turbine-pin {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 26px;
-    height: 26px;
-    background: #0f172a;
-    border: 2px solid #ffffff;
-    border-radius: 50%;
-    color: #ffffff;
-    font-size: 10px;
-    font-weight: 700;
-    font-family: var(--font-mono);
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.8), 0 0 8px rgba(255, 255, 255, 0.5);
-    cursor: pointer;
-    transition: transform 0.15s ease, box-shadow 0.2s ease;
+/* Real 3D Wind Turbine Representation on Leaflet Map */
+.s5-pin-wrapper {
+    background: transparent !important;
+    border: none !important;
+}
+
+.real-3d-turbine {
     position: relative;
+    width: 60px;
+    height: 72px;
+    cursor: pointer;
+    pointer-events: auto;
+    /* Ground anchor point is bottom-center (30px, 66px) */
+    transform: translate(-30px, -66px);
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.s5-turbine-pin:hover {
-    transform: scale(1.15);
+.real-3d-turbine:hover {
+    transform: translate(-30px, -68px) scale(1.08);
 }
 
-.s5-turbine-pin.selected {
-    border-color: #38bdf8;
-    background: #0284c7;
-    box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.35), 0 0 16px rgba(56, 189, 248, 0.9);
-    transform: scale(1.2);
-}
-
-.s5-turbine-pin.selected::after {
-    content: attr(data-label);
+/* Ground Foundation Shadow */
+.turbine-ground-shadow {
     position: absolute;
-    top: -24px;
+    bottom: 4px;
+    left: 18px;
+    width: 24px;
+    height: 8px;
+    background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0) 70%);
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+/* Ground Selection Cyan Halo Ring */
+.turbine-ground-ring {
+    position: absolute;
+    bottom: 2px;
+    left: 14px;
+    width: 32px;
+    height: 12px;
+    border: 1.5px solid transparent;
+    border-radius: 50%;
+    pointer-events: none;
+    transition: all 0.3s ease;
+}
+
+.real-3d-turbine.selected .turbine-ground-ring {
+    border-color: #38bdf8;
+    background: radial-gradient(ellipse at center, rgba(56, 189, 248, 0.5) 0%, rgba(56, 189, 248, 0.15) 60%, transparent 80%);
+    box-shadow: 0 0 14px rgba(56, 189, 248, 0.8), inset 0 0 6px rgba(56, 189, 248, 0.5);
+    animation: pulse-ring 2s infinite ease-in-out;
+}
+
+@keyframes pulse-ring {
+    0%, 100% { transform: scale(1); opacity: 0.95; }
+    50% { transform: scale(1.15); opacity: 0.6; }
+}
+
+/* Tapered Vertical 3D Mast / Tower */
+.turbine-tower {
+    position: absolute;
+    bottom: 8px;
+    left: 28px;
+    width: 4px;
+    height: 38px;
+    background: linear-gradient(to right, #cbd5e1 0%, #ffffff 45%, #94a3b8 100%);
+    clip-path: polygon(25% 0%, 75% 0%, 100% 100%, 0% 100%);
+    filter: drop-shadow(1px 2px 3px rgba(0, 0, 0, 0.6));
+    border-radius: 1px;
+}
+
+/* Aerodynamic Nacelle at top of Tower */
+.turbine-nacelle {
+    position: absolute;
+    top: 24px;
+    left: 25px;
+    width: 10px;
+    height: 5px;
+    background: linear-gradient(to bottom, #ffffff, #94a3b8);
+    border-radius: 2px 4px 2px 2px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+/* 3-Blade Rotating Rotor Assembly */
+.turbine-rotor {
+    position: absolute;
+    top: 15px;
+    left: 19px;
+    width: 22px;
+    height: 22px;
+    transform-origin: 11px 11px;
+    animation: spin-blade 2.8s linear infinite;
+}
+
+@keyframes spin-blade {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.rotor-hub {
+    position: absolute;
+    top: 9px;
+    left: 9px;
+    width: 5px;
+    height: 5px;
+    background: #ffffff;
+    border-radius: 50%;
+    box-shadow: 0 0 3px rgba(0, 0, 0, 0.6);
+    z-index: 5;
+}
+
+.rotor-blade {
+    position: absolute;
+    top: 11px;
+    left: 10px;
+    width: 2px;
+    height: 18px;
+    background: linear-gradient(to bottom, #ffffff, #e2e8f0);
+    border-radius: 1px 1px 0 0;
+    transform-origin: 1px 0px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.rotor-blade::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 2px;
+    height: 2px;
+    background: #ef4444; /* Winglet safety tip */
+    border-radius: 1px;
+}
+
+.blade-1 {
+    transform: rotate(0deg) translateY(-18px);
+}
+
+.blade-2 {
+    transform: rotate(120deg) translateY(-18px);
+}
+
+.blade-3 {
+    transform: rotate(240deg) translateY(-18px);
+}
+
+/* Floating Label on Selected Turbine */
+.turbine-floating-label {
+    position: absolute;
+    top: 0px;
     left: 50%;
     transform: translateX(-50%);
     background: rgba(11, 17, 32, 0.95);
     border: 1px solid #38bdf8;
     color: #38bdf8;
-    padding: 2px 6px;
+    padding: 2px 7px;
     border-radius: 4px;
     font-size: 10px;
+    font-family: var(--font-mono);
     font-weight: 700;
     white-space: nowrap;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
+    display: none;
+    z-index: 20;
+}
+
+.real-3d-turbine.selected .turbine-floating-label {
+    display: block;
+}
+
+.inspector-thumb-photo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: var(--radius-md);
 }
 
 /* Screen 5 Analysis Panel (Desktop Right Sidebar / Mobile Bottom Sheet) */

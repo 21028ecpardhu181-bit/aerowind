@@ -357,33 +357,36 @@
 
             layout.forEach((t) => {
                 const pt = this.map.latLngToContainerPoint([t.lat, t.lon]);
+                // Elevate origin to the nacelle hub at the top of the 3D tower
+                const hubX = pt.x;
+                const hubY = pt.y - 36;
                 
                 // Calculate physical pixel length based on map zoom scale
                 // Jensen wake cone extends downwind with half-angle k=0.075
-                const coneLength = 340; // Pixels downwind
+                const coneLength = 320; // Pixels downwind
                 const startRadius = 14; // Blade hub/tip radius
                 const endRadius = startRadius + coneLength * 0.075 * 2.2; // Jensen expansion k=0.075
 
-                const p0_left = { x: pt.x - nx * startRadius, y: pt.y - ny * startRadius };
-                const p0_right = { x: pt.x + nx * startRadius, y: pt.y + ny * startRadius };
-                const p1_right = { x: pt.x + wx * coneLength + nx * endRadius, y: pt.y + wy * coneLength + ny * endRadius };
-                const p1_left = { x: pt.x + wx * coneLength - nx * endRadius, y: pt.y + wy * coneLength - ny * endRadius };
+                const p0_left = { x: hubX - nx * startRadius, y: hubY - ny * startRadius };
+                const p0_right = { x: hubX + nx * startRadius, y: hubY + ny * startRadius };
+                const p1_right = { x: hubX + wx * coneLength + nx * endRadius, y: hubY + wy * coneLength + ny * endRadius };
+                const p1_left = { x: hubX + wx * coneLength - nx * endRadius, y: hubY + wy * coneLength - ny * endRadius };
 
-                // Downwind gradient: High deficit red/amber -> dissipating cyan
+                // Downwind gradient matching reference: Core Blue/Cyan -> Amber/Green -> Soft dissipation
                 const effSpeed = typeof t.effective_mps === 'number' ? t.effective_mps : this.windSpeed;
                 const deficit = Math.max(0.0, 1.0 - (effSpeed / this.windSpeed));
                 const isHeavyWake = deficit > 0.12;
 
-                const grad = this.ctx.createLinearGradient(pt.x, pt.y, pt.x + wx * coneLength, pt.y + wy * coneLength);
+                const grad = this.ctx.createLinearGradient(hubX, hubY, hubX + wx * coneLength, hubY + wy * coneLength);
                 if (isHeavyWake) {
-                    grad.addColorStop(0, 'rgba(239, 68, 68, 0.52)');   // Deep red near rotor
-                    grad.addColorStop(0.35, 'rgba(245, 158, 11, 0.38)'); // Amber mid-wake
-                    grad.addColorStop(0.75, 'rgba(56, 189, 248, 0.14)'); // Dissipating wake
+                    grad.addColorStop(0, 'rgba(56, 189, 248, 0.75)');    // Core flow
+                    grad.addColorStop(0.25, 'rgba(239, 68, 68, 0.65)');  // High wake loss core
+                    grad.addColorStop(0.60, 'rgba(245, 158, 11, 0.42)'); // Mid wake loss amber
                     grad.addColorStop(1, 'rgba(56, 189, 248, 0.0)');
                 } else {
-                    grad.addColorStop(0, 'rgba(245, 158, 11, 0.38)');
-                    grad.addColorStop(0.4, 'rgba(56, 189, 248, 0.22)');
-                    grad.addColorStop(0.85, 'rgba(56, 189, 248, 0.08)');
+                    grad.addColorStop(0, 'rgba(56, 189, 248, 0.70)');    // Clean laminar inflow
+                    grad.addColorStop(0.35, 'rgba(16, 185, 129, 0.45)'); // Low wake loss green
+                    grad.addColorStop(0.70, 'rgba(245, 158, 11, 0.22)'); // Far field
                     grad.addColorStop(1, 'rgba(56, 189, 248, 0.0)');
                 }
 
@@ -395,6 +398,16 @@
                 this.ctx.lineTo(p1_left.x, p1_left.y);
                 this.ctx.closePath();
                 this.ctx.fill();
+
+                // Subtle wake boundary stream lines
+                this.ctx.strokeStyle = isHeavyWake ? 'rgba(239, 68, 68, 0.35)' : 'rgba(56, 189, 248, 0.35)';
+                this.ctx.lineWidth = 1;
+                this.ctx.beginPath();
+                this.ctx.moveTo(p0_left.x, p0_left.y);
+                this.ctx.lineTo(p1_left.x, p1_left.y);
+                this.ctx.moveTo(p0_right.x, p0_right.y);
+                this.ctx.lineTo(p1_right.x, p1_right.y);
+                this.ctx.stroke();
             });
 
             this.ctx.restore();

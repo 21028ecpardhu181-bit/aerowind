@@ -184,16 +184,18 @@
             });
 
             // Base Layers
-            const esriSatellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                maxZoom: 19
+            const esriSatellite = L.tileLayer('/api/geo/tiles/satellite/{z}/{x}/{y}', {
+                maxZoom: 20,
+                attribution: 'Satellite Imagery'
             }).addTo(map);
 
             const osmStreet = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 19
             });
 
-            const esriTopo = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
-                maxZoom: 19
+            const esriTopo = L.tileLayer('/api/geo/tiles/terrain/{z}/{x}/{y}', {
+                maxZoom: 20,
+                attribution: 'Terrain Imagery'
             });
 
             APP_STATE.layers = {
@@ -1052,9 +1054,9 @@
                         attributionControl: false
                     });
 
-                    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                        maxZoom: 18,
-                        attribution: 'Esri Satellite'
+                    L.tileLayer('/api/geo/tiles/satellite/{z}/{x}/{y}', {
+                        maxZoom: 20,
+                        attribution: 'Satellite Imagery'
                     }).addTo(map);
 
                     APP_STATE.screen3Map = map;
@@ -1776,14 +1778,14 @@
                     });
 
                     // Basemap Layers
-                    APP_STATE.screen5SatelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                        maxZoom: 18,
-                        attribution: 'Esri Satellite'
+                    APP_STATE.screen5SatelliteLayer = L.tileLayer('/api/geo/tiles/satellite/{z}/{x}/{y}', {
+                        maxZoom: 20,
+                        attribution: 'Satellite Imagery'
                     });
 
-                    APP_STATE.screen5TerrainLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
-                        maxZoom: 18,
-                        attribution: 'Esri Topo'
+                    APP_STATE.screen5TerrainLayer = L.tileLayer('/api/geo/tiles/terrain/{z}/{x}/{y}', {
+                        maxZoom: 20,
+                        attribution: 'Terrain Imagery'
                     });
 
                     APP_STATE.screen5SatelliteLayer.addTo(map);
@@ -1802,11 +1804,26 @@
             // Render Layout Telemetry and Map
             this.renderScreen5Layout();
 
+            const mapContainer = document.querySelector('.s5-map-container');
+            if (mapContainer && !this._screen5ResizeObserver && window.ResizeObserver) {
+                this._screen5ResizeObserver = new ResizeObserver(() => {
+                    if (APP_STATE.screen5Map) {
+                        APP_STATE.screen5Map.invalidateSize();
+                        APP_STATE.screen5Engine?.handleResize();
+                    }
+                });
+                this._screen5ResizeObserver.observe(mapContainer);
+            }
+
             if (APP_STATE.screen5Map) {
-                setTimeout(() => {
-                    APP_STATE.screen5Map?.invalidateSize();
-                    APP_STATE.screen5Engine?.handleResize();
-                }, 60);
+                [60, 200, 500].forEach(delay => {
+                    setTimeout(() => {
+                        if (APP_STATE.screen5Map) {
+                            APP_STATE.screen5Map.invalidateSize();
+                            APP_STATE.screen5Engine?.handleResize();
+                        }
+                    }, delay);
+                });
             }
         },
 
@@ -2100,12 +2117,27 @@
                 const labelText = t.label ? (t.label.startsWith('T') && !t.label.startsWith('T-') ? `T-${String(idx + 1).padStart(2, '0')}` : t.label) : `T-${String(idx + 1).padStart(2, '0')}`;
                 t.displayLabel = labelText;
 
-                const pinClass = isSelected ? 's5-turbine-pin selected' : 's5-turbine-pin';
+                const turbineHtml = `
+                    <div class="real-3d-turbine ${isSelected ? 'selected' : ''}" data-label="${labelText}" data-index="${idx}">
+                        <div class="turbine-ground-ring"></div>
+                        <div class="turbine-ground-shadow"></div>
+                        <div class="turbine-tower"></div>
+                        <div class="turbine-nacelle"></div>
+                        <div class="turbine-rotor" style="animation-duration: ${(2.2 + (idx % 3) * 0.4).toFixed(1)}s;">
+                            <div class="rotor-blade blade-1"></div>
+                            <div class="rotor-blade blade-2"></div>
+                            <div class="rotor-blade blade-3"></div>
+                            <div class="rotor-hub"></div>
+                        </div>
+                        <div class="turbine-floating-label">${labelText}</div>
+                    </div>
+                `;
+
                 const pinIcon = L.divIcon({
                     className: 's5-pin-wrapper',
-                    html: `<div class="${pinClass}" data-label="${labelText}" data-index="${idx}">${idx + 1}</div>`,
-                    iconSize: [26, 26],
-                    iconAnchor: [13, 13]
+                    html: turbineHtml,
+                    iconSize: [60, 72],
+                    iconAnchor: [30, 66] // Anchor at the ground base of the mast
                 });
 
                 const marker = L.marker([t.lat, t.lon], { icon: pinIcon }).addTo(map);
@@ -2135,7 +2167,7 @@
 
             // Update marker styles
             APP_STATE.screen5Markers.forEach((m, idx) => {
-                const el = m.getElement()?.querySelector('.s5-turbine-pin');
+                const el = m.getElement()?.querySelector('.real-3d-turbine');
                 if (el) {
                     el.classList.toggle('selected', idx === index);
                 }

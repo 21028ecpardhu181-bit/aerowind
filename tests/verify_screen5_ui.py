@@ -192,12 +192,15 @@ def verify_screen5():
         page_d.wait_for_selector("#screen-2-container", state="visible")
         page_d.locator("#btn-generate-layout").click()
         page_d.wait_for_selector("#screen-3-container", state="visible")
+        time.sleep(1.5)
+
         page_d.locator("#btn-screen3-optimize").click()
         page_d.wait_for_selector("#screen-4-container", state="visible")
         page_d.wait_for_selector("#btn-screen4-view-optimized:not([disabled])", timeout=15000)
         page_d.locator("#btn-screen4-view-optimized").click()
         page_d.wait_for_selector("#screen-5-container", state="visible")
-        time.sleep(1.5)
+        page_d.wait_for_selector("#screen5-map .leaflet-tile-loaded", timeout=10000)
+        page_d.wait_for_timeout(2000)
 
         # On desktop, the side analysis panel is visible
         assert page_d.locator("#screen-5-sheet").is_visible(), "Analysis sidebar must be visible on desktop"

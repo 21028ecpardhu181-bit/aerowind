@@ -69,3 +69,42 @@ def generate_candidates(
         grid_n=req.grid_n,
     )
     return [CandidateSite(**item) for item in candidates_data]
+
+
+import urllib.request
+from fastapi import Response
+
+_TILE_CACHE = {}
+
+@router.get(
+    "/tiles/{layer}/{z}/{x}/{y}",
+    summary="Proxy satellite and terrain map tiles",
+    description="Fetches live geographic satellite and terrain tiles with in-memory caching.",
+)
+async def get_map_tile(layer: str, z: int, x: int, y: int):
+    cache_key = f"{layer}_{z}_{x}_{y}"
+    if cache_key in _TILE_CACHE:
+        return Response(content=_TILE_CACHE[cache_key], media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
+
+    if layer == "satellite":
+        url = f"https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"
+    elif layer == "terrain":
+        url = f"https://mt1.google.com/vt/lyrs=p&x={x}&y={y}&z={z}"
+    else:
+        url = f"https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
+
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
+        )
+        with urllib.request.urlopen(req, timeout=10.0) as resp:
+            data = resp.read()
+            if len(_TILE_CACHE) < 500:
+                _TILE_CACHE[cache_key] = data
+            return Response(content=data, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Failed to fetch tile: {e}")
+
