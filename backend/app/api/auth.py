@@ -1,0 +1,156 @@
+"""
+backend/app/api/auth.py — Authentication Router.
+
+Endpoints:
+- POST /api/auth/register : Create new engineer account
+- POST /api/auth/login : Authenticate and receive session token
+- GET /api/auth/me : Retrieve current user profile
+- POST /api/auth/logout : Invalidate session token
+"""
+
+from __future__ import annotations
+
+import secrets
+import time
+from typing import Optional
+
+from fastapi import APIRouter, Header, HTTPException, status
+from pydantic import BaseModel, EmailStr
+
+from backend.app.db import get_db_connection, hash_password, verify_password
+
+router = APIRouter(prefix="/auth", tags=["auth"])
+
+SESSION_TTL_SECONDS = 7 * 24 * 3600  # 7 days
+
+
+class RegisterRequest(BaseModel):
+    username: str
+    email: str
+    password: str
+
+
+class LoginRequest(BaseModel):
+    username_or_email: str
+    password: str
+
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    email: str
+    created_at: str
+
+
+class AuthResponse(BaseModel):
+    token: str
+    user: UserResponse
+
+
+def get_current_user(authorization: Optional[str] = Header(None)) -> Optional[dict]:
+    if not authorization:
+        return None
+    token = authorization.replace("Bearer ", "").strip()
+    if not token:
+        return None
+
+    now = time.time()
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT u.id, u.username, u.email, u.created_at
+            FROM sessions s
+            JOIN users u ON s.user_id = u.id
+            WHERE s.token = ? AND s.expires_at > ?
+        """, (token, now))
+        row = cursor.fetchone()
+        if row:
+            return dict(row)
+    return None
+
+
+@router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
+def register(req: RegisterRequest):
+    req.username = req.username.strip()
+    req.email = req.email.strip().lower()
+    if len(req.password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM users WHERE username = ? OR email = ?", (req.username, req.email))
+        if cursor.fetchone():
+            raise HTTPException(status_code=409, detail="Username or email already registered")
+
+        pwd_hash = hash_password(req.password)
+        cursor.execute("""
+            INSERT INTO users (username, email, password_hash)
+            VALUES (?, ?, ?)
+        """, (req.username, req.email, pwd_hash))
+        user_id = cursor.lastrowid
+
+        # Generate session token
+        token = secrets.token_urlsafe(32)
+        expires_at = time.time() + SESSION_TTL_SECONDS
+        cursor.execute("""
+            INSERT INTO sessions (token, user_id, expires_at)
+            VALUES (?, ?, ?)
+        """, (token, user_id, expires_at))
+        conn.commit()
+
+        cursor.execute("SELECT id, username, email, created_at FROM users WHERE id = ?", (user_id,))
+        user_data = dict(cursor.fetchone())
+
+    return AuthResponse(token=token, user=UserResponse(**user_data))
+
+
+@router.post("/login", response_model=AuthResponse)
+def login(req: LoginRequest):
+    identity = req.username_or_email.strip()
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, username, email, password_hash, created_at
+            FROM users
+            WHERE username = ? OR email = ?
+        """, (identity, identity.lower()))
+        user_row = cursor.fetchone()
+
+        if not user_row or not verify_password(req.password, user_row["password_hash"]):
+            raise HTTPException(status_code=401, detail="Invalid username/email or password")
+
+        user_id = user_row["id"]
+        token = secrets.token_urlsafe(32)
+        expires_at = time.time() + SESSION_TTL_SECONDS
+        cursor.execute("""
+            INSERT INTO sessions (token, user_id, expires_at)
+            VALUES (?, ?, ?)
+        """, (token, user_id, expires_at))
+        conn.commit()
+
+        user_data = {
+            "id": user_row["id"],
+            "username": user_row["username"],
+            "email": user_row["email"],
+            "created_at": user_row["created_at"],
+        }
+
+    return AuthResponse(token=token, user=UserResponse(**user_data))
+
+
+@router.get("/me", response_model=UserResponse)
+def get_me(authorization: Optional[str] = Header(None)):
+    user = get_current_user(authorization)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return UserResponse(**user)
+
+
+@router.post("/logout")
+def logout(authorization: Optional[str] = Header(None)):
+    if authorization:
+        token = authorization.replace("Bearer ", "").strip()
+        with get_db_connection() as conn:
+            conn.cursor().execute("DELETE FROM sessions WHERE token = ?", (token,))
+            conn.commit()
+    return {"message": "Logged out successfully"}
