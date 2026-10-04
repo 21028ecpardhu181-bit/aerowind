@@ -17,12 +17,22 @@ import time
 from typing import Optional, Sequence, Union
 
 import numpy as np
-from qiskit import QuantumCircuit
-from qiskit.circuit import ParameterVector
-from qiskit_aer.primitives import SamplerV2 as AerSamplerV2
 from scipy.optimize import minimize
 
 from core.post_processor import repair
+
+# Qiskit is optional — only available locally, not on Vercel (250MB limit).
+# When unavailable the module still loads; optimize() uses the classical fallback.
+try:
+    from qiskit import QuantumCircuit
+    from qiskit.circuit import ParameterVector
+    from qiskit_aer.primitives import SamplerV2 as AerSamplerV2
+    _QISKIT_AVAILABLE = True
+except ImportError:  # pragma: no cover
+    _QISKIT_AVAILABLE = False
+    QuantumCircuit = None  # type: ignore
+    ParameterVector = None  # type: ignore
+    AerSamplerV2 = None  # type: ignore
 
 
 def continuous_relaxation(
@@ -262,6 +272,19 @@ def optimize(
     h_arr = np.asarray(h, dtype=np.float64)
     J_arr = np.asarray(J, dtype=np.float64)
     N = len(h_arr)
+
+    # ── Classical fallback when qiskit not installed (e.g. Vercel) ─────────
+    if not _QISKIT_AVAILABLE:
+        c_star = continuous_relaxation(h_arr, J_arr, K)
+        top_k = set(np.argsort(c_star)[-K:].tolist())
+        bs = "".join("1" if i in top_k else "0" for i in range(N))
+        bs = repair(bs, K=K, W=W)
+        x = np.array([int(b) for b in bs], dtype=np.int8)
+        z = 1.0 - 2.0 * x
+        energy = float(np.dot(h_arr, z) + 0.5 * (z @ J_arr @ z))
+        return bs, energy, {bs: 1024}, float(time.time() - start_time)
+    # ───────────────────────────────────────────────────────────────────────
+
 
     # Compute warm start angles if not provided
     if thetas is None:
