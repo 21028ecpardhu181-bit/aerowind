@@ -20,8 +20,17 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-DB_DIR = Path(__file__).resolve().parent.parent / "data"
-DB_DIR.mkdir(parents=True, exist_ok=True)
+if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+    DB_DIR = Path("/tmp/aeroquantum_data")
+else:
+    DB_DIR = Path(__file__).resolve().parent.parent / "data"
+
+try:
+    DB_DIR.mkdir(parents=True, exist_ok=True)
+except Exception:
+    DB_DIR = Path("/tmp/aeroquantum_data")
+    DB_DIR.mkdir(parents=True, exist_ok=True)
+
 DB_PATH = DB_DIR / "aeroquantum.db"
 
 
