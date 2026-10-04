@@ -587,6 +587,147 @@
         }
 
         /**
+         * Set 3D camera to predefined engineering viewpoints (Requirement 4 & 15).
+         * Presets: TOP, NORTH, SOUTH, EAST, WEST, OBLIQUE, LOW_ANGLE, NEAR_GROUND, FIT_SITE.
+         */
+        setCameraPreset(preset, targetLat, targetLon, polygonCoords = null) {
+            if (!this.viewer) return;
+            const p = String(preset).toUpperCase().replace(/[\s-]/g, '_');
+
+            if (p === 'FIT_SITE' && polygonCoords) {
+                this.fitToBoundary(polygonCoords);
+                return;
+            }
+
+            const lat = Number(targetLat);
+            const lon = Number(targetLon);
+
+            switch (p) {
+                case 'TOP':
+                    this.flyTo(lat, lon, 4500, -89.9, 0, 1.2);
+                    break;
+                case 'NORTH':
+                    // Looking towards North (heading 0 deg, positioned South of target)
+                    this.viewer.camera.flyTo({
+                        destination: Cesium.Cartesian3.fromDegrees(lon, lat - 0.025, 2200),
+                        orientation: { heading: Cesium.Math.toRadians(0), pitch: Cesium.Math.toRadians(-28), roll: 0 },
+                        duration: 1.2
+                    });
+                    break;
+                case 'SOUTH':
+                    // Looking towards South (heading 180 deg, positioned North of target)
+                    this.viewer.camera.flyTo({
+                        destination: Cesium.Cartesian3.fromDegrees(lon, lat + 0.025, 2200),
+                        orientation: { heading: Cesium.Math.toRadians(180), pitch: Cesium.Math.toRadians(-28), roll: 0 },
+                        duration: 1.2
+                    });
+                    break;
+                case 'EAST':
+                    // Looking towards East (heading 90 deg, positioned West of target)
+                    this.viewer.camera.flyTo({
+                        destination: Cesium.Cartesian3.fromDegrees(lon - 0.025, lat, 2200),
+                        orientation: { heading: Cesium.Math.toRadians(90), pitch: Cesium.Math.toRadians(-28), roll: 0 },
+                        duration: 1.2
+                    });
+                    break;
+                case 'WEST':
+                    // Looking towards West (heading 270 deg, positioned East of target)
+                    this.viewer.camera.flyTo({
+                        destination: Cesium.Cartesian3.fromDegrees(lon + 0.025, lat, 2200),
+                        orientation: { heading: Cesium.Math.toRadians(270), pitch: Cesium.Math.toRadians(-28), roll: 0 },
+                        duration: 1.2
+                    });
+                    break;
+                case 'OBLIQUE':
+                    this.viewer.camera.flyTo({
+                        destination: Cesium.Cartesian3.fromDegrees(lon - 0.015, lat - 0.015, 2800),
+                        orientation: { heading: Cesium.Math.toRadians(45), pitch: Cesium.Math.toRadians(-45), roll: 0 },
+                        duration: 1.2
+                    });
+                    break;
+                case 'LOW_ANGLE':
+                    this.viewer.camera.flyTo({
+                        destination: Cesium.Cartesian3.fromDegrees(lon - 0.018, lat - 0.018, 900),
+                        orientation: { heading: Cesium.Math.toRadians(40), pitch: Cesium.Math.toRadians(-14), roll: 0 },
+                        duration: 1.2
+                    });
+                    break;
+                case 'NEAR_GROUND':
+                    this.viewer.camera.flyTo({
+                        destination: Cesium.Cartesian3.fromDegrees(lon - 0.005, lat - 0.005, 180),
+                        orientation: { heading: Cesium.Math.toRadians(35), pitch: Cesium.Math.toRadians(-6), roll: 0 },
+                        duration: 1.2
+                    });
+                    break;
+                default:
+                    this.flyTo(lat, lon, 3500, -45, 0, 1.2);
+            }
+        }
+
+        /**
+         * Fly to a specific turbine for close-up 3D engineering inspection (Requirement 15 & 26).
+         */
+        flyToTurbine(t, angle = 'front') {
+            if (!this.viewer || !t) return;
+            const lat = Number(t.lat);
+            const lon = Number(t.lon);
+            const elev = Number(t.elevation_m || 40);
+            const hubH = Number(t.hub_height || 110);
+
+            let heading = 0;
+            let offsetLat = -0.0035;
+            let offsetLon = -0.002;
+
+            if (angle === 'top') {
+                this.viewer.camera.flyTo({
+                    destination: Cesium.Cartesian3.fromDegrees(lon, lat, elev + hubH + 350),
+                    orientation: { heading: 0, pitch: Cesium.Math.toRadians(-89.9), roll: 0 },
+                    duration: 1.2
+                });
+                return;
+            } else if (angle === 'side') {
+                heading = 90;
+                offsetLat = 0;
+                offsetLon = -0.004;
+            } else if (angle === 'back') {
+                heading = 180;
+                offsetLat = 0.004;
+                offsetLon = 0;
+            }
+
+            this.viewer.camera.flyTo({
+                destination: Cesium.Cartesian3.fromDegrees(lon + offsetLon, lat + offsetLat, elev + hubH + 45),
+                orientation: {
+                    heading: Cesium.Math.toRadians(heading),
+                    pitch: Cesium.Math.toRadians(-20),
+                    roll: 0
+                },
+                duration: 1.2
+            });
+        }
+
+        /**
+         * Set wake cone display opacity (Requirement 17).
+         */
+        setWakeOpacity(opacity) {
+            const op = Math.max(0.0, Math.min(1.0, Number(opacity)));
+            this.wakeEntities.forEach(w => {
+                if (w.cylinder) {
+                    w.cylinder.material = Cesium.Color.fromCssColorString(`rgba(56, 189, 248, ${op * 0.25})`);
+                }
+            });
+        }
+
+        /**
+         * Toggle wake cones on or off (Requirement 17).
+         */
+        setWakesVisible(show) {
+            this.wakeEntities.forEach(w => {
+                w.show = !!show;
+            });
+        }
+
+        /**
          * Resize or trigger redraw when container changes size.
          */
         resize() {

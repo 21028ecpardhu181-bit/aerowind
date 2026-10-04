@@ -144,110 +144,47 @@ def generate_feasible_candidates(
 ) -> List[Dict[str, Any]]:
     """
     Generates candidate micro-siting coordinates strictly constrained inside the project boundary
-    and feasible land mask. Enforces:
+    and feasible land mask using CandidateGenerationEngine.
+    Enforces:
     1. candidate ∈ boundary polygon (strictly inside).
     2. dist_to_boundary >= setback (default 0.5 * rotor_diameter).
     3. exclusion buffers (water bodies, settlements, steep slopes).
     4. wind resource cut-in threshold (rejects candidates below min_wind_speed_mps).
+    5. Returns candidate objects with all 13 required engineering fields.
     """
-    # 1. Establish boundary polygon in local meters
-    if boundary and len(boundary) >= 3:
-        poly_pts = []
-        for pt in boundary:
-            # pt is [lat, lon]
-            xm, ym = lat_lon_to_meters(float(pt[0]), float(pt[1]), center_lat, center_lon)
-            poly_pts.append([xm, ym])
-        poly_m = np.array(poly_pts, dtype=np.float64)
-    else:
-        # Default concession polygon around center (approximate area_km2)
-        radius_m = math.sqrt(area_km2 * 1e6 / math.pi)
-        angles = np.linspace(0, 2 * math.pi, 16, endpoint=False)
-        poly_pts = []
-        for a in angles:
-            poly_pts.append([radius_m * math.cos(a), radius_m * math.sin(a)])
-        poly_m = np.array(poly_pts, dtype=np.float64)
+    try:
+        from backend.app.geo_engine import CandidateGenerationEngine
+    except ImportError:
+        from app.geo_engine import CandidateGenerationEngine
 
-    min_x, min_y = np.min(poly_m, axis=0)
-    max_x, max_y = np.max(poly_m, axis=0)
+    engine = CandidateGenerationEngine(
+        center_lat=center_lat,
+        center_lon=center_lon,
+        boundary=boundary,
+        area_km2=area_km2,
+        rotor_diameter=rotor_diameter,
+        hub_height=110.0,
+        spacing_multiplier_d=spacing_multiplier_d,
+        site_wind_speed_mps=site_wind_speed_mps,
+        exclusions=exclusions,
+    )
+    result = engine.execute_pipeline(requested_turbines=20)
+    raw_candidates = result["candidates"]
 
-    # Setback from property perimeter (half rotor diameter)
-    setback_m = max(40.0, rotor_diameter * 0.5)
+    # Format each candidate with both modern engineering fields and backward-compatible keys
+    formatted = []
+    for c in raw_candidates:
+        item = dict(c)
+        item["id"] = c.get("candidate_id", 0)
+        item["lat"] = c.get("latitude", 0.0)
+        item["lon"] = c.get("longitude", 0.0)
+        item["elevation_m"] = c.get("terrain_elevation", 45.0)
+        item["wind_speed_mps"] = c.get("wind_resource", site_wind_speed_mps)
+        item["boundary_dist_m"] = c.get("boundary_distance", 50.0)
+        item["is_feasible"] = (c.get("feasibility") == "FEASIBLE")
+        formatted.append(item)
 
-    # Minimum candidate sampling grid step (denser than turbine-to-turbine spacing to give QAOA flexibility)
-    grid_step_m = max(180.0, rotor_diameter * min(spacing_multiplier_d * 0.65, 3.2))
-
-    xs = np.arange(min_x + setback_m, max_x - setback_m + 1.0, grid_step_m)
-    ys = np.arange(min_y + setback_m, max_y - setback_m + 1.0, grid_step_m)
-
-    candidates: List[Dict[str, Any]] = []
-    site_id = 0
-
-    # Parse exclusions if any
-    parsed_exclusions = []
-    if exclusions:
-        for ex in exclusions:
-            coords = ex.get("coords") or []
-            if len(coords) >= 3:
-                ex_pts = [lat_lon_to_meters(p[0], p[1], center_lat, center_lon) for p in coords]
-                parsed_exclusions.append(np.array(ex_pts, dtype=np.float64))
-
-    for y in ys:
-        for x in xs:
-            # 1. Must be strictly inside boundary polygon
-            if not point_in_polygon(x, y, poly_m):
-                continue
-
-            # 2. Must satisfy perimeter setback
-            edge_dist = dist_to_polygon_boundary(x, y, poly_m)
-            if edge_dist < setback_m:
-                continue
-
-            # 3. Must not fall inside any exclusion zone
-            in_exclusion = False
-            for ex_poly in parsed_exclusions:
-                if point_in_polygon(x, y, ex_poly):
-                    in_exclusion = True
-                    break
-            if in_exclusion:
-                continue
-
-            # 4. Wind resource check
-            local_wind = site_wind_speed_mps
-            if local_wind < min_wind_speed_mps:
-                continue
-
-            lat, lon = meters_to_lat_lon(x, y, center_lat, center_lon)
-            candidates.append({
-                "id": site_id,
-                "lat": round(lat, 7),
-                "lon": round(lon, 7),
-                "x_m": round(float(x), 2),
-                "y_m": round(float(y), 2),
-                "boundary_dist_m": round(float(edge_dist), 1),
-                "wind_speed_mps": round(float(local_wind), 2),
-                "elevation_m": round(float(42.0 + 5.0 * math.sin(x / 500.0) * math.cos(y / 500.0)), 1),
-                "is_feasible": True,
-            })
-            site_id += 1
-
-    # In case grid was slightly too coarse to capture candidates, fallback to centroid
-    if not candidates:
-        centroid_x = float(np.mean(poly_m[:, 0]))
-        centroid_y = float(np.mean(poly_m[:, 1]))
-        lat, lon = meters_to_lat_lon(centroid_x, centroid_y, center_lat, center_lon)
-        candidates.append({
-            "id": 0,
-            "lat": round(lat, 7),
-            "lon": round(lon, 7),
-            "x_m": round(centroid_x, 2),
-            "y_m": round(centroid_y, 2),
-            "boundary_dist_m": round(float(dist_to_polygon_boundary(centroid_x, centroid_y, poly_m)), 1),
-            "wind_speed_mps": round(float(site_wind_speed_mps), 2),
-            "elevation_m": 42.0,
-            "is_feasible": True,
-        })
-
-    return candidates
+    return formatted
 
 
 def generate_grid_candidates(

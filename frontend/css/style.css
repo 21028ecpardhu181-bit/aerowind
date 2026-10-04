@@ -4865,3 +4865,85 @@ body {
         padding: 20px 20px 24px 20px;
     }
 }
+
+/* Floating 3D Camera Presets Bar */
+.s5-camera-presets-bar {
+    position: absolute;
+    top: 114px;
+    right: 20px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    z-index: 500;
+    background: rgba(13, 17, 28, 0.92);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    padding: 4px 6px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+    max-width: 460px;
+}
+
+.camera-preset-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-secondary);
+    font-size: 10px;
+    font-weight: 600;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.camera-preset-btn:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.camera-preset-btn.active {
+    color: #ffffff;
+    background: var(--primary-blue);
+    border-color: var(--primary-blue);
+}
+
+@media (max-width: 768px) {
+    .s5-camera-presets-bar {
+        top: 110px;
+        left: 12px;
+        right: 12px;
+        max-width: none;
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        white-space: nowrap;
+        padding: 4px 8px;
+    }
+    .camera-preset-btn {
+        flex-shrink: 0;
+    }
+}
+
+/* GIS Polygon Drawing Marker */
+.gis-vertex-marker-wrapper {
+    background: transparent;
+    border: none;
+}
+
+.gis-vertex-marker {
+    width: 22px;
+    height: 22px;
+    background: var(--primary-cyan);
+    color: #0b0f19;
+    border: 2px solid #ffffff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 800;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+    cursor: move;
+}
+

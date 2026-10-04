@@ -322,25 +322,25 @@
 
                 <!-- Mode Selection Tabs -->
                 <div class="selection-mode-tabs">
-                    <button type="button" class="mode-tab-btn active" data-mode="search">
+                    <button type="button" class="mode-tab-btn active" data-mode="search" id="tab-mode-search">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <circle cx="11" cy="11" r="8"></circle>
                             <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                         </svg>
-                        <span>Search Location</span>
+                        <span>Search</span>
                     </button>
-                    <button type="button" class="mode-tab-btn" data-mode="coords">
+                    <button type="button" class="mode-tab-btn" data-mode="radius" id="tab-mode-radius">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-                            <circle cx="12" cy="10" r="3"></circle>
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <circle cx="12" cy="12" r="3"></circle>
                         </svg>
-                        <span>Coordinates</span>
+                        <span>Radius</span>
                     </button>
-                    <button type="button" class="mode-tab-btn" data-mode="draw">
+                    <button type="button" class="mode-tab-btn" data-mode="draw" id="tab-mode-draw">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon>
                         </svg>
-                        <span>Draw on Map</span>
+                        <span>Freeform Polygon</span>
                     </button>
                 </div>
 
@@ -366,7 +366,54 @@
                     </button>
                 </div>
 
-                <!-- Mode 2: Enter Coordinates Form -->
+                <!-- Mode 2: Radius Selection Chips & Custom Input -->
+                <div id="radius-mode-container" class="radius-mode-container" style="display: none; flex-direction: column; gap: 10px; margin-bottom: 20px; background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 12px;">
+                    <div style="font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Concession Radius</div>
+                    <div class="radius-chips-row" style="display: flex; flex-wrap: wrap; gap: 6px;">
+                        <button type="button" class="chip-btn radius-chip-btn" data-radius="1">1 km</button>
+                        <button type="button" class="chip-btn radius-chip-btn active" data-radius="5">5 km</button>
+                        <button type="button" class="chip-btn radius-chip-btn" data-radius="10">10 km</button>
+                        <button type="button" class="chip-btn radius-chip-btn" data-radius="25">25 km</button>
+                        <button type="button" class="chip-btn radius-chip-btn" data-radius="50">50 km</button>
+                        <button type="button" class="chip-btn radius-chip-btn" data-radius="100">100 km</button>
+                    </div>
+                    <div class="radius-custom-row" style="display: flex; gap: 8px; align-items: center; margin-top: 4px;">
+                        <input id="custom-radius-input" type="number" min="0.5" max="200" step="0.5" placeholder="Custom radius (km)" class="coord-input" style="flex: 1;" value="5">
+                        <button type="button" id="btn-apply-custom-radius" class="btn-apply-coords" style="width: auto; padding: 7px 14px; margin-top: 0;">Apply</button>
+                    </div>
+                    <div style="font-size: 11px; color: var(--text-dim);">
+                        Calculates a 64-vertex geodesic circular boundary and fits site framing tightly.
+                    </div>
+                </div>
+
+                <!-- Mode 3: Freeform Polygon Interactive Drawing Controls -->
+                <div id="draw-mode-hint" class="draw-mode-hint" style="display: none; margin-bottom: 20px;">
+                    <div style="font-size: 12px; margin-bottom: 8px; color: var(--text-primary); font-weight: 600;">
+                        Interactive GIS Polygon Drawing
+                    </div>
+                    <div style="font-size: 11px; margin-bottom: 10px; color: var(--text-secondary);">
+                        Click on the satellite map to drop vertices. Drag markers to adjust, right-click to delete.
+                    </div>
+                    <div class="draw-boundary-tools-row" style="display: flex; flex-wrap: wrap; gap: 6px;">
+                        <button type="button" id="btn-start-polygon-draw" class="btn-draw-tool active" title="Start placing boundary vertices">
+                            <span>✏️ Draw Area</span>
+                        </button>
+                        <button type="button" id="btn-close-polygon-draw" class="btn-draw-tool" title="Close polygon and calculate concession area">
+                            <span>✅ Close Polygon</span>
+                        </button>
+                        <button type="button" id="btn-clear-polygon-draw" class="btn-draw-tool secondary" title="Clear all drawn points">
+                            <span>🗑️ Clear</span>
+                        </button>
+                        <button type="button" id="btn-fit-drawn-polygon" class="btn-draw-tool secondary" title="Fit map view to boundary">
+                            <span>🎯 Fit Site</span>
+                        </button>
+                    </div>
+                    <div id="draw-status-label" style="font-size: 11px; margin-top: 8px; color: var(--primary-cyan); line-height: 1.4;">
+                        Click on the satellite map to place boundary points.
+                    </div>
+                </div>
+
+                <!-- Fallback / Legacy Coords Form (Preserved for backward compatibility) -->
                 <div id="coords-input-form" class="coords-input-form">
                     <div class="coords-row">
                         <div class="coord-field-group">
@@ -379,24 +426,6 @@
                         </div>
                     </div>
                     <button type="button" id="btn-apply-coords" class="btn-apply-coords">Apply Coordinates</button>
-                </div>
-
-                <!-- Mode 3: Draw on Map Boundary Controls -->
-                <div id="draw-mode-hint" class="draw-mode-hint">
-                    <div style="font-size: 12px; margin-bottom: 8px; color: var(--text-secondary);">
-                        Tap on the satellite map or use boundary tools to reshape your wind farm concession:
-                    </div>
-                    <div class="draw-boundary-tools-row">
-                        <button type="button" id="btn-draw-circle" class="btn-draw-tool">
-                            <span>⭕ Draw Circle</span>
-                        </button>
-                        <button type="button" id="btn-draw-polygon" class="btn-draw-tool">
-                            <span>📐 Draw Polygon</span>
-                        </button>
-                        <button type="button" id="btn-reset-boundary" class="btn-draw-tool secondary">
-                            <span>↺ Reset</span>
-                        </button>
-                    </div>
                 </div>
 
                 <!-- Recent Locations Section -->
@@ -494,6 +523,9 @@
                     </button>
                     <button type="button" id="btn-ctx-reset" class="ctx-pill-btn secondary" title="Reset boundary">
                         <span>↺ Reset</span>
+                    </button>
+                    <button type="button" id="btn-ctx-data-sources" class="ctx-pill-btn" title="View dataset provenance and authority">
+                        <span>🌐 Data Sources</span>
                     </button>
                 </div>
 
@@ -665,7 +697,7 @@
                     <div class="wind-resource-card">
                         <div class="resource-header">
                             <span>Wind Resource (Live Telemetry)</span>
-                            <span id="meta-source-badge" style="font-size: 10px; color: var(--primary-cyan); font-weight: 600;" title="Live atmospheric model & SRTM digital elevation telemetry">ECMWF / SRTM ⓘ</span>
+                            <span id="meta-source-badge" style="font-size: 10px; color: var(--primary-cyan); font-weight: 600; cursor: pointer; text-decoration: underline;" title="Click to view verified data provenance & authority (ECMWF, SRTM, GWA, OSM)">ECMWF / SRTM ⓘ</span>
                         </div>
                         <div class="resource-row">
                             <span>Hub Wind Speed (100 m)</span>
@@ -762,6 +794,7 @@
                             <button type="button" class="chip-btn" data-turbines="8">8</button>
                             <button type="button" class="chip-btn active" data-turbines="12">12</button>
                             <button type="button" class="chip-btn" data-turbines="16">16</button>
+                            <button type="button" class="chip-btn" data-turbines="20">20</button>
                             <button type="button" class="chip-btn" data-turbines="24">24</button>
                             <button type="button" class="chip-btn" data-turbines="50">50</button>
                         </div>
@@ -1619,6 +1652,19 @@
                         </div>
                     </div>
 
+                    <!-- Floating 3D Camera Presets Toolbar -->
+                    <div id="s5-camera-presets-bar" class="s5-camera-presets-bar" style="display: none;">
+                        <button type="button" class="camera-preset-btn active" data-preset="FIT_SITE" title="Fit Entire Concession Site">Fit Site</button>
+                        <button type="button" class="camera-preset-btn" data-preset="TOP" title="Top-Down Planimetric View">Top</button>
+                        <button type="button" class="camera-preset-btn" data-preset="NORTH" title="Facing North">North</button>
+                        <button type="button" class="camera-preset-btn" data-preset="SOUTH" title="Facing South">South</button>
+                        <button type="button" class="camera-preset-btn" data-preset="EAST" title="Facing East">East</button>
+                        <button type="button" class="camera-preset-btn" data-preset="WEST" title="Facing West">West</button>
+                        <button type="button" class="camera-preset-btn" data-preset="OBLIQUE" title="45° Oblique Perspective">Oblique</button>
+                        <button type="button" class="camera-preset-btn" data-preset="LOW_ANGLE" title="Low Angle Pitch">Low Angle</button>
+                        <button type="button" class="camera-preset-btn" data-preset="NEAR_GROUND" title="Ground Level Elevation">Ground</button>
+                    </div>
+
                     <!-- Floating Vertical Map Action Group -->
                     <div class="s5-map-actions-group">
                         <button type="button" id="btn-s5-reset-view" class="map-icon-btn" title="Reset Map View">
@@ -1759,9 +1805,12 @@
                                         <span class="inspector-meta-label">Average Spacing</span>
                                         <span id="s5-inspector-spacing" class="inspector-meta-val">628 m</span>
                                     </div>
-                                    <div class="inspector-actions-row" style="margin-top: 10px;">
-                                        <button type="button" id="btn-s5-compare-layout" class="btn-inspector-compare">
-                                            ⇄ Compare Layout (Before / After)
+                                    <div class="inspector-actions-row" style="margin-top: 10px; display: flex; gap: 8px;">
+                                        <button type="button" id="btn-s5-fly-turbine" class="btn-inspector-action" style="flex: 1; padding: 6px 10px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 6px; color: var(--primary-cyan); font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.15s ease;">
+                                            ✈️ Inspect in 3D
+                                        </button>
+                                        <button type="button" id="btn-s5-compare-layout" class="btn-inspector-compare" style="flex: 1;">
+                                            ⇄ Compare Layout
                                         </button>
                                     </div>
                                 </div>
@@ -2015,7 +2064,24 @@
             </div>
         </div>
 
-    </main>
+    <!-- Data Sources Provenance Modal -->
+    <div id="data-sources-modal" class="project-modal-backdrop" style="display: none; z-index: 9999;">
+        <div class="project-modal-card" style="max-width: 680px; max-height: 85vh; overflow-y: auto;">
+            <div class="project-modal-header">
+                <div class="project-modal-brand">
+                    <span style="font-size: 22px;">🌐</span>
+                    <div>
+                        <div class="project-modal-title">Dataset Provenance & Authority</div>
+                        <div class="project-modal-tagline">Disclosing real-world telemetry sources, timestamps, and model fidelity.</div>
+                    </div>
+                </div>
+                <button type="button" id="btn-close-sources-modal" class="btn-modal-close" aria-label="Close dialog">✕</button>
+            </div>
+            <div class="project-modal-body" id="data-sources-modal-body" style="display: flex; flex-direction: column; gap: 12px; margin-top: 14px;">
+                <div style="text-align: center; color: var(--text-secondary); padding: 20px;">Loading provenance metadata...</div>
+            </div>
+        </div>
+    </div>
 
     <!-- Global App Toast Notification -->
     <div id="app-toast" class="app-toast"></div>

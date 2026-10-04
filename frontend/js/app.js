@@ -231,9 +231,13 @@
             // Render Site Boundary Polygon
             this.drawSitePolygon(site.lat, site.lon, site.areaKm2);
 
-            // Map Click Handler (Select Location Directly on Map)
+            // Map Click Handler (Select Location Directly on Map or Drop Drawing Vertices)
             map.on('click', (e) => {
-                this.selectLocationFromMap(e.latlng.lat, e.latlng.lng);
+                if (APP_STATE.isDrawingPolygon) {
+                    this.handleMapClickForDrawing(e);
+                } else {
+                    this.selectLocationFromMap(e.latlng.lat, e.latlng.lng);
+                }
             });
         },
 
@@ -394,6 +398,321 @@
                 area += (xi * yj - xj * yi);
             }
             return Math.abs(area) / 2.0;
+        },
+
+        applyRadius(radiusKm) {
+            const r = parseFloat(radiusKm);
+            if (isNaN(r) || r <= 0) {
+                this.showToast('Please enter a valid radius in km', 'error');
+                return;
+            }
+            const site = APP_STATE.selectedSite;
+            if (!site) return;
+
+            const map = APP_STATE.map;
+            if (!map) return;
+
+            if (APP_STATE.sitePolygon) map.removeLayer(APP_STATE.sitePolygon);
+            if (APP_STATE.areaBadgeMarker) map.removeLayer(APP_STATE.areaBadgeMarker);
+            if (APP_STATE.locationLabelMarker) map.removeLayer(APP_STATE.locationLabelMarker);
+
+            const centerLat = site.lat;
+            const centerLon = site.lon;
+            const steps = 64;
+            const vertices = [];
+            const cosLat = Math.cos(centerLat * Math.PI / 180.0) || 1e-6;
+
+            for (let i = 0; i < steps; i++) {
+                const angle = (i / steps) * 2 * Math.PI;
+                const dLat = (r / 111.0) * Math.cos(angle);
+                const dLon = (r / (111.0 * cosLat)) * Math.sin(angle);
+                vertices.push([parseFloat((centerLat + dLat).toFixed(6)), parseFloat((centerLon + dLon).toFixed(6))]);
+            }
+
+            const areaKm2 = Math.PI * r * r;
+            site.radiusKm = r;
+            site.areaKm2 = areaKm2;
+            site.boundary = vertices;
+
+            APP_STATE.sitePolygon = L.polygon(vertices, {
+                color: '#3b82f6',
+                weight: 2,
+                opacity: 0.9,
+                fillColor: '#2563eb',
+                fillOpacity: 0.18,
+                smoothFactor: 1
+            }).addTo(map);
+
+            const isMobile = window.innerWidth <= 768;
+            map.fitBounds(APP_STATE.sitePolygon.getBounds(), {
+                padding: isMobile ? [35, 35] : [55, 55],
+                maxZoom: 15
+            });
+
+            const badgeIcon = L.divIcon({
+                className: 'badge-div-wrapper',
+                html: `<div class="selected-area-badge">Concession Area<br><strong>${areaKm2.toFixed(1)} km² (${r} km)</strong></div>`,
+                iconSize: [120, 40],
+                iconAnchor: [60, 20]
+            });
+            APP_STATE.areaBadgeMarker = L.marker([centerLat, centerLon], { icon: badgeIcon }).addTo(map);
+
+            const areaElem = document.getElementById('meta-area');
+            if (areaElem) areaElem.innerText = `${areaKm2.toFixed(1)} km²`;
+
+            if (APP_STATE.screen1CesiumActive && APP_STATE.screen1CesiumEngine) {
+                APP_STATE.screen1CesiumEngine.setSiteBoundary(vertices);
+                APP_STATE.screen1CesiumEngine.fitToBoundary(vertices);
+                APP_STATE.screen1CesiumEngine.renderGISAnalysisLayers(centerLat, centerLon, r * 2.0);
+            }
+
+            this.highlightRadiusChip(r);
+            this.updateScreen2Capacity();
+            this.showToast(`Concession set to ${r} km radius (${areaKm2.toFixed(1)} km²)`, 'success');
+        },
+
+        highlightRadiusChip(radiusKm) {
+            document.querySelectorAll('.radius-chip-btn').forEach(btn => {
+                const val = parseFloat(btn.dataset.radius);
+                btn.classList.toggle('active', Math.abs(val - radiusKm) < 0.1);
+            });
+            const customInput = document.getElementById('custom-radius-input');
+            if (customInput) customInput.value = radiusKm;
+        },
+
+        startPolygonDraw() {
+            APP_STATE.isDrawingPolygon = true;
+            APP_STATE.drawnVertices = APP_STATE.drawnVertices || [];
+            APP_STATE.drawnMarkers = APP_STATE.drawnMarkers || [];
+
+            const map = APP_STATE.map;
+            if (map && map.getContainer()) {
+                map.getContainer().style.cursor = 'crosshair';
+            }
+            this.updateDrawStatus();
+            this.showToast('Drawing mode active: Click map to drop boundary vertices', 'info');
+        },
+
+        stopPolygonDraw(save = true) {
+            APP_STATE.isDrawingPolygon = false;
+            const map = APP_STATE.map;
+            if (map && map.getContainer()) {
+                map.getContainer().style.cursor = '';
+            }
+        },
+
+        handleMapClickForDrawing(e) {
+            if (!APP_STATE.isDrawingPolygon) return;
+            const lat = parseFloat(e.latlng.lat.toFixed(6));
+            const lon = parseFloat(e.latlng.lng.toFixed(6));
+            if (!APP_STATE.drawnVertices) APP_STATE.drawnVertices = [];
+            APP_STATE.drawnVertices.push([lat, lon]);
+            this.renderDrawnPolygon();
+        },
+
+        renderDrawnPolygon() {
+            const map = APP_STATE.map;
+            if (!map) return;
+
+            if (APP_STATE.drawnMarkers) {
+                APP_STATE.drawnMarkers.forEach(m => map.removeLayer(m));
+            }
+            APP_STATE.drawnMarkers = [];
+
+            if (APP_STATE.drawnPolyline) {
+                map.removeLayer(APP_STATE.drawnPolyline);
+                APP_STATE.drawnPolyline = null;
+            }
+
+            const vertices = APP_STATE.drawnVertices || [];
+            if (vertices.length === 0) {
+                this.updateDrawStatus();
+                return;
+            }
+
+            if (vertices.length >= 3) {
+                APP_STATE.drawnPolyline = L.polygon(vertices, {
+                    color: '#06b6d4',
+                    weight: 2,
+                    dashArray: '5, 5',
+                    fillColor: '#06b6d4',
+                    fillOpacity: 0.15
+                }).addTo(map);
+            } else if (vertices.length >= 2) {
+                APP_STATE.drawnPolyline = L.polyline(vertices, {
+                    color: '#06b6d4',
+                    weight: 2,
+                    dashArray: '5, 5'
+                }).addTo(map);
+            }
+
+            vertices.forEach((v, idx) => {
+                const markerIcon = L.divIcon({
+                    className: 'gis-vertex-marker-wrapper',
+                    html: `<div class="gis-vertex-marker" title="Drag to adjust, right-click to delete">${idx + 1}</div>`,
+                    iconSize: [22, 22],
+                    iconAnchor: [11, 11]
+                });
+                const m = L.marker(v, { icon: markerIcon, draggable: true }).addTo(map);
+
+                m.on('drag', (ev) => {
+                    const newPos = ev.target.getLatLng();
+                    vertices[idx] = [parseFloat(newPos.lat.toFixed(6)), parseFloat(newPos.lng.toFixed(6))];
+                    if (APP_STATE.drawnPolyline) {
+                        APP_STATE.drawnPolyline.setLatLngs(vertices);
+                    }
+                    this.updateDrawStatus();
+                });
+
+                m.on('contextmenu', (ev) => {
+                    ev.originalEvent?.preventDefault();
+                    vertices.splice(idx, 1);
+                    this.renderDrawnPolygon();
+                    this.showToast(`Removed vertex ${idx + 1}`, 'info');
+                });
+
+                APP_STATE.drawnMarkers.push(m);
+            });
+
+            this.updateDrawStatus();
+        },
+
+        updateDrawStatus() {
+            const label = document.getElementById('draw-status-label');
+            const count = APP_STATE.drawnVertices ? APP_STATE.drawnVertices.length : 0;
+            if (label) {
+                if (count === 0) {
+                    label.innerText = 'Click on the satellite map to place boundary vertices.';
+                } else if (count < 3) {
+                    label.innerText = `${count} point${count > 1 ? 's' : ''} placed. Add at least 3 points, then click "Close Polygon".`;
+                } else {
+                    const areaKm2 = this.calculatePolygonAreaKm2(APP_STATE.drawnVertices);
+                    label.innerText = `${count} points placed (~${areaKm2.toFixed(1)} km²). Drag markers to edit, right-click to delete. Click "Close Polygon" to finish.`;
+                }
+            }
+        },
+
+        closePolygonDraw() {
+            const vertices = APP_STATE.drawnVertices;
+            if (!vertices || vertices.length < 3) {
+                this.showToast('Please place at least 3 vertices before closing polygon', 'warning');
+                return;
+            }
+            const site = APP_STATE.selectedSite;
+            if (!site) return;
+
+            const areaKm2 = this.calculatePolygonAreaKm2(vertices);
+            site.boundary = vertices.slice();
+            site.areaKm2 = areaKm2;
+            const centerLat = vertices.reduce((sum, v) => sum + v[0], 0) / vertices.length;
+            const centerLon = vertices.reduce((sum, v) => sum + v[1], 0) / vertices.length;
+            site.lat = centerLat;
+            site.lon = centerLon;
+
+            this.stopPolygonDraw(true);
+
+            if (APP_STATE.drawnMarkers) {
+                APP_STATE.drawnMarkers.forEach(m => APP_STATE.map?.removeLayer(m));
+                APP_STATE.drawnMarkers = [];
+            }
+            if (APP_STATE.drawnPolyline) {
+                APP_STATE.map?.removeLayer(APP_STATE.drawnPolyline);
+                APP_STATE.drawnPolyline = null;
+            }
+
+            const map = APP_STATE.map;
+            if (map) {
+                if (APP_STATE.sitePolygon) map.removeLayer(APP_STATE.sitePolygon);
+                if (APP_STATE.areaBadgeMarker) map.removeLayer(APP_STATE.areaBadgeMarker);
+
+                APP_STATE.sitePolygon = L.polygon(vertices, {
+                    color: '#06b6d4',
+                    weight: 2,
+                    opacity: 0.95,
+                    fillColor: '#0891b2',
+                    fillOpacity: 0.2
+                }).addTo(map);
+
+                map.fitBounds(APP_STATE.sitePolygon.getBounds(), {
+                    padding: [45, 45],
+                    maxZoom: 15
+                });
+
+                const badgeIcon = L.divIcon({
+                    className: 'badge-div-wrapper',
+                    html: `<div class="selected-area-badge">Concession Area<br><strong>${areaKm2.toFixed(1)} km²</strong></div>`,
+                    iconSize: [110, 40],
+                    iconAnchor: [55, 20]
+                });
+                APP_STATE.areaBadgeMarker = L.marker([centerLat, centerLon], { icon: badgeIcon }).addTo(map);
+            }
+
+            const areaElem = document.getElementById('meta-area');
+            if (areaElem) areaElem.innerText = `${areaKm2.toFixed(1)} km²`;
+
+            if (APP_STATE.screen1CesiumActive && APP_STATE.screen1CesiumEngine) {
+                APP_STATE.screen1CesiumEngine.setSiteBoundary(vertices);
+                APP_STATE.screen1CesiumEngine.fitToBoundary(vertices);
+            }
+
+            this.updateScreen2Capacity();
+            this.showToast(`Custom polygon closed: ${areaKm2.toFixed(1)} km² concession`, 'success');
+        },
+
+        clearPolygonDraw() {
+            APP_STATE.drawnVertices = [];
+            this.renderDrawnPolygon();
+            this.showToast('Drawn points cleared', 'info');
+        },
+
+        async openDataSourcesModal() {
+            const modal = document.getElementById('data-sources-modal');
+            const body = document.getElementById('data-sources-modal-body');
+            if (!modal || !body) return;
+
+            modal.style.display = 'flex';
+            body.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 20px;">Fetching live dataset provenance from /api/geo/data-sources...</div>';
+
+            try {
+                const res = await fetch('/api/geo/data-sources');
+                if (!res.ok) throw new Error('Failed to fetch data sources');
+                const data = await res.json();
+
+                const entries = [
+                    { key: 'terrain', label: 'Terrain & Elevation (DEM)', icon: '🏔️', info: data.terrain },
+                    { key: 'wind_resource', label: 'Wind Climatology & Atlas', icon: '💨', info: data.wind_resource },
+                    { key: 'buildings', label: 'Building Footprints & Setbacks', icon: '🏘️', info: data.buildings },
+                    { key: 'roads', label: 'Transport Corridors & Road Network', icon: '🛣️', info: data.roads },
+                    { key: 'weather', label: 'Atmospheric Telemetry & Reanalysis', icon: '⛅', info: data.weather },
+                    { key: 'optimization', label: 'Quantum Optimization (WS-QAOA)', icon: '⚛️', info: data.optimization },
+                    { key: 'wake_model', label: 'Aerodynamic Wake Decay Model', icon: '🌀', info: data.wake_model }
+                ];
+
+                body.innerHTML = entries.map(e => `
+                    <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-light); border-radius: 8px; padding: 12px 14px;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                            <div style="font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 8px;">
+                                <span>${e.icon}</span>
+                                <span>${e.label}</span>
+                            </div>
+                            <span style="font-size: 10px; font-weight: 700; color: #10b981; background: rgba(16, 185, 129, 0.12); padding: 2px 6px; border-radius: 4px;">
+                                ${e.info?.status || 'VERIFIED'}
+                            </span>
+                        </div>
+                        <div style="font-size: 12px; color: var(--text-primary); margin-bottom: 4px;">
+                            <strong>Source:</strong> ${e.info?.source || 'N/A'}
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 11px; color: var(--text-secondary);">
+                            <div><strong>Resolution:</strong> ${e.info?.resolution || 'N/A'}</div>
+                            <div><strong>Confidence:</strong> ${e.info?.confidence || 'N/A'}</div>
+                            <div><strong>Coverage:</strong> ${e.info?.coverage || 'N/A'}</div>
+                            <div><strong>Timestamp:</strong> ${e.info?.timestamp ? new Date(e.info.timestamp).toLocaleDateString() : 'Active'}</div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (err) {
+                body.innerHTML = `<div style="color: #ef4444; padding: 20px;">Error loading provenance metadata: ${err.message}</div>`;
+            }
         },
 
         setupEventListeners() {
@@ -626,6 +945,48 @@
             document.getElementById('btn-reset-boundary')?.addEventListener('click', handleResetBoundary);
             document.getElementById('btn-ctx-reset')?.addEventListener('click', handleResetBoundary);
 
+            // Radius mode quick chips and custom input
+            document.querySelectorAll('.radius-chip-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const r = parseFloat(e.currentTarget.dataset.radius);
+                    this.applyRadius(r);
+                });
+            });
+
+            document.getElementById('btn-apply-custom-radius')?.addEventListener('click', () => {
+                const r = parseFloat(document.getElementById('custom-radius-input')?.value);
+                this.applyRadius(r);
+            });
+
+            // Freeform polygon drawing controls
+            document.getElementById('btn-start-polygon-draw')?.addEventListener('click', () => {
+                this.startPolygonDraw();
+            });
+            document.getElementById('btn-close-polygon-draw')?.addEventListener('click', () => {
+                this.closePolygonDraw();
+            });
+            document.getElementById('btn-clear-polygon-draw')?.addEventListener('click', () => {
+                this.clearPolygonDraw();
+            });
+            document.getElementById('btn-fit-drawn-polygon')?.addEventListener('click', handleFitSite);
+
+            // Data Sources Provenance Modal
+            document.getElementById('meta-source-badge')?.addEventListener('click', () => {
+                this.openDataSourcesModal();
+            });
+            document.getElementById('btn-close-sources-modal')?.addEventListener('click', () => {
+                const modal = document.getElementById('data-sources-modal');
+                if (modal) modal.style.display = 'none';
+            });
+            document.getElementById('data-sources-modal')?.addEventListener('click', (e) => {
+                if (e.target.id === 'data-sources-modal') {
+                    e.currentTarget.style.display = 'none';
+                }
+            });
+            document.getElementById('btn-ctx-data-sources')?.addEventListener('click', () => {
+                this.openDataSourcesModal();
+            });
+
             // Review Site Button: Expands sheet and scrolls to intelligence analysis
             document.getElementById('btn-review-site')?.addEventListener('click', () => {
                 const panel = document.getElementById('site-info-panel');
@@ -664,16 +1025,33 @@
             });
 
             const searchBox = document.getElementById('search-box-container');
-            const coordsForm = document.getElementById('coords-input-form');
+            const radiusContainer = document.getElementById('radius-mode-container');
             const drawHint = document.getElementById('draw-mode-hint');
+            const coordsForm = document.getElementById('coords-input-form');
 
             if (searchBox) searchBox.style.display = mode === 'search' ? 'flex' : 'none';
+            if (radiusContainer) radiusContainer.style.display = mode === 'radius' ? 'flex' : 'none';
+            if (drawHint) drawHint.style.display = (mode === 'draw' || mode === 'polygon') ? 'block' : 'none';
             if (coordsForm) coordsForm.style.display = mode === 'coords' ? 'flex' : 'none';
-            if (drawHint) drawHint.style.display = mode === 'draw' ? 'block' : 'none';
+
+            if (mode === 'radius') {
+                const currentRadius = APP_STATE.selectedSite?.radiusKm || 5;
+                this.highlightRadiusChip(currentRadius);
+            }
+
+            if (mode === 'draw' || mode === 'polygon') {
+                this.startPolygonDraw();
+            } else {
+                if (APP_STATE.isDrawingPolygon) {
+                    this.stopPolygonDraw(false);
+                }
+            }
 
             if (mode === 'coords') {
-                document.getElementById('coord-lat-input').value = APP_STATE.selectedSite.lat.toFixed(4);
-                document.getElementById('coord-lon-input').value = APP_STATE.selectedSite.lon.toFixed(4);
+                const latInput = document.getElementById('coord-lat-input');
+                const lonInput = document.getElementById('coord-lon-input');
+                if (latInput) latInput.value = APP_STATE.selectedSite.lat.toFixed(4);
+                if (lonInput) lonInput.value = APP_STATE.selectedSite.lon.toFixed(4);
             }
         },
 
@@ -2215,7 +2593,11 @@
             // Update Header Site Pill
             const s5Ind = document.getElementById('s5-indicator-text');
             if (s5Ind) {
-                s5Ind.innerText = `${site.shortName} · ${turbineCount} Turbines (QAOA)`;
+                if (data && data.turbine_count_target && data.turbine_count_actual < data.turbine_count_target) {
+                    s5Ind.innerText = `${site.shortName} · ${data.turbine_count_target} requested · ${data.turbine_count_actual} feasible (QAOA)`;
+                } else {
+                    s5Ind.innerText = `${site.shortName} · ${turbineCount} Turbines (QAOA)`;
+                }
             }
 
             // Update Floating Wind Vector Arrow & Text
@@ -2378,6 +2760,50 @@
                 if (turbines.length === 0) return;
                 const nextIdx = (APP_STATE.screen5SelectedTurbineIndex + 1) % turbines.length;
                 this.selectScreen5Turbine(nextIdx);
+            });
+
+            // 3D Camera Presets
+            document.querySelectorAll('.camera-preset-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const preset = e.currentTarget.dataset.preset;
+                    document.querySelectorAll('.camera-preset-btn').forEach(b => b.classList.remove('active'));
+                    e.currentTarget.classList.add('active');
+
+                    const site = APP_STATE.selectedSite;
+                    const vertices = this.getSiteBoundaryVertices(site);
+
+                    if (!APP_STATE.screen5CesiumActive) {
+                        this.toggleScreen5Cesium(true);
+                    }
+
+                    setTimeout(() => {
+                        if (APP_STATE.screen5CesiumEngine) {
+                            APP_STATE.screen5CesiumEngine.setCameraPreset(preset, site.lat, site.lon, vertices);
+                        }
+                    }, 150);
+
+                    this.showToast(`Camera viewpoint: ${preset}`, 'info');
+                });
+            });
+
+            // Inspect in 3D Button
+            document.getElementById('btn-s5-fly-turbine')?.addEventListener('click', () => {
+                const turbines = APP_STATE.screen5Mode === 'before'
+                    ? (APP_STATE.screen3Data?.turbines || [])
+                    : (APP_STATE.screen4Data?.optimized_turbines || []);
+                const t = turbines[APP_STATE.screen5SelectedTurbineIndex];
+                if (!t) return;
+
+                if (!APP_STATE.screen5CesiumActive) {
+                    this.toggleScreen5Cesium(true);
+                }
+                setTimeout(() => {
+                    if (APP_STATE.screen5CesiumEngine) {
+                        APP_STATE.screen5CesiumEngine.selectTurbine(APP_STATE.screen5SelectedTurbineIndex);
+                        APP_STATE.screen5CesiumEngine.flyToTurbine(t);
+                    }
+                }, 250);
+                this.showToast(`Flying to turbine ${t.displayLabel || t.label || 'T-01'} in 3D`, 'info');
             });
         },
 
@@ -2668,6 +3094,10 @@
 
             if (APP_STATE.screen5CesiumActive && APP_STATE.screen5CesiumEngine) {
                 APP_STATE.screen5CesiumEngine.selectTurbine(index);
+                const t = turbines[index];
+                if (t) {
+                    APP_STATE.screen5CesiumEngine.flyToTurbine(t);
+                }
             }
         },
 
@@ -2801,8 +3231,10 @@
             const cesiumElem = document.getElementById('screen5-cesium');
             const mapElem = document.getElementById('screen5-map');
             const canvasElem = document.getElementById('screen5-canvas');
+            const presetsBar = document.getElementById('s5-camera-presets-bar');
 
             if (btn3D) btn3D.classList.toggle('active', shouldBeActive);
+            if (presetsBar) presetsBar.style.display = shouldBeActive ? 'flex' : 'none';
 
             if (shouldBeActive) {
                 if (cesiumElem) cesiumElem.style.display = 'block';
