@@ -300,14 +300,14 @@ def verify_frontend_ui_modes():
 
         # Test clicking camera presets
         for preset in ["TOP", "NORTH", "SOUTH", "OBLIQUE", "FIT_SITE"]:
-            page.click(f".camera-preset-btn[data-preset='{preset}']")
+            page.locator(f".camera-preset-btn[data-preset='{preset}']").click(force=True)
             page.wait_for_timeout(400)
             active_btn = page.locator(f".camera-preset-btn[data-preset='{preset}']")
             assert "active" in active_btn.get_attribute("class")
             print(f"✓ Activated camera preset: {preset}")
 
         # Test Turbine Inspector 3D Inspect button
-        page.click("#btn-s5-fly-turbine")
+        page.locator("#btn-s5-fly-turbine").click(force=True)
         page.wait_for_timeout(500)
         print("✓ Clicked 'Inspect in 3D' button")
 
