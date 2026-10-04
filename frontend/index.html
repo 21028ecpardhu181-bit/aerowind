@@ -132,15 +132,10 @@
             <!-- Dismiss / Close button -->
             <button type="button" id="btn-close-auth" class="auth-close-btn" aria-label="Close">✕</button>
 
-            <!-- VIEW A: WELCOME / PLATFORM ONBOARDING VIEW -->
+            <!-- VIEW A: WELCOME / ONBOARDING VIEW (Left Phone in Mockup) -->
             <div id="auth-welcome-view" class="auth-screen-view" style="display: none;">
                 <div class="auth-hero-illustration">
-                    <img src="/assets/auth/wind-onboarding-hero.webp" alt="AeroQuantum Wind Farm" class="auth-wind-img">
-                    <div class="auth-hero-gradient-overlay"></div>
-                    <div class="auth-hero-hud-chip">
-                        <span class="hud-live-dot">●</span>
-                        <span>ECMWF Telemetry · 7.1 m/s @ 300°</span>
-                    </div>
+                    <img src="/assets/auth/robot-welcome-hero.webp" alt="AeroQuantum AI Assistant" class="auth-robot-img">
                 </div>
                 <div class="auth-welcome-body">
                     <!-- Carousel Pagination Dots -->
@@ -150,31 +145,8 @@
                         <span class="auth-dot"></span>
                     </div>
 
-                    <div class="auth-brand-badge">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
-                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-                        </svg>
-                        <span>AeroQuantum-Wind</span>
-                    </div>
-
-                    <h1 class="auth-welcome-title">Quantum Wind Farm Optimization</h1>
-                    <p class="auth-welcome-desc">Design micrositing layouts with 3D GIS satellite terrain, Jensen aerodynamic wake physics, and QAOA quantum algorithms.</p>
-
-                    <!-- 3 Engineering Value Props -->
-                    <div class="auth-features-list">
-                        <div class="auth-feature-pill">
-                            <span>🌍</span>
-                            <span>3D Satellite GIS</span>
-                        </div>
-                        <div class="auth-feature-pill">
-                            <span>💨</span>
-                            <span>Jensen Wake Physics</span>
-                        </div>
-                        <div class="auth-feature-pill">
-                            <span>⚛️</span>
-                            <span>QAOA Optimization</span>
-                        </div>
-                    </div>
+                    <h1 class="auth-welcome-title">Redefine Wind Farm Design</h1>
+                    <p class="auth-welcome-desc">Let an intelligent assistant optimize your wind farm layouts, simulate wake loss, and maximize energy yield.</p>
 
                     <button type="button" id="btn-welcome-get-started" class="btn-auth-pill">
                         GET STARTED
@@ -182,29 +154,20 @@
                 </div>
             </div>
 
-            <!-- VIEW B: ENGINEER WORKSPACE / SIGN IN / CREATE ACCOUNT -->
+            <!-- VIEW B: CREATE ACCOUNT / LOGIN SHEET (Right Phone in Mockup) -->
             <div id="auth-login-view" class="auth-screen-view">
                 <div class="auth-hero-illustration compact">
-                    <img src="/assets/auth/wind-auth-hero.webp" alt="AeroQuantum Wind Farm" class="auth-wind-img">
-                    <div class="auth-hero-gradient-overlay"></div>
-                    <div class="auth-hero-hud-chip">
-                        <span class="hud-live-dot">●</span>
-                        <span>Kanyakumari Complex · 12 Turbines · 30 MW</span>
+                    <!-- Robot Speech Bubble -->
+                    <div class="auth-speech-bubble">
+                        <span>Hi! Welcome to AeroQuantum AI Bot</span>
+                        <div class="auth-speech-bubble-tail"></div>
                     </div>
+                    <img src="/assets/auth/robot-login-hero.webp" alt="AeroQuantum AI Assistant" class="auth-robot-img">
                 </div>
 
-                <!-- Engineering Bottom Sheet -->
+                <!-- White Bottom Sheet -->
                 <div class="auth-bottom-sheet">
-                    <div class="auth-sheet-header-group">
-                        <div class="auth-brand-badge mini">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
-                                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-                            </svg>
-                            <span>AeroQuantum-Wind</span>
-                        </div>
-                        <h2 id="auth-form-title" class="auth-sheet-title">Engineer Workspace</h2>
-                        <p id="auth-form-subtitle" class="auth-sheet-subtitle">Sign in to access your projects, terrain GIS models, and quantum layouts.</p>
-                    </div>
+                    <h2 id="auth-form-title" class="auth-sheet-title">Create Account</h2>
 
                     <form id="auth-form" class="auth-form" autocomplete="on">
                         <!-- Email Input Group -->
@@ -215,13 +178,13 @@
 
                         <!-- Organization / Team Input Group (visible in signup mode) -->
                         <div id="auth-username-group" class="auth-field-group">
-                            <label class="auth-field-label" for="auth-username-input">Engineering Team / Callout</label>
+                            <label class="auth-field-label" for="auth-username-input">Organization / Team</label>
                             <input id="auth-username-input" class="auth-field-input" type="text" placeholder="Wind Systems Lab" value="engineer1">
                         </div>
 
                         <!-- Password Input Group -->
                         <div class="auth-field-group password-group">
-                            <label class="auth-field-label" for="auth-password-input">Security Credential / Password</label>
+                            <label class="auth-field-label" for="auth-password-input">Password</label>
                             <div class="auth-password-wrapper">
                                 <input id="auth-password-input" class="auth-field-input" type="password" placeholder="••••••••" required value="securepassword123">
                                 <button type="button" id="btn-toggle-password" class="auth-eye-btn" aria-label="Toggle password visibility">
@@ -238,39 +201,39 @@
 
                         <!-- Primary Action Button -->
                         <button type="submit" id="btn-auth-submit" class="btn-auth-pill">
-                            CREATE ENGINEER ACCOUNT
+                            CREATE ACCOUNT
                         </button>
                     </form>
 
                     <div class="auth-divider">
-                        <span>or authenticate via enterprise sso</span>
+                        <span>or</span>
                     </div>
 
-                    <!-- Enterprise SSO Login Buttons -->
+                    <!-- Social Login Buttons -->
                     <div class="auth-social-row">
-                        <!-- GitHub -->
-                        <button type="button" class="auth-social-btn" title="Sign in with GitHub">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
-                            </svg>
-                        </button>
                         <!-- Google -->
-                        <button type="button" class="auth-social-btn" title="Sign in with Google Cloud">
+                        <button type="button" class="auth-social-btn" title="Sign in with Google">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                                 <path d="M12.24 10.285V13.8h6.887C18.2 16.6 15.64 18.8 12.24 18.8c-3.76 0-6.8-3.04-6.8-6.8s3.04-6.8 6.8-6.8c1.7 0 3.24.63 4.44 1.67l2.67-2.67C17.58 2.5 15.08 1.6 12.24 1.6 6.38 1.6 1.6 6.38 1.6 12.24s4.78 10.64 10.64 10.64c6.12 0 10.18-4.3 10.18-10.36 0-.7-.07-1.37-.18-2.23H12.24z"/>
                             </svg>
                         </button>
-                        <!-- Microsoft Azure -->
-                        <button type="button" class="auth-social-btn" title="Sign in with Microsoft Azure">
+                        <!-- Apple -->
+                        <button type="button" class="auth-social-btn" title="Sign in with Apple">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M0 0h11.377v11.372H0zm12.623 0H24v11.372H12.623zM0 12.628h11.377V24H0zm12.623 0H24V24H12.623z"/>
+                                <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.4c.66-.82 1.11-1.96.99-3.1-.97.04-2.12.65-2.79 1.44-.59.68-1.11 1.84-.97 2.96 1.08.08 2.14-.54 2.77-1.3"/>
+                            </svg>
+                        </button>
+                        <!-- Facebook -->
+                        <button type="button" class="auth-social-btn" title="Sign in with Facebook">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
                             </svg>
                         </button>
                     </div>
 
                     <!-- Mode Toggle Link -->
                     <div class="auth-toggle-footer">
-                        <span id="auth-toggle-prompt">Already have an engineer account?</span>
+                        <span id="auth-toggle-prompt">Already have an account yet?</span>
                         <button type="button" id="btn-toggle-auth-mode" class="auth-switch-link">Log In</button>
                     </div>
                 </div>
