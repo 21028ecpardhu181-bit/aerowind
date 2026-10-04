@@ -38,10 +38,8 @@ def normalize_coord_pair(p: Union[List[float], Tuple[float, float]]) -> Tuple[fl
     """
     p0, p1 = float(p[0]), float(p[1])
     # Absolute longitude check: latitude cannot exceed 90 degrees
+    # If the first element is > 90 in magnitude, it is definitely a longitude in [lon, lat] format
     if abs(p0) > 90.0 and abs(p1) <= 90.0:
-        return p1, p0
-    # Common region check (e.g. India longitude is 68-98, latitude is 8-36)
-    if p0 > 55.0 and p1 < 40.0:
         return p1, p0
     return p0, p1
 

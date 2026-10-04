@@ -400,6 +400,22 @@
             return Math.abs(area) / 2.0;
         },
 
+        calculatePolygonPerimeterKm(vertices) {
+            if (!vertices || vertices.length < 2) return 0.0;
+            const R = 6371.0;
+            const refLat = vertices[0][0];
+            const cosLat = Math.cos(refLat * Math.PI / 180.0);
+            let perim = 0.0;
+            const n = vertices.length;
+            for (let i = 0; i < n; i++) {
+                const j = (i + 1) % n;
+                const dx = ((vertices[j][1] - vertices[i][1]) * Math.PI / 180.0) * R * cosLat;
+                const dy = ((vertices[j][0] - vertices[i][0]) * Math.PI / 180.0) * R;
+                perim += Math.hypot(dx, dy);
+            }
+            return perim;
+        },
+
         applyRadius(radiusKm) {
             const r = parseFloat(radiusKm);
             if (isNaN(r) || r <= 0) {
@@ -587,7 +603,8 @@
                     label.innerText = `${count} point${count > 1 ? 's' : ''} placed. Add at least 3 points, then click "Close Polygon".`;
                 } else {
                     const areaKm2 = this.calculatePolygonAreaKm2(APP_STATE.drawnVertices);
-                    label.innerText = `${count} points placed (~${areaKm2.toFixed(1)} km²). Drag markers to edit, right-click to delete. Click "Close Polygon" to finish.`;
+                    const perimKm = this.calculatePolygonPerimeterKm(APP_STATE.drawnVertices);
+                    label.innerText = `${count} points placed (~${areaKm2.toFixed(1)} km², perimeter ${perimKm.toFixed(1)} km). Drag markers to edit, right-click to delete. Click "Close Polygon" to finish.`;
                 }
             }
         },
@@ -602,8 +619,10 @@
             if (!site) return;
 
             const areaKm2 = this.calculatePolygonAreaKm2(vertices);
+            const perimKm = this.calculatePolygonPerimeterKm(vertices);
             site.boundary = vertices.slice();
             site.areaKm2 = areaKm2;
+            site.perimeterKm = perimKm;
             const centerLat = vertices.reduce((sum, v) => sum + v[0], 0) / vertices.length;
             const centerLon = vertices.reduce((sum, v) => sum + v[1], 0) / vertices.length;
             site.lat = centerLat;
@@ -640,9 +659,9 @@
 
                 const badgeIcon = L.divIcon({
                     className: 'badge-div-wrapper',
-                    html: `<div class="selected-area-badge">Concession Area<br><strong>${areaKm2.toFixed(1)} km²</strong></div>`,
-                    iconSize: [110, 40],
-                    iconAnchor: [55, 20]
+                    html: `<div class="selected-area-badge">Concession Area<br><strong>${areaKm2.toFixed(1)} km²</strong> <span style="font-size:10px;opacity:0.8;">(${perimKm.toFixed(1)} km perim)</span></div>`,
+                    iconSize: [120, 44],
+                    iconAnchor: [60, 22]
                 });
                 APP_STATE.areaBadgeMarker = L.marker([centerLat, centerLon], { icon: badgeIcon }).addTo(map);
             }
@@ -656,7 +675,7 @@
             }
 
             this.updateScreen2Capacity();
-            this.showToast(`Custom polygon closed: ${areaKm2.toFixed(1)} km² concession`, 'success');
+            this.showToast(`Custom polygon closed: ${areaKm2.toFixed(1)} km² concession (${perimKm.toFixed(1)} km perimeter)`, 'success');
         },
 
         clearPolygonDraw() {

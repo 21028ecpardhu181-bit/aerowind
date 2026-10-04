@@ -377,6 +377,18 @@ class NominatimClient:
                     "display_name": "Bommuru, Rajahmundry, East Godavari, Andhra Pradesh, India",
                     "boundingbox": [16.94, 17.03, 81.77, 81.86],
                 },
+                "rajahmundry": {
+                    "lat": 17.0050,
+                    "lon": 81.7805,
+                    "display_name": "Rajahmundry, East Godavari, Andhra Pradesh, India",
+                    "boundingbox": [16.95, 17.06, 81.72, 81.84],
+                },
+                "hukkumpeta": {
+                    "lat": 18.1499,
+                    "lon": 82.6946,
+                    "display_name": "Hukkumpeta, Alluri Sitharama Raju, Andhra Pradesh, India",
+                    "boundingbox": [18.10, 18.20, 82.64, 82.75],
+                },
                 "anantapur": {
                     "lat": 14.6818877,
                     "lon": 77.6005911,
