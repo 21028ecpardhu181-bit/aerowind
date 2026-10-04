@@ -113,9 +113,10 @@ export const Screen2Config: React.FC<Screen2ConfigProps> = ({
               <button
                 key={cnt}
                 type="button"
-                className={`turbine-chip px-3 py-1 rounded-lg text-xs font-bold transition-all border ${
+                data-turbines={cnt}
+                className={`turbine-chip chip-btn px-3 py-1 rounded-lg text-xs font-bold transition-all border ${
                   turbineCount === cnt
-                    ? 'active bg-amber-400 text-slate-950 border-amber-400 shadow-xs'
+                    ? 'active bg-[#FFD21F] text-slate-950 border-[#FFD21F] shadow-xs'
                     : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
                 }`}
                 onClick={() => handlePresetClick(cnt)}
@@ -215,7 +216,7 @@ export const Screen2Config: React.FC<Screen2ConfigProps> = ({
           variant="energy"
           size="lg"
           onClick={onGenerateLayout}
-          className="w-full text-slate-950 font-bold py-3.5 shadow-md"
+          className="w-full bg-[#FFD21F] hover:bg-[#F2C50F] text-slate-950 font-black py-3.5 shadow-md"
         >
           <span>Generate Micro-Siting Layout ({turbineCount} Turbines)</span>
           <ArrowRight className="w-5 h-5 stroke-[2.5]" />

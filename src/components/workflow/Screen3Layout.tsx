@@ -110,7 +110,7 @@ export const Screen3Layout: React.FC<Screen3LayoutProps> = ({
             variant="energy"
             size="md"
             onClick={onLaunchOptimize}
-            className="w-full text-slate-950 font-bold mt-1"
+            className="w-full bg-[#FFD21F] hover:bg-[#F2C50F] text-slate-950 font-black mt-1 shadow-md"
           >
             <span>Launch Quantum Optimization</span>
             <ArrowRight className="w-4 h-4 stroke-[2.5]" />

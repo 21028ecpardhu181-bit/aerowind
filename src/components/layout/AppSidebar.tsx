@@ -35,7 +35,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
         {/* + New Wind Farm Action Button */}
         <button
           onClick={onNewWindFarm}
-          className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-amber-400 hover:bg-amber-500 text-slate-900 font-bold text-sm shadow-sm hover:shadow active:scale-[0.98] transition-all"
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#FFD21F] hover:bg-[#F2C50F] text-slate-950 font-black text-sm shadow-sm hover:shadow active:scale-[0.98] transition-all"
         >
           <Plus className="w-4 h-4 stroke-[3]" />
           <span>New Wind Farm</span>
@@ -131,8 +131,12 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
                     }`}
                   >
                     {/* Thumbnail representation */}
-                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-100 to-sky-100 border border-slate-200 flex-shrink-0 flex items-center justify-center font-bold text-xs text-slate-600 shadow-2xs">
-                      ⚡
+                    <div className="w-10 h-10 rounded-lg overflow-hidden bg-slate-200 border border-slate-200 flex-shrink-0">
+                      <img
+                        src="/assets/real-turbines-photo.jpg"
+                        alt={proj.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                      />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-xs font-bold text-slate-900 truncate group-hover:text-amber-700 transition-colors">

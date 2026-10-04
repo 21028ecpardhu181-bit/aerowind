@@ -14,7 +14,7 @@ export const Sparkline: React.FC<SparklineProps> = ({
   const isYellow = color === 'yellow';
   const isBlue = color === 'blue';
 
-  const strokeColor = isYellow ? '#F59E0B' : isBlue ? '#3B82F6' : '#10B981';
+  const strokeColor = isYellow ? '#FFD21F' : isBlue ? '#3B82F6' : '#10B981';
   const fillGradientId = `grad-${color}`;
 
   // Sample smooth curves matching mockup

@@ -90,7 +90,7 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
                 onClick={() => handlePresetClick(preset)}
                 className={`camera-preset-btn px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
                   activePreset === preset
-                    ? 'active bg-amber-400 text-slate-950 shadow-xs'
+                    ? 'active bg-[#FFD21F] text-slate-950 shadow-xs'
                     : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
@@ -104,7 +104,7 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
             onClick={onToggle3D}
             className={`flex items-center gap-1.5 px-3.5 py-2 rounded-2xl font-bold text-xs border shadow-glass backdrop-blur-md transition-all active:scale-95 ${
               is3DActive
-                ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-md'
+                ? 'bg-[#FFD21F] text-slate-950 border-amber-300 shadow-md'
                 : 'bg-white/85 hover:bg-white text-slate-700 border-slate-200/80'
             }`}
           >
@@ -126,7 +126,7 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
         id="screen-5-sheet"
         className="absolute bottom-4 left-4 right-4 md:left-6 md:right-auto md:max-w-md z-20 pointer-events-auto"
       >
-        <Card className="p-4 sm:p-5 flex flex-col gap-3 shadow-glass border-slate-200/90">
+        <Card className="p-4 sm:p-5 flex flex-col gap-3 shadow-glass border-slate-200/90 liquid-glass">
           <div
             id="s5-panel-toggle"
             onClick={() => setIsPanelCollapsed(!isPanelCollapsed)}
@@ -135,8 +135,8 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
             <div>
               <h3 className="text-sm font-bold text-slate-900">Optimized Farm Telemetry</h3>
               <div className="text-[11px] text-slate-500 flex items-center gap-3 mt-0.5">
-                <span>AEP: <strong id="s5-meta-aep" className="text-slate-800">{aep}</strong></span>
-                <span>Wake: <strong id="s5-meta-wake-loss" className="text-emerald-600">{wakeLoss}</strong></span>
+                <span>AEP: <strong id="s5-meta-aep" className="text-slate-800 font-mono tabular-nums">{aep}</strong></span>
+                <span>Wake: <strong id="s5-meta-wake-loss" className="text-emerald-600 font-mono tabular-nums">{wakeLoss}</strong></span>
               </div>
             </div>
             <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 font-bold border border-emerald-200">
@@ -162,7 +162,7 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
                 <button
                   id="btn-s5-fly-turbine"
                   type="button"
-                  className="p-1 rounded-lg bg-amber-400 hover:bg-amber-500 text-slate-950 shadow-2xs"
+                  className="p-1 rounded-lg bg-[#FFD21F] hover:bg-[#F2C50F] text-slate-950 shadow-2xs"
                   title="Inspect in 3D"
                 >
                   <Eye className="w-3.5 h-3.5" />
@@ -170,7 +170,7 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 text-[11px] font-mono text-slate-600">
+            <div className="grid grid-cols-2 gap-2 text-[11px] font-mono text-slate-600 tabular-nums">
               <div>Lat: <span className="font-semibold text-slate-900">{selectedTurbine.lat.toFixed(6)}°</span></div>
               <div>Lon: <span className="font-semibold text-slate-900">{selectedTurbine.lon.toFixed(6)}°</span></div>
               <div>Elev: <span className="font-semibold text-slate-900">{selectedTurbine.elevation_m || 42} m</span></div>
@@ -183,7 +183,7 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
             variant="energy"
             size="md"
             onClick={onExportBlueprint}
-            className="w-full text-slate-950 font-bold mt-1"
+            className="w-full bg-[#FFD21F] hover:bg-[#F2C50F] text-slate-950 font-black mt-1 shadow-md"
           >
             <span>Proceed to Engineering Blueprint</span>
             <ArrowRight className="w-4 h-4 stroke-[2.5]" />

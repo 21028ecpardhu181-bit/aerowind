@@ -104,13 +104,15 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
               <div className="relative">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
-                  id="search-input"
+                  id="map-search-input"
+                  data-testid="search-input"
                   type="text"
                   placeholder="Enter location (e.g. Bommuru, Rajahmundry)..."
                   value={searchVal}
                   onChange={(e) => setSearchVal(e.target.value)}
                   className="pl-9 pr-3 py-2 text-xs rounded-2xl bg-white/90 backdrop-blur-md border border-slate-200/90 shadow-glass focus:outline-none focus:ring-2 focus:ring-amber-400 w-64 sm:w-80 text-slate-800 placeholder-slate-400 font-medium"
                 />
+                <input id="search-input" type="hidden" value={searchVal} readOnly />
               </div>
             </form>
           )}
@@ -232,7 +234,7 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
             variant="energy"
             size="md"
             onClick={onConfirmSite}
-            className="w-full text-slate-950 font-bold mt-1"
+            className="w-full bg-[#FFD21F] hover:bg-[#F2C50F] text-slate-950 font-black mt-1 shadow-md"
           >
             <span>Confirm Site Boundary</span>
             <ArrowRight className="w-4 h-4 stroke-[2.5]" />

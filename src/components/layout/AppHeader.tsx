@@ -1,6 +1,7 @@
 import React from 'react';
 import { Search, Bell, Sun, Wind } from 'lucide-react';
 import { TelemetryData } from '../../types';
+import { DesktopNavigation } from './DesktopNavigation';
 
 interface AppHeaderProps {
   currentTab: string;
@@ -25,11 +26,11 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           onClick={() => onTabChange('projects')}
           className="flex items-center gap-1.5 text-left focus:outline-none group"
         >
-          <div className="w-8 h-8 rounded-lg bg-amber-400 flex items-center justify-center font-bold text-slate-900 shadow-sm group-hover:bg-amber-500 transition-colors">
+          <div className="w-8 h-8 rounded-lg bg-[#FFD21F] flex items-center justify-center font-black text-slate-950 shadow-sm group-hover:bg-[#F2C50F] transition-colors">
             AQ
           </div>
           <div className="text-lg font-bold tracking-tight text-slate-900 flex items-center">
-            AeroQuantum<span className="text-amber-500 font-semibold">Wind</span>
+            AeroQuantum<span className="text-[#FFD21F] font-black">Wind</span>
           </div>
         </button>
         <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono text-slate-500 bg-slate-100 border border-slate-200">
@@ -38,58 +39,11 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
       </div>
 
       {/* Center Nav Tabs (Desktop) */}
-      <nav className="hidden lg:flex items-center gap-1 bg-slate-100/80 p-1 rounded-xl border border-slate-200/70">
-        <button
-          onClick={() => onTabChange('projects')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-            currentTab === 'projects'
-              ? 'bg-amber-400 text-slate-900 shadow-sm'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
-          }`}
-        >
-          Projects
-        </button>
-        <button
-          onClick={onNewProject}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-            currentTab === 'new'
-              ? 'bg-amber-400 text-slate-900 shadow-sm'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
-          }`}
-        >
-          New Project
-        </button>
-        <button
-          onClick={() => onTabChange('analytics')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-            currentTab === 'analytics'
-              ? 'bg-amber-400 text-slate-900 shadow-sm'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
-          }`}
-        >
-          Analytics
-        </button>
-        <button
-          onClick={() => onTabChange('blueprints')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-            currentTab === 'blueprints'
-              ? 'bg-amber-400 text-slate-900 shadow-sm'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
-          }`}
-        >
-          Blueprints
-        </button>
-        <button
-          onClick={() => onTabChange('settings')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-            currentTab === 'settings'
-              ? 'bg-amber-400 text-slate-900 shadow-sm'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
-          }`}
-        >
-          Settings
-        </button>
-      </nav>
+      <DesktopNavigation
+        currentTab={currentTab}
+        onTabChange={onTabChange}
+        onNewProject={onNewProject}
+      />
 
       {/* Right Section: Search & Live Telemetry & Avatar */}
       <div className="flex items-center gap-3">

@@ -82,7 +82,7 @@ export const Screen6Blueprint: React.FC<Screen6BlueprintProps> = ({
             variant="energy"
             size="sm"
             onClick={onExportJSON}
-            className="text-xs font-bold text-slate-950"
+            className="text-xs font-black text-slate-950 bg-[#FFD21F] hover:bg-[#F2C50F] shadow-sm"
           >
             <FileText className="w-3.5 h-3.5 stroke-[2.5]" />
             <span>Export Blueprint</span>

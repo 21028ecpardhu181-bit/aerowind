@@ -13,11 +13,11 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   onNewProject,
 }) => {
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-lg border-t border-slate-200/80 px-4 py-2 flex items-center justify-around shadow-lg">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 liquid-glass border-t border-slate-200/80 px-4 py-2 flex items-center justify-around shadow-glass">
       <button
         onClick={() => onTabChange('dashboard')}
         className={`flex flex-col items-center gap-1 text-[11px] font-medium transition-colors ${
-          currentTab === 'dashboard' ? 'text-amber-600 font-bold' : 'text-slate-500 hover:text-slate-900'
+          currentTab === 'dashboard' ? 'text-amber-700 font-bold' : 'text-slate-500 hover:text-slate-900'
         }`}
       >
         <Home className="w-5 h-5" />
@@ -27,7 +27,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
       <button
         onClick={() => onTabChange('projects')}
         className={`flex flex-col items-center gap-1 text-[11px] font-medium transition-colors ${
-          currentTab === 'projects' ? 'text-amber-600 font-bold' : 'text-slate-500 hover:text-slate-900'
+          currentTab === 'projects' ? 'text-amber-700 font-bold' : 'text-slate-500 hover:text-slate-900'
         }`}
       >
         <FolderKanban className="w-5 h-5" />
@@ -37,7 +37,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
       {/* Floating Center Action Button */}
       <button
         onClick={onNewProject}
-        className="w-12 h-12 -mt-6 rounded-full bg-amber-400 hover:bg-amber-500 text-slate-950 flex items-center justify-center shadow-lg active:scale-95 transition-transform border-4 border-white"
+        className="w-12 h-12 -mt-6 rounded-full bg-[#FFD21F] hover:bg-[#F2C50F] text-slate-950 flex items-center justify-center shadow-lg active:scale-95 transition-transform border-4 border-white"
         aria-label="New Wind Farm Project"
       >
         <Plus className="w-6 h-6 stroke-[3]" />

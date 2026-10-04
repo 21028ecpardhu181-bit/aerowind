@@ -71,7 +71,7 @@ export const Screen4Optimize: React.FC<Screen4OptimizeProps> = ({
         {/* Progress bar */}
         <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden border border-slate-200">
           <div
-            className="bg-amber-400 h-full rounded-full transition-all duration-200 ease-out"
+            className="bg-[#FFD21F] h-full rounded-full transition-all duration-200 ease-out"
             style={{ width: `${iteration}%` }}
           />
         </div>
@@ -79,22 +79,22 @@ export const Screen4Optimize: React.FC<Screen4OptimizeProps> = ({
         {/* KPIs Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-center">
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
-            <span className="text-xs font-semibold text-slate-500">Best AEP</span>
-            <div id="s4-kpi-best-aep" className="text-xl font-black text-slate-900 font-mono mt-1">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Best AEP</span>
+            <div id="s4-kpi-best-aep" className="text-xl font-black text-slate-900 font-mono tabular-nums mt-1">
               🏆 {bestAep} GWh/yr
             </div>
           </div>
 
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
-            <span className="text-xs font-semibold text-slate-500">Current Iteration AEP</span>
-            <div id="s4-kpi-current-aep" className="text-xl font-black text-slate-700 font-mono mt-1">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Current Iteration</span>
+            <div id="s4-kpi-current-aep" className="text-xl font-black text-slate-700 font-mono tabular-nums mt-1">
               {currAep} GWh/yr
             </div>
           </div>
 
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
-            <span className="text-xs font-semibold text-slate-500">Net Improvement</span>
-            <div id="s4-kpi-improvement" className="text-xl font-black text-emerald-600 font-mono mt-1">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Net Gain</span>
+            <div id="s4-kpi-improvement" className="text-xl font-black text-emerald-600 font-mono tabular-nums mt-1">
               + {improvement}%
             </div>
           </div>
@@ -103,13 +103,13 @@ export const Screen4Optimize: React.FC<Screen4OptimizeProps> = ({
         {/* Engineering Architecture Diagram (zero sci-fi slop) */}
         <div id="s4-section-circuit" className="p-5 rounded-2xl bg-white border border-slate-200 text-xs text-slate-700">
           <div className="font-bold text-slate-900 mb-2 flex items-center justify-between">
-            <span>Engineering Pipeline & Constraints</span>
+            <span>Optimization Method: Hybrid WS-QAOA</span>
             <span className="text-[11px] font-mono text-emerald-600 font-medium">✓ Qiskit Aer Sampler</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-[11px] text-slate-600">
             <div id="s4-check-boundary" className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-              <span>Boundary Perimeter: 100% Contained</span>
+              <span>Boundary: 100% Contained</span>
             </div>
             <div id="s4-check-spacing" className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
@@ -117,15 +117,15 @@ export const Screen4Optimize: React.FC<Screen4OptimizeProps> = ({
             </div>
             <div id="s4-check-turbines" className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-              <span>Wake Decaying Cones: Active</span>
+              <span>Jensen Wake Cones: Active</span>
             </div>
           </div>
         </div>
 
         {/* QUBO Matrix Container */}
         <div id="s4-qubo-grid" className="p-4 rounded-xl bg-slate-50 border border-slate-200 font-mono text-xs text-slate-600">
-          <div className="font-bold text-slate-800 mb-1">QUBO Penalty Formulation</div>
-          <div className="text-[11px] text-slate-500 leading-relaxed">
+          <div className="font-bold text-slate-800 mb-1">Mathematical Formulation</div>
+          <div className="text-[11px] text-slate-500 leading-relaxed tabular-nums">
             H = - ∑ E_i x_i + λ_spacing ∑ C_ij x_i x_j + λ_turb (∑ x_i - K)² (λ = 150.0)
           </div>
         </div>
@@ -137,7 +137,7 @@ export const Screen4Optimize: React.FC<Screen4OptimizeProps> = ({
           size="lg"
           onClick={onViewOptimized}
           disabled={!isDone}
-          className="w-full text-slate-950 font-bold py-3.5 shadow-md mt-2"
+          className="w-full bg-[#FFD21F] hover:bg-[#F2C50F] text-slate-950 font-black py-3.5 shadow-md mt-2"
         >
           <span>View Optimized Wind Farm</span>
           <ArrowRight className="w-5 h-5 stroke-[2.5]" />

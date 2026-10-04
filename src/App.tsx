@@ -30,6 +30,8 @@ import { Screen4Optimize } from './components/workflow/Screen4Optimize';
 import { Screen5Inspect } from './components/workflow/Screen5Inspect';
 import { Screen6Blueprint } from './components/workflow/Screen6Blueprint';
 import { DataSourcesModal } from './components/workflow/DataSourcesModal';
+import { BottomSheet } from './components/ui/BottomSheet';
+import { ProjectSelector } from './components/dashboard/ProjectSelector';
 
 // Expose APP_STATE on window for automated testing and test assertion harnesses
 declare global {
@@ -48,6 +50,7 @@ export function App() {
   const [telemetry, setTelemetry] = useState<TelemetryData | null>(null);
   const [isDataSourcesOpen, setIsDataSourcesOpen] = useState<boolean>(false);
   const [is3DActive, setIs3DActive] = useState<boolean>(false);
+  const [isMobileProjectSheetOpen, setIsMobileProjectSheetOpen] = useState<boolean>(false);
 
   // Active engineering site
   const [site, setSite] = useState<SiteInfo>({
@@ -487,12 +490,34 @@ export function App() {
         currentTab={currentTab}
         onTabChange={(tab) => {
           setCurrentTab(tab);
-          if (tab === 'dashboard' || tab === 'projects') setCurrentScreen('home');
+          if (tab === 'dashboard' || tab === 'home') setCurrentScreen('home');
+          if (tab === 'projects') setIsMobileProjectSheetOpen(true);
           if (tab === 'map') setCurrentScreen('s1_site');
           if (tab === 'reports') setCurrentScreen('s6_blueprint');
         }}
         onNewProject={handleNewProject}
       />
+
+      {/* Mobile Project Selector Bottom Sheet */}
+      <BottomSheet
+        isOpen={isMobileProjectSheetOpen}
+        onClose={() => setIsMobileProjectSheetOpen(false)}
+        title="Switch Wind Farm Project"
+        subtitle="Select an existing concession or create a new site"
+      >
+        <ProjectSelector
+          projects={projects}
+          selectedProjectId={activeProject?.id || null}
+          onSelectProject={(p) => {
+            setIsMobileProjectSheetOpen(false);
+            handleOpenProject(p);
+          }}
+          onNewProject={() => {
+            setIsMobileProjectSheetOpen(false);
+            handleNewProject();
+          }}
+        />
+      </BottomSheet>
 
       {/* Dataset Provenance Modal */}
       <DataSourcesModal
