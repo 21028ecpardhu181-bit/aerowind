@@ -54,66 +54,86 @@ export const Screen3Layout: React.FC<Screen3LayoutProps> = ({
 
   // 1. Initialize Map
   useEffect(() => {
-    const L = window.L;
-    if (!L || !mapContainerRef.current) return;
+    let checkInterval: any = null;
 
-    if (mapRef.current) {
-      try { mapRef.current.remove(); } catch (_) {}
-      mapRef.current = null;
+    const setupMap = () => {
+      const L = window.L;
+      if (!L || !mapContainerRef.current) return;
+
+      if (mapRef.current) {
+        try { mapRef.current.remove(); } catch (_) {}
+        mapRef.current = null;
+      }
+
+      const map = L.map(mapContainerRef.current, {
+        center: [site.lat, site.lon],
+        zoom: 13,
+        zoomControl: false,
+        attributionControl: false,
+      });
+
+      // Satellite tiles
+      L.tileLayer('/api/geo/tiles/satellite/{z}/{x}/{y}', {
+        maxZoom: 20,
+        attribution: 'Satellite Imagery',
+      }).addTo(map);
+
+      L.control.scale({ position: 'bottomleft', metric: true, imperial: false }).addTo(map);
+
+      mapRef.current = map;
+
+      // Render Boundary Polygon
+      const vertices = site.boundary && site.boundary.length >= 3 ? site.boundary : [
+        [site.lat + 0.015, site.lon - 0.015],
+        [site.lat + 0.015, site.lon + 0.015],
+        [site.lat - 0.015, site.lon + 0.015],
+        [site.lat - 0.015, site.lon - 0.015],
+      ];
+
+      polygonLayerRef.current = L.polygon(vertices, {
+        color: '#FFD21F',
+        weight: 2,
+        opacity: 0.9,
+        fillColor: '#FFD21F',
+        fillOpacity: 0.12,
+        dashArray: '5, 5',
+      }).addTo(map);
+
+      map.fitBounds(polygonLayerRef.current.getBounds(), { padding: [40, 40] });
+
+      // Render Candidate Grid Dots
+      candidates.forEach((c: any) => {
+        const dotIcon = L.divIcon({
+          className: 'candidate-dot-wrapper',
+          html: '<div class="candidate-grid-dot"></div>',
+          iconSize: [10, 10],
+          iconAnchor: [5, 5],
+        });
+        const m = L.marker([c.lat, c.lon], { icon: dotIcon, interactive: false }).addTo(map);
+        candidateMarkersRef.current.push(m);
+      });
+
+      // Render Turbines & Wake Cones
+      renderTurbinesAndWakes(map, turbines, windDir, showWakes);
+
+      setTimeout(() => {
+        try { map.invalidateSize(); } catch (_) {}
+      }, 200);
+    };
+
+    if (window.L) {
+      setupMap();
+    } else {
+      checkInterval = setInterval(() => {
+        if (window.L) {
+          clearInterval(checkInterval);
+          setupMap();
+        }
+      }, 100);
     }
 
-    const map = L.map(mapContainerRef.current, {
-      center: [site.lat, site.lon],
-      zoom: 13,
-      zoomControl: false,
-      attributionControl: false,
-    });
-
-    // Satellite tiles
-    L.tileLayer('/api/geo/tiles/satellite/{z}/{x}/{y}', {
-      maxZoom: 20,
-      attribution: 'Satellite Imagery',
-    }).addTo(map);
-
-    L.control.scale({ position: 'bottomleft', metric: true, imperial: false }).addTo(map);
-
-    mapRef.current = map;
-
-    // Render Boundary Polygon
-    const vertices = site.boundary && site.boundary.length >= 3 ? site.boundary : [
-      [site.lat + 0.015, site.lon - 0.015],
-      [site.lat + 0.015, site.lon + 0.015],
-      [site.lat - 0.015, site.lon + 0.015],
-      [site.lat - 0.015, site.lon - 0.015],
-    ];
-
-    polygonLayerRef.current = L.polygon(vertices, {
-      color: '#FFD21F',
-      weight: 2,
-      opacity: 0.9,
-      fillColor: '#FFD21F',
-      fillOpacity: 0.12,
-      dashArray: '5, 5',
-    }).addTo(map);
-
-    map.fitBounds(polygonLayerRef.current.getBounds(), { padding: [40, 40] });
-
-    // Render Candidate Grid Dots
-    candidates.forEach((c: any) => {
-      const dotIcon = L.divIcon({
-        className: 'candidate-dot-wrapper',
-        html: '<div class="candidate-grid-dot"></div>',
-        iconSize: [10, 10],
-        iconAnchor: [5, 5],
-      });
-      const m = L.marker([c.lat, c.lon], { icon: dotIcon, interactive: false }).addTo(map);
-      candidateMarkersRef.current.push(m);
-    });
-
-    // Render Turbines & Wake Cones
-    renderTurbinesAndWakes(map, turbines, windDir, showWakes);
-
     return () => {
+      if (checkInterval) clearInterval(checkInterval);
       if (mapRef.current) {
         try { mapRef.current.remove(); } catch (_) {}
         mapRef.current = null;
@@ -207,17 +227,17 @@ export const Screen3Layout: React.FC<Screen3LayoutProps> = ({
   };
 
   return (
-    <div id="screen-3-container" className="relative w-full h-[calc(100vh-53px)] overflow-hidden flex flex-col bg-slate-900">
+    <div id="screen-3-container" className="relative w-full h-[calc(100dvh-53px)] overflow-hidden flex flex-col bg-slate-100">
       
       {/* ── TOP FLOATING CONTROL BAR ────────────────────────────── */}
-      <div className="absolute top-3 left-3 right-3 z-30 flex items-center justify-between pointer-events-none">
+      <div className="absolute top-2 left-2 right-2 sm:top-3 sm:left-3 sm:right-3 z-30 flex items-center justify-between pointer-events-none">
         
         {/* Left: Back & Step Indicator */}
-        <div className="flex items-center gap-2 pointer-events-auto">
+        <div className="flex items-center gap-1.5 sm:gap-2 pointer-events-auto">
           <button
             id="btn-s3-back"
             onClick={onBack}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/90 backdrop-blur-xl border border-white/80 text-xs font-bold text-slate-800 hover:text-slate-950 hover:bg-white shadow-glass transition-all active:scale-95"
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-white/90 backdrop-blur-xl border border-white/80 text-xs font-bold text-slate-800 hover:text-slate-950 hover:bg-white shadow-glass transition-all active:scale-95"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Config</span>
@@ -225,10 +245,10 @@ export const Screen3Layout: React.FC<Screen3LayoutProps> = ({
 
           <div
             id="s3-indicator-text"
-            className="px-3 py-1.5 rounded-xl bg-white/95 backdrop-blur-xl border border-white/90 text-xs font-bold text-slate-900 shadow-glass flex items-center gap-2"
+            className="hidden sm:flex px-3 py-1.5 rounded-xl bg-white/95 backdrop-blur-xl border border-white/90 text-xs font-bold text-slate-900 shadow-glass items-center gap-2"
           >
             <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-            <span>{site.shortName || site.name} · {turbines.length} Turbines Initial Layout</span>
+            <span>{site.shortName || site.name} · {turbines.length} Turbines</span>
           </div>
         </div>
 

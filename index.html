@@ -6,20 +6,27 @@
   <title>AeroQuantum-Wind — Engineering Wind Farm Optimization</title>
 
   <!-- Leaflet CSS -->
-  <link rel="stylesheet" href="/assets/vendor/leaflet.css" onerror="this.onerror=null;this.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <link rel="stylesheet" href="/assets/vendor/leaflet.css" />
 
   <!-- CesiumJS CSS -->
-  <link rel="stylesheet" href="/assets/vendor/cesium/Widgets/widgets.css" onerror="this.onerror=null;this.href='https://cdn.jsdelivr.net/npm/cesium@1.118/Build/Cesium/Widgets/widgets.css';" />
-</head>
-<body class="bg-[#F8FAFC] text-slate-900 overflow-x-hidden">
-  <div id="root"></div>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cesium@1.118/Build/Cesium/Widgets/widgets.css" />
+  <link rel="stylesheet" href="/assets/vendor/cesium/Widgets/widgets.css" />
 
-  <!-- Leaflet Vendor JS -->
-  <script src="/assets/vendor/leaflet.js" onerror="this.onerror=null;this.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';"></script>
+  <!-- Leaflet JS (loaded synchronously in head before React mounts) -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    if (typeof window.L === 'undefined') {
+      document.write('<script src="/assets/vendor/leaflet.js"><\/script>');
+    }
+  </script>
 
   <!-- Cesium Vendor JS -->
   <script>window.CESIUM_BASE_URL = "/assets/vendor/cesium/";</script>
   <script src="/assets/vendor/cesium/Cesium.js" onerror="this.onerror=null;window.CESIUM_BASE_URL='https://cdn.jsdelivr.net/npm/cesium@1.118/Build/Cesium/';const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/cesium@1.118/Build/Cesium/Cesium.js';document.head.appendChild(s);"></script>
+</head>
+<body class="bg-[#F8FAFC] text-slate-900 overflow-x-hidden">
+  <div id="root"></div>
 
   <!-- Main React Vite Entry -->
   <script type="module" src="/src/main.tsx"></script>

@@ -28,6 +28,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
 
   return (
     <div
+      id={`btn-select-project-${project.id}`}
       onClick={() => onSelect(project)}
       className={cn(
         'group p-3 rounded-2xl transition-all duration-200 cursor-pointer flex items-center justify-between gap-3 border',

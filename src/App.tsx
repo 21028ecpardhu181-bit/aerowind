@@ -465,7 +465,7 @@ export function App() {
         )}
 
         {/* Screen Routing */}
-        <main className="flex-1 flex flex-col overflow-y-auto">
+        <main className={`flex-1 flex flex-col ${['s1_site', 's3_analysis', 's5_inspect'].includes(currentScreen) ? 'overflow-hidden h-full relative' : 'overflow-y-auto'}`}>
           {currentScreen === 'home' && (
             <ProjectHome
               projects={projects}

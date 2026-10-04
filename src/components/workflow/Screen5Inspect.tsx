@@ -80,62 +80,83 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
   // 1. Initialize Map
   useEffect(() => {
     if (is3DActive) return;
-    const L = window.L;
-    if (!L || !mapContainerRef.current) return;
 
-    if (mapRef.current) {
-      try { mapRef.current.remove(); } catch (_) {}
-      mapRef.current = null;
-    }
+    let checkInterval: any = null;
 
-    const map = L.map(mapContainerRef.current, {
-      center: [site.lat, site.lon],
-      zoom: 13,
-      zoomControl: false,
-      attributionControl: false,
-    });
+    const setupMap = () => {
+      const L = window.L;
+      if (!L || !mapContainerRef.current) return;
 
-    const satellite = L.tileLayer('/api/geo/tiles/satellite/{z}/{x}/{y}', {
-      maxZoom: 20,
-      attribution: 'Satellite Imagery',
-    });
+      if (mapRef.current) {
+        try { mapRef.current.remove(); } catch (_) {}
+        mapRef.current = null;
+      }
 
-    const terrain = L.tileLayer('/api/geo/tiles/terrain/{z}/{x}/{y}', {
-      maxZoom: 20,
-      attribution: 'Terrain Imagery',
-    });
+      const map = L.map(mapContainerRef.current, {
+        center: [site.lat, site.lon],
+        zoom: 13,
+        zoomControl: false,
+        attributionControl: false,
+      });
 
-    baseLayersRef.current = { satellite, terrain };
-    if (activeBasemap === 'terrain') {
-      terrain.addTo(map);
+      const satellite = L.tileLayer('/api/geo/tiles/satellite/{z}/{x}/{y}', {
+        maxZoom: 20,
+        attribution: 'Satellite Imagery',
+      });
+
+      const terrain = L.tileLayer('/api/geo/tiles/terrain/{z}/{x}/{y}', {
+        maxZoom: 20,
+        attribution: 'Terrain Imagery',
+      });
+
+      baseLayersRef.current = { satellite, terrain };
+      if (activeBasemap === 'terrain') {
+        terrain.addTo(map);
+      } else {
+        satellite.addTo(map);
+      }
+
+      L.control.scale({ position: 'bottomleft', metric: true, imperial: false }).addTo(map);
+      mapRef.current = map;
+
+      // Render Boundary Polygon
+      const vertices = site.boundary && site.boundary.length >= 3 ? site.boundary : [
+        [site.lat + 0.015, site.lon - 0.015],
+        [site.lat + 0.015, site.lon + 0.015],
+        [site.lat - 0.015, site.lon + 0.015],
+        [site.lat - 0.015, site.lon - 0.015],
+      ];
+
+      polygonLayerRef.current = L.polygon(vertices, {
+        color: '#FFD21F',
+        weight: 2,
+        opacity: 0.9,
+        fillColor: '#FFD21F',
+        fillOpacity: 0.12,
+      }).addTo(map);
+
+      map.fitBounds(polygonLayerRef.current.getBounds(), { padding: [40, 40] });
+
+      renderLayout(map, activeTurbines, windDir, showWakes, selectedTurbineIdx);
+
+      setTimeout(() => {
+        try { map.invalidateSize(); } catch (_) {}
+      }, 200);
+    };
+
+    if (window.L) {
+      setupMap();
     } else {
-      satellite.addTo(map);
+      checkInterval = setInterval(() => {
+        if (window.L) {
+          clearInterval(checkInterval);
+          setupMap();
+        }
+      }, 100);
     }
-
-    L.control.scale({ position: 'bottomleft', metric: true, imperial: false }).addTo(map);
-    mapRef.current = map;
-
-    // Render Boundary Polygon
-    const vertices = site.boundary && site.boundary.length >= 3 ? site.boundary : [
-      [site.lat + 0.015, site.lon - 0.015],
-      [site.lat + 0.015, site.lon + 0.015],
-      [site.lat - 0.015, site.lon + 0.015],
-      [site.lat - 0.015, site.lon - 0.015],
-    ];
-
-    polygonLayerRef.current = L.polygon(vertices, {
-      color: '#FFD21F',
-      weight: 2,
-      opacity: 0.9,
-      fillColor: '#FFD21F',
-      fillOpacity: 0.12,
-    }).addTo(map);
-
-    map.fitBounds(polygonLayerRef.current.getBounds(), { padding: [40, 40] });
-
-    renderLayout(map, activeTurbines, windDir, showWakes, selectedTurbineIdx);
 
     return () => {
+      if (checkInterval) clearInterval(checkInterval);
       if (mapRef.current) {
         try { mapRef.current.remove(); } catch (_) {}
         mapRef.current = null;
@@ -252,17 +273,17 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
   };
 
   return (
-    <div id="screen-5-container" className="relative w-full h-[calc(100vh-53px)] overflow-hidden flex flex-col bg-slate-900">
+    <div id="screen-5-container" className="relative w-full h-[calc(100dvh-53px)] overflow-hidden flex flex-col bg-slate-100">
       
       {/* ── TOP STATUS & CONTROLS BAR ───────────────────────────── */}
-      <div className="absolute top-3 left-3 right-3 z-30 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+      <div className="absolute top-2 left-2 right-2 sm:top-3 sm:left-3 sm:right-3 z-30 flex flex-wrap items-center justify-between gap-1.5 sm:gap-2 pointer-events-none">
         
         {/* Left: Back & Step Indicator */}
-        <div className="flex items-center gap-2 pointer-events-auto">
+        <div className="flex items-center gap-1.5 sm:gap-2 pointer-events-auto">
           <button
             id="btn-s5-back"
             onClick={onBack}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/90 backdrop-blur-xl border border-white/80 text-xs font-bold text-slate-800 hover:text-slate-950 hover:bg-white shadow-glass transition-all active:scale-95"
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-white/90 backdrop-blur-xl border border-white/80 text-xs font-bold text-slate-800 hover:text-slate-950 hover:bg-white shadow-glass transition-all active:scale-95"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Optimize</span>
@@ -270,10 +291,10 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
 
           <div
             id="s5-indicator-text"
-            className="px-3.5 py-1.5 rounded-xl bg-white/95 backdrop-blur-xl border border-white/90 text-xs font-bold text-slate-900 shadow-glass flex items-center gap-2"
+            className="hidden sm:flex px-3.5 py-1.5 rounded-xl bg-white/95 backdrop-blur-xl border border-white/90 text-xs font-bold text-slate-900 shadow-glass items-center gap-2"
           >
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>{site.shortName || site.name} · {activeTurbines.length} Turbines (WS-QAOA Certified)</span>
+            <span>{site.shortName || site.name} · {activeTurbines.length} Turbines (WS-QAOA)</span>
           </div>
         </div>
 

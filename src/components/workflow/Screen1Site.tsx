@@ -144,6 +144,10 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
         satellite.addTo(map);
       }
 
+      setTimeout(() => {
+        try { map.invalidateSize(); } catch (_) {}
+      }, 200);
+
       // Add Scale Bar
       L.control.scale({
         position: 'bottomleft',
@@ -543,7 +547,7 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
   ];
 
   return (
-    <div id="screen-1-container" className="relative w-full h-[calc(100vh-53px)] overflow-hidden flex flex-col bg-slate-100">
+    <div id="screen-1-container" className="relative w-full h-[calc(100dvh-53px)] overflow-hidden flex flex-col bg-slate-100">
       
       {/* ── TOP CONTROL HUD (Liquid Glass Floating Panel) ─────────── */}
       <div className="absolute top-3 left-3 right-3 md:right-[404px] z-30 flex flex-col gap-2 pointer-events-none">
