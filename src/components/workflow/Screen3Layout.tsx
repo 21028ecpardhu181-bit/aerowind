@@ -17,6 +17,8 @@ import { LayoutAnalysisData, SiteInfo, Turbine } from '../../types';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 
+import { ensureTurbinesInsideBoundary, generatePolygonEnclosedTurbines } from '../../utils/geometry';
+
 interface Screen3LayoutProps {
   site: SiteInfo;
   layoutData: LayoutAnalysisData;
@@ -44,30 +46,21 @@ export const Screen3Layout: React.FC<Screen3LayoutProps> = ({
   const wakeLayersRef = useRef<any[]>([]);
   const turbineMarkersRef = useRef<any[]>([]);
   const candidateMarkersRef = useRef<any[]>([]);
-function generateFallbackTurbines(clat: number, clon: number, count: number = 8, radiusKm: number = 3.0): Turbine[] {
-  const turbs: Turbine[] = [];
-  const radiusDeg = (Math.max(0.5, radiusKm) * 0.72) / 111.0;
-  for (let i = 0; i < count; i++) {
-    const angle = (i / count) * 2 * Math.PI;
-    const r = radiusDeg * (0.35 + 0.65 * ((i % 3) / 2));
-    const lat = clat + r * Math.cos(angle);
-    const lon = clon + (r * Math.sin(angle)) / Math.cos((clat * Math.PI) / 180);
-    turbs.push({
-      id: `T${i + 1}`,
-      label: `T-${String(i + 1).padStart(2, '0')}`,
-      lat: Number(lat.toFixed(6)),
-      lon: Number(lon.toFixed(6)),
-      elevation_m: 42 + (i % 5) * 4,
-      effective_mps: Number((7.2 + (i % 4) * 0.2).toFixed(2)),
-      wake_deficit_pct: Number((2.5 + (i % 3) * 1.1).toFixed(1)),
-    });
-  }
-  return turbs;
-}
 
   const polygonLayerRef = useRef<any>(null);
-  const fallbackList = useMemo(() => generateFallbackTurbines(site.lat, site.lon, 8, site.radiusKm || 3.0), [site.lat, site.lon, site.radiusKm]);
-  const turbines = (layoutData.turbines && layoutData.turbines.length > 0) ? layoutData.turbines : fallbackList;
+
+  // Guarantee 100% boundary containment: Every turbine is strictly enclosed inside site.boundary
+  const targetCount = layoutData.turbines?.length || 8;
+  const fallbackList = useMemo(
+    () => generatePolygonEnclosedTurbines(site.boundary, targetCount, site.lat, site.lon, site.windSpeedMps || 7.5),
+    [site.boundary, targetCount, site.lat, site.lon, site.windSpeedMps]
+  );
+
+  const baseTurbines = (layoutData.turbines && layoutData.turbines.length > 0) ? layoutData.turbines : fallbackList;
+  const turbines = useMemo(
+    () => ensureTurbinesInsideBoundary(baseTurbines, site.boundary, site.lat, site.lon),
+    [baseTurbines, site.boundary, site.lat, site.lon]
+  );
   const candidates = layoutData.candidate_positions || layoutData.candidates || [];
   const windDir = layoutData.wind_direction_deg ?? 300;
   const windSpeed = (layoutData.wind_speed_mps || site.windSpeedMps || 7.1).toFixed(1);
@@ -299,7 +292,7 @@ function generateFallbackTurbines(clat: number, clon: number, count: number = 8,
           <strong style="font-size: 13px;">Turbine ${tId}</strong><br>
           Effective Wind: <strong>${speed} m/s</strong><br>
           Wake Deficit: <span style="color: ${(t.wake_deficit_pct || 0) > 8 ? '#ef4444' : '#f59e0b'}; font-weight: 700;">-${(t.wake_deficit_pct || 4.2).toFixed(1)}%</span><br>
-          ${t.conflict_desc ? `<div style="color: #ef4444; font-weight: 600; margin-top: 4px;">⚠️ ${t.conflict_desc}</div>` : '<div style="color: #10b981; font-weight: 600; margin-top: 4px;">✓ Free Stream Velocity</div>'}
+          ${t.conflict_desc ? `<div style="color: #ef4444; font-weight: 700; margin-top: 4px;">Wake Conflict: ${t.conflict_desc}</div>` : '<div style="color: #10b981; font-weight: 600; margin-top: 4px;">Free Stream Velocity</div>'}
         </div>
       `);
 
@@ -535,7 +528,7 @@ function generateFallbackTurbines(clat: number, clon: number, count: number = 8,
               <span>Boundary & 5D Spacing Enforced</span>
             </span>
             <span className="font-bold text-[11px] font-mono">
-              {conflictsCount === 0 ? '✓ 0 Overlaps' : `⚠️ ${conflictsCount} Overlaps`}
+              {conflictsCount === 0 ? '0 Overlaps' : `${conflictsCount} Overlaps`}
             </span>
           </div>
 

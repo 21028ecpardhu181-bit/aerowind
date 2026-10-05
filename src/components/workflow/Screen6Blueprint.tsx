@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileText, Download, ArrowLeft, RotateCcw, Printer, CheckCircle2 } from 'lucide-react';
+import { FileText, Download, ArrowLeft, RotateCcw, Printer, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { OptimizationData, SiteInfo, Turbine } from '../../types';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
@@ -144,8 +144,9 @@ export const Screen6Blueprint: React.FC<Screen6BlueprintProps> = ({
             </div>
 
             <div className="text-right">
-              <span className="text-[11px] font-mono text-emerald-800 bg-emerald-50 border border-emerald-300 px-2.5 py-1 rounded-md font-bold">
-                ✓ Certified WS-QAOA Optimization
+              <span className="text-[11px] font-mono text-emerald-800 bg-emerald-50 border border-emerald-300 px-2.5 py-1 rounded-md font-bold inline-flex items-center gap-1">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Certified WS-QAOA Optimization</span>
               </span>
               <div className="text-[11px] text-slate-400 mt-1">Certified geodetic CRS: WGS84</div>
             </div>

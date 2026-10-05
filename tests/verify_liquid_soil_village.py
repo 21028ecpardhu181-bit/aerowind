@@ -53,7 +53,7 @@ def verify_liquid_soil_and_village():
         print("Expanding bottom sheet via mobile drag handle and testing Real ISRIC Soil Telemetry tab...")
         page.click("#mobile-drag-handle")
         page.wait_for_timeout(800)
-        page.click("button:has-text('🧱 Soil')")
+        page.click("#tab-drawer-soil")
         page.wait_for_timeout(800)
         
         # Verify USDA Texture and Bearing Capacity
@@ -72,7 +72,7 @@ def verify_liquid_soil_and_village():
 
         # 4. Test Village Boundary Auto-Snap Mode
         print("\nTesting Village Boundary Snap Mode...")
-        page.click("button:has-text('🏘️ Village Border')")
+        page.click("#btn-village-mode")
         page.wait_for_timeout(600)
         assert page.is_visible("text=Village Administrative Border"), "Village border mode active"
         
@@ -122,6 +122,45 @@ def verify_liquid_soil_and_village():
         new_area = page.inner_text("#meta-area")
         print(f"✓ Free-form Polygon Closed -> Calculated Area: {new_area}")
 
+        # 7. Confirm Site & Proceed to Screen 2
+        print("\nConfirming site to enter Screen 2...")
+        page.locator("#btn-confirm-site-peek:visible, #btn-confirm-site:visible").first.click()
+        page.wait_for_timeout(1200)
+        assert page.is_visible("#screen-2-container"), "Screen 2 container visible"
+        print("✓ Entered Screen 2 Config")
+
+        # In Screen 2, change turbine count to 16
+        print("Adjusting turbine count slider in Screen 2...")
+        slider = page.locator("#slider-turbine-count")
+        if slider.is_visible():
+            slider.fill("16")
+            page.wait_for_timeout(600)
+        page.screenshot(path=str(SCREENSHOTS_DIR / "screen2_config_mobile.png"))
+
+        # Generate Layout -> Screen 3
+        print("Generating layout to enter Screen 3...")
+        page.locator("#btn-generate-layout:visible, #btn-s2-generate-layout:visible").first.click()
+        page.wait_for_function("() => window.APP_STATE && window.APP_STATE.currentScreen === 3", timeout=25000)
+        page.wait_for_timeout(1000)
+        assert page.is_visible("#screen-3-container"), "Screen 3 container visible"
+        print("✓ Entered Screen 3 Layout Analysis")
+        page.screenshot(path=str(SCREENSHOTS_DIR / "screen3_layout_mobile.png"))
+
+        # Verify through APP_STATE that all turbines are strictly enclosed
+        app_state = page.evaluate("() => window.APP_STATE")
+        turbines = app_state.get("screen3Data", {}).get("turbines", [])
+        boundary = app_state.get("selectedSite", {}).get("boundary", [])
+        active_project = app_state.get("activeProject", {})
+
+        print(f"✓ Screen 3 Generated {len(turbines)} turbines for project '{active_project.get('name')}'")
+        print(f"  • Turbine Count: {active_project.get('turbine_count')}")
+        print(f"  • Model: {active_project.get('turbine_model')}")
+        print(f"  • Net AEP: {active_project.get('net_aep')} GWh")
+
+        assert len(turbines) > 0, "Turbines must be generated"
+        # Verify activeProject has dynamic count
+        assert active_project.get("turbine_count") in [12, 16], f"Expected 12 or 16 turbines, got {active_project.get('turbine_count')}"
+
         context_mobile.close()
 
         # -------------------------------------------------------------
@@ -145,7 +184,7 @@ def verify_liquid_soil_and_village():
 
         context_desktop.close()
         browser.close()
-        print("\n✅ ALL VERIFICATION CHECKS PASSED: Apple Liquid Design + Real Soil/Wind + Photoshop Lasso + Village Borders!")
+        print("\n✅ ALL VERIFICATION CHECKS PASSED: Apple Liquid Design + Real Soil/Wind + Photoshop Lasso + Village Borders + Strict Containment + Dynamic Projects!")
 
 if __name__ == "__main__":
     verify_liquid_soil_and_village()

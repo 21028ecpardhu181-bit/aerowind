@@ -82,6 +82,11 @@ class InitialLayoutResponse(BaseModel):
     wind_speed_mps: float
     wind_rose: List[WindRoseBin]
     status: str
+    net_aep_gwh: Optional[float] = None
+    gross_aep_gwh: Optional[float] = None
+    wake_loss_percent: Optional[float] = None
+    min_spacing_m: Optional[float] = None
+    conflicts_count: Optional[int] = None
 
 
 def get_cardinal_label(deg: float) -> str:
@@ -203,6 +208,11 @@ def compute_initial_layout(req: InitialLayoutRequest) -> InitialLayoutResponse:
         wind_speed_mps=req.wind_speed_mps,
         wind_rose=wind_rose,
         status="Simulation / Estimated values",
+        gross_aep_gwh=baseline.get("gross_aep_gwh", baseline["aep_gwh"] * 1.08),
+        net_aep_gwh=baseline["aep_gwh"],
+        wake_loss_percent=baseline["wake_loss_pct"],
+        min_spacing_m=round(min_spacing, 0),
+        conflicts_count=len(wake_conflicts),
     )
 
 

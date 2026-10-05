@@ -44,10 +44,21 @@ export const ProjectHome: React.FC<ProjectHomeProps> = ({
 
   // Authentic engineering values calculated from active project state
   const turbineCount = currentProj?.turbine_count || 12;
-  const ratingMw = 2.5;
+  const getTurbineRating = (model?: string): number => {
+    if (!model) return 2.5;
+    const m = model.toLowerCase();
+    if (m.includes('14.0') || m.includes('14mw') || m.includes('offshore')) return 14.0;
+    if (m.includes('6.0') || m.includes('6mw')) return 6.0;
+    if (m.includes('4.2') || m.includes('4.2mw')) return 4.2;
+    if (m.includes('3.4') || m.includes('sg-132') || m.includes('sg 3.4')) return 3.4;
+    if (m.includes('2.1') || m.includes('s120')) return 2.1;
+    if (m.includes('2.0') || m.includes('v110')) return 2.0;
+    return 2.5;
+  };
+  const ratingMw = (currentProj as any)?.rated_power_mw || getTurbineRating(currentProj?.turbine_model);
   const installedCapacityMw = (turbineCount * ratingMw).toFixed(1);
-  const netAep = currentProj?.net_aep ? currentProj.net_aep.toFixed(2) : (turbineCount * 7.1).toFixed(2);
-  const wakeLoss = currentProj?.wake_loss_percent ? currentProj.wake_loss_percent.toFixed(2) : '6.12';
+  const netAep = currentProj?.net_aep ? currentProj.net_aep.toFixed(2) : (turbineCount * ratingMw * 2.85).toFixed(2);
+  const wakeLoss = currentProj?.wake_loss_percent ? currentProj.wake_loss_percent.toFixed(2) : '5.80';
   const studyArea = currentProj?.area_km2 ? `${currentProj.area_km2.toFixed(1)} km²` : '24.8 km²';
   const windSpeed = telemetry ? `${telemetry.wind_speed_120m} m/s` : '7.82 m/s';
   const windDir = telemetry ? telemetry.wind_direction_deg : 45;
@@ -63,8 +74,8 @@ export const ProjectHome: React.FC<ProjectHomeProps> = ({
         }}
       />
 
-      {/* Soft atmospheric gradient to ensure cards and text readability */}
-      <div className="absolute inset-0 bg-gradient-to-b from-white/10 via-white/40 to-[#F8FAFC]/95 pointer-events-none" />
+      {/* Gentle liquid glow gradients: keeps photo fully visible while maximizing text legibility */}
+      <div className="absolute inset-0 bg-gradient-to-b from-white/20 via-white/35 to-slate-100/85 pointer-events-none" />
 
       {/* Main Home Content Container */}
       <div className="relative z-10 w-full max-w-5xl mx-auto px-4 sm:px-6 pt-3 sm:pt-6 flex flex-col gap-5 sm:gap-6">

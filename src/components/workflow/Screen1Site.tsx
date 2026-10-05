@@ -24,7 +24,11 @@ import {
   Wind,
   Mountain,
   Sliders,
-  Maximize2
+  Maximize2,
+  ShieldCheck,
+  Landmark,
+  Flame,
+  PenTool
 } from 'lucide-react';
 import { SiteInfo, TelemetryData } from '../../types';
 import { Button } from '../ui/Button';
@@ -543,7 +547,7 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
           <div class="w-6 h-6 rounded-full bg-slate-900 border-2 border-[#FFD21F] text-[#FFD21F] font-mono font-black text-[10px] flex items-center justify-center shadow-lg transition-transform hover:scale-125 cursor-move ${
             isFirst ? 'ring-2 ring-emerald-400 ring-offset-1' : ''
           }" title="${isFirst ? 'Click to close polygon' : 'Drag to adjust vertex'}">
-            ${isFirst ? '✓' : idx + 1}
+            ${idx + 1}
           </div>
         `,
         iconSize: [24, 24],
@@ -579,33 +583,55 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
   const handleDirectMapSelection = (lat: number, lon: number) => {
     const shortName = `${lat.toFixed(3)}°N, ${lon.toFixed(3)}°E`;
     const r = selectedRadius || site.radiusKm || 3.0;
-    const boundary = generateCircleVertices(lat, lon, r);
-    const areaKm2 = Math.round(Math.PI * r * r * 10) / 10;
-    const newSite = {
+    const fallbackBoundary = generateCircleVertices(lat, lon, r);
+    const fallbackAreaKm2 = Math.round(Math.PI * r * r * 10) / 10;
+    
+    // Initial display with radius concession
+    onSiteChange({
       ...site,
       lat,
       lon,
       shortName,
       name: `${shortName}, Engineering Site`,
       radiusKm: r,
-      areaKm2,
-      boundary,
-    };
-    onSiteChange(newSite);
-    renderBoundary(lat, lon, areaKm2, boundary);
+      areaKm2: fallbackAreaKm2,
+      boundary: fallbackBoundary,
+    });
+    renderBoundary(lat, lon, fallbackAreaKm2, fallbackBoundary);
 
-    // Reverse geocode quietly via OpenStreetMap Nominatim
-    fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (data && data.display_name) {
-          onSiteChange({ name: data.display_name, shortName: data.display_name.split(',')[0] });
+    // Automatically check if this location has an official village/town boundary!
+    fetchVillageBoundary('', lat, lon)
+      .then((vRes) => {
+        if (vRes && vRes.boundary && vRes.boundary.length >= 3) {
+          setVillageData(vRes);
+          const cLat = vRes.center ? vRes.center[0] : (vRes.latitude ?? lat);
+          const cLon = vRes.center ? vRes.center[1] : (vRes.longitude ?? lon);
+          const vArea = vRes.area_km2 || calculatePolygonAreaKm2(vRes.boundary);
+          onSiteChange({
+            name: vRes.display_name || vRes.village_name,
+            shortName: vRes.village_name,
+            lat: cLat,
+            lon: cLon,
+            areaKm2: vArea,
+            boundary: vRes.boundary,
+          });
+          renderBoundary(cLat, cLon, vArea, vRes.boundary);
+        } else {
+          // Standard reverse geocode for name
+          fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`)
+            .then((r) => r.json())
+            .then((data) => {
+              if (data && data.display_name) {
+                onSiteChange({ name: data.display_name, shortName: data.display_name.split(',')[0] });
+              }
+            })
+            .catch(() => {});
         }
       })
       .catch(() => {});
   };
 
-  // Search Submission
+  // Search Submission: Automatically searches and loads village boundary polygon
   const handleSearchSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const query = searchVal.trim();
@@ -614,6 +640,29 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
     setIsSearching(true);
     setSearchError('');
     try {
+      // 1. Auto-fetch official village/town administrative boundary
+      const vRes = await fetchVillageBoundary(query);
+      if (vRes && vRes.boundary && vRes.boundary.length >= 3) {
+        setVillageData(vRes);
+        const centerLat = vRes.center ? vRes.center[0] : (vRes.latitude ?? site.lat);
+        const centerLon = vRes.center ? vRes.center[1] : (vRes.longitude ?? site.lon);
+        const area = vRes.area_km2 || calculatePolygonAreaKm2(vRes.boundary);
+
+        onSiteChange({
+          name: vRes.display_name || vRes.village_name || query,
+          shortName: vRes.village_name || query,
+          lat: centerLat,
+          lon: centerLon,
+          areaKm2: area,
+          boundary: vRes.boundary,
+        });
+
+        renderBoundary(centerLat, centerLon, area, vRes.boundary);
+        setActiveDrawerTab('village');
+        return;
+      }
+
+      // 2. Geocoding fallback if no official boundary polygon in cadastre
       await onSearchLocation(query);
     } catch (_) {
       setSearchError('Location not found. Try entering coordinates or clicking the map.');
@@ -631,13 +680,13 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
       const res = await fetchVillageBoundary(villageName, site.lat, site.lon);
       if (res && res.boundary && res.boundary.length >= 3) {
         setVillageData(res);
-        const centerLat = res.center[0];
-        const centerLon = res.center[1];
+        const centerLat = res.center ? res.center[0] : (res.latitude ?? site.lat);
+        const centerLon = res.center ? res.center[1] : (res.longitude ?? site.lon);
         const area = res.area_km2 || calculatePolygonAreaKm2(res.boundary);
 
         onSiteChange({
-          name: res.display_name || res.name,
-          shortName: res.name,
+          name: res.display_name || res.village_name || villageName,
+          shortName: res.village_name || villageName,
           lat: centerLat,
           lon: centerLon,
           areaKm2: area,
@@ -845,26 +894,28 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
               id="btn-search-mode"
               type="button"
               onClick={() => { setMode('search'); onToggleDrawMode(false); }}
-              className={`px-3 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all ${
+              className={`px-3 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
                 mode === 'search'
                   ? 'bg-slate-950 text-white shadow-xs'
                   : 'text-slate-600 dark:text-slate-300 hover:bg-white/50'
               }`}
             >
-              🔍 Site
+              <MapPin className="w-3 h-3" />
+              <span>Site</span>
             </button>
 
             <button
               id="btn-radius-mode"
               type="button"
               onClick={() => { setMode('radius'); onToggleDrawMode(false); }}
-              className={`px-3 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all ${
+              className={`px-3 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
                 mode === 'radius'
                   ? 'bg-[#FFD21F] text-slate-950 font-black shadow-xs'
                   : 'text-slate-600 dark:text-slate-300 hover:bg-white/50'
               }`}
             >
-              ⭕ Radius
+              <CircleDot className="w-3 h-3" />
+              <span>Radius</span>
             </button>
 
             <button
@@ -875,38 +926,42 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
                 setMode(next);
                 onToggleDrawMode(next === 'draw');
               }}
-              className={`px-3 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all flex items-center gap-1 ${
+              className={`px-3 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
                 mode === 'draw'
                   ? 'bg-[#FFD21F] text-slate-950 font-black shadow-xs animate-pulse'
                   : 'text-slate-600 dark:text-slate-300 hover:bg-white/50'
               }`}
             >
               <Edit3 className="w-3 h-3" />
-              <span>✏️ Photoshop Lasso</span>
+              <span>Lasso Boundary</span>
             </button>
 
             <button
               type="button"
+              id="btn-village-mode"
               onClick={() => { setMode('village'); onToggleDrawMode(false); }}
-              className={`px-3 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all ${
+              className={`px-3 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
                 mode === 'village'
                   ? 'bg-emerald-600 text-white shadow-xs'
                   : 'text-slate-600 dark:text-slate-300 hover:bg-white/50'
               }`}
             >
-              🏘️ Village Border
+              <Landmark className="w-3 h-3" />
+              <span>Village Cadastre</span>
             </button>
 
             <button
               type="button"
+              id="btn-hotspots-mode"
               onClick={() => { setMode('hotspots'); onToggleDrawMode(false); }}
-              className={`px-3 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all ${
+              className={`px-3 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
                 mode === 'hotspots'
                   ? 'bg-amber-600 text-white shadow-xs'
                   : 'text-slate-600 dark:text-slate-300 hover:bg-white/50'
               }`}
             >
-              ⚡ Hotspots
+              <Flame className="w-3 h-3" />
+              <span>Hotspots</span>
             </button>
           </div>
 
@@ -1107,9 +1162,10 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
               id="btn-close-polygon-draw"
               disabled={drawnPoints.length < 3}
               onClick={handleClosePolygon}
-              className="px-3 py-1 rounded-full bg-[#FFD21F] hover:bg-[#F2C50F] text-slate-950 font-black text-xs disabled:opacity-40 transition-all active:scale-95"
+              className="px-3 py-1 rounded-full bg-[#FFD21F] hover:bg-[#F2C50F] text-slate-950 font-black text-xs disabled:opacity-40 transition-all active:scale-95 flex items-center gap-1"
             >
-              ✓ Close Polygon
+              <Check className="w-3 h-3 stroke-[3]" />
+              <span>Enclose Boundary</span>
             </button>
 
             <button
@@ -1335,44 +1391,52 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
         {/* Navigation Tabs for Real Geotechnical & Atmospheric Stack */}
         <div className="flex items-center justify-between border-b border-slate-200/60 dark:border-white/10 px-3 py-1 bg-white/30 dark:bg-white/5">
           <button
+            id="tab-drawer-soil"
             onClick={() => setActiveDrawerTab('soil')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
               activeDrawerTab === 'soil'
                 ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
                 : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100'
             }`}
           >
-            🧱 Soil (ISRIC)
+            <Layers className="w-3.5 h-3.5" />
+            <span>Soil Telemetry</span>
           </button>
           <button
+            id="tab-drawer-wind"
             onClick={() => setActiveDrawerTab('wind')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
               activeDrawerTab === 'wind'
                 ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
                 : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100'
             }`}
           >
-            🍃 Wind (100m)
+            <Wind className="w-3.5 h-3.5" />
+            <span>Wind Resource</span>
           </button>
           <button
+            id="tab-drawer-village"
             onClick={() => setActiveDrawerTab('village')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
               activeDrawerTab === 'village'
                 ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
                 : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100'
             }`}
           >
-            🗺️ Village / Land
+            <Compass className="w-3.5 h-3.5" />
+            <span>Village Cadastre</span>
           </button>
           <button
+            id="tab-drawer-intel"
             onClick={() => setActiveDrawerTab('intel')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
               activeDrawerTab === 'intel'
                 ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
                 : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100'
             }`}
           >
-            ✓ Checks
+            <ShieldCheck className="w-3.5 h-3.5" />
+            <span>Verification</span>
           </button>
         </div>
 
@@ -1528,8 +1592,8 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
                   <span className="font-sans text-[10px] text-slate-500">5-Class Feasibility Mask</span>
                   <span id="meta-land-feasibility" className="text-[11px] text-emerald-600 font-bold">
                     {landData
-                      ? `✓ ${landData.buildable_percent}% Buildable · ${landData.restricted_percent}% Restricted · ${landData.excluded_percent}% Excluded`
-                      : '✓ 84% Buildable · 11% Restricted · 5% Excluded'}
+                      ? `${landData.buildable_percent}% Buildable · ${landData.restricted_percent}% Restricted · ${landData.excluded_percent}% Excluded`
+                      : '84% Buildable · 11% Restricted · 5% Excluded'}
                   </span>
                 </div>
               </div>
@@ -1559,8 +1623,9 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
             <div id="site-intelligence-card" className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-white/10 flex flex-col gap-2">
               <div className="flex items-center justify-between mb-1">
                 <span className="font-bold text-slate-800 dark:text-white text-xs uppercase tracking-wider">Site Verification Checklist</span>
-                <span id="intel-overall-pill" className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                  ✓ Verified
+                <span id="intel-overall-pill" className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold flex items-center gap-1">
+                  <Check className="w-3 h-3 text-emerald-700 stroke-[3]" />
+                  <span>Verified</span>
                 </span>
               </div>
               <div id="intel-checks-list" className="flex flex-col gap-1.5">

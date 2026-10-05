@@ -240,7 +240,7 @@ export const Screen2Config: React.FC<Screen2ConfigProps> = ({
           >
             <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-200/60 text-xs">
               <div className="flex items-center gap-2 font-bold">
-                <span>{isOverCapacity ? '⚠️' : '✓'}</span>
+                {isOverCapacity ? <AlertCircle className="w-3.5 h-3.5 text-amber-600" /> : <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />}
                 <span id="capacity-status-headline">
                   {isOverCapacity ? 'Exceeds Relaxed Spacing Budget' : 'Site Capacity Optimal'}
                 </span>

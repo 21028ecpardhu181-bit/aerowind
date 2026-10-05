@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Cpu, Activity, Zap, CheckCircle2, ArrowRight } from 'lucide-react';
+import { Cpu, Activity, Zap, CheckCircle2, ArrowRight, Award } from 'lucide-react';
 import { OptimizationData } from '../../types';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
@@ -89,8 +89,9 @@ export const Screen4Optimize: React.FC<Screen4OptimizeProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-center">
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Best AEP</span>
-            <div id="s4-kpi-best-aep" className="text-xl font-black text-slate-900 font-mono tabular-nums mt-1">
-              🏆 {bestAep} GWh/yr
+            <div id="s4-kpi-best-aep" className="text-xl font-black text-slate-900 font-mono tabular-nums mt-1 flex items-center justify-center gap-1.5">
+              <Award className="w-5 h-5 text-amber-500" />
+              <span>{bestAep} GWh/yr</span>
             </div>
           </div>
 
@@ -113,7 +114,10 @@ export const Screen4Optimize: React.FC<Screen4OptimizeProps> = ({
         <div id="s4-section-circuit" className="p-5 rounded-2xl bg-white border border-slate-200 text-xs text-slate-700">
           <div className="font-bold text-slate-900 mb-2 flex items-center justify-between">
             <span>Optimization Method: Hybrid WS-QAOA</span>
-            <span className="text-[11px] font-mono text-emerald-600 font-medium">✓ Qiskit Aer Sampler</span>
+            <span className="text-[11px] font-mono text-emerald-600 font-medium flex items-center gap-1">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>Qiskit Aer Sampler</span>
+            </span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-[11px] text-slate-600">
             <div id="s4-check-boundary" className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center gap-2">

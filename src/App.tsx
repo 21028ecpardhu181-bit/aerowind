@@ -35,6 +35,7 @@ import { DataSourcesModal } from './components/workflow/DataSourcesModal';
 import { AuthModal } from './components/workflow/AuthModal';
 import { BottomSheet } from './components/ui/BottomSheet';
 import { ProjectSelector } from './components/dashboard/ProjectSelector';
+import { ensureTurbinesInsideBoundary, generatePolygonEnclosedTurbines } from './utils/geometry';
 
 // Expose APP_STATE on window for automated testing and test assertion harnesses
 declare global {
@@ -162,12 +163,12 @@ export function App() {
 
   // Active farm configuration
   const [config, setConfig] = useState<FarmConfig>({
-    turbineCount: 20,
-    model: 'ge-140',
-    modelName: 'GE 14.0 MW Offshore',
-    rotorDiameter: 140.0,
-    hubHeight: 120.0,
-    ratedPowerKw: 14000,
+    turbineCount: 12,
+    model: 'ge-120',
+    modelName: 'GE 2.5-120',
+    rotorDiameter: 120.0,
+    hubHeight: 110.0,
+    ratedPowerKw: 2500,
     windDirectionDeg: 45.0,
     spacingMultiplierD: 5.0,
     wakeDecay: 0.075,
@@ -273,6 +274,11 @@ export function App() {
       lon: p.longitude,
       areaKm2: p.area_km2 || 24.8,
     }));
+    setConfig(prev => ({
+      ...prev,
+      turbineCount: p.turbine_count || prev.turbineCount,
+      modelName: p.turbine_model || prev.modelName,
+    }));
     fetchTelemetry(p.latitude, p.longitude).then(setTelemetry).catch(() => {});
     setCurrentScreen('dashboard');
     setCurrentTab('dashboard');
@@ -292,13 +298,20 @@ export function App() {
       terrainType: 'Coastal / Mild Terrain',
       windSpeedMps: 7.82,
     }));
+    setConfig(prev => ({
+      ...prev,
+      turbineCount: p.turbine_count || prev.turbineCount,
+      modelName: p.turbine_model || prev.modelName,
+    }));
     fetchTelemetry(p.latitude, p.longitude).then(setTelemetry).catch(() => {});
 
     const statusNorm = (p.status || '').toLowerCase();
     if (statusNorm.includes('opt') || statusNorm.includes('done')) {
       try {
         const full = await fetchProject(p.id).catch(() => null);
-        const turbs = full?.turbines || [];
+        const rawTurbs = full?.turbines || [];
+        const baseTurbs = rawTurbs.length > 0 ? rawTurbs : generatePolygonEnclosedTurbines(site.boundary, p.turbine_count, p.latitude, p.longitude);
+        const turbs = ensureTurbinesInsideBoundary(baseTurbs, site.boundary, p.latitude, p.longitude);
         setOptimizationData({
           problem_name: p.name,
           variables_count: turbs.length || p.turbine_count,
@@ -314,7 +327,7 @@ export function App() {
           turbine_count_actual: turbs.length || p.turbine_count,
           minimum_spacing_required_m: 600,
           minimum_spacing_actual_m: 612,
-          optimized_turbines: turbs.length > 0 ? turbs : generateMockTurbines(p.latitude, p.longitude, p.turbine_count),
+          optimized_turbines: turbs,
           status_headline: 'Best feasible layout identified',
           status_description: 'Quantum WS-QAOA optimization certified.',
         });
@@ -375,50 +388,124 @@ export function App() {
       setSite(effectiveSite);
     }
     const cleanLocation = effectiveSite.shortName || effectiveSite.name.split(',')[0].trim();
-    const newProjId = `proj-${Date.now().toString(36)}`;
-    const newProjName = `${cleanLocation} Wind Complex`;
     
+    // Check if modifying an existing project or creating a new one
+    const existingIndex = projects.findIndex(
+      p => p.id === activeProject?.id || p.location_name.toLowerCase() === effectiveSite.name.toLowerCase()
+    );
+    const existing = existingIndex >= 0 ? projects[existingIndex] : null;
+    const projId = existing ? existing.id : `proj-${Date.now().toString(36)}`;
+    const projName = existing ? existing.name : `${cleanLocation} Wind Complex`;
+    
+    const count = config.turbineCount || 12;
+    const model = config.modelName || 'GE 2.5-120';
+    let mwPerTurbine = 2.5;
+    if (model.includes('14.0') || model.includes('14MW')) mwPerTurbine = 14.0;
+    else if (model.includes('3.4')) mwPerTurbine = 3.4;
+    else if (model.includes('2.1')) mwPerTurbine = 2.1;
+    else if (model.includes('2.0')) mwPerTurbine = 2.0;
+
+    const netAep = Math.round(count * mwPerTurbine * 8.76 * 0.35 * 0.94 * 10) / 10;
+
     const newProject: ProjectSummary = {
-      id: newProjId,
-      name: newProjName,
+      id: projId,
+      name: projName,
       location_name: effectiveSite.name,
       latitude: effectiveSite.lat,
       longitude: effectiveSite.lon,
       area_km2: effectiveSite.areaKm2 || 24.8,
-      turbine_count: config.turbineCount || 12,
-      turbine_model: config.modelName || 'GE 2.5-120',
+      turbine_count: count,
+      turbine_model: model,
       suitability: 'Preferred',
-      net_aep: Math.round((config.turbineCount || 12) * 7.1 * 10) / 10,
+      net_aep: netAep,
       wake_loss_percent: 6.12,
       status: 'Configured',
       updated_at: 'Just now',
     };
 
-    // Update active project and list immediately so it is NEVER fixed to Kanyakumari
+    // Update active project and list immediately so it is dynamic and synchronized
     setActiveProject(newProject);
-    setProjects((prev) => [newProject, ...prev.filter(p => p.id !== newProjId)]);
+    setProjects((prev) => [newProject, ...prev.filter(p => p.id !== projId)]);
 
     // Persist in localStorage
     try {
-      const existing = JSON.parse(localStorage.getItem('aqw_user_projects') || '[]');
-      localStorage.setItem('aqw_user_projects', JSON.stringify([newProject, ...existing.filter((p: any) => p.id !== newProjId)]));
+      const stored = JSON.parse(localStorage.getItem('aqw_user_projects') || '[]');
+      localStorage.setItem('aqw_user_projects', JSON.stringify([newProject, ...stored.filter((p: any) => p.id !== projId)]));
     } catch (_) {}
 
     // Save to backend database
     createProject({
-      id: newProjId,
-      name: newProjName,
+      id: projId,
+      name: projName,
       location_name: effectiveSite.name,
       latitude: effectiveSite.lat,
       longitude: effectiveSite.lon,
       area_km2: effectiveSite.areaKm2,
-      turbine_count: config.turbineCount,
-      turbine_model: config.modelName,
+      turbine_count: count,
+      turbine_model: model,
+      net_aep: netAep,
       status: 'configured',
       boundary: effectiveSite.boundary as any,
     }).catch(() => {});
 
     setCurrentScreen('s2_config');
+  };
+
+  // Synchronized Config Update Handler: immediately updates active project and all project lists
+  const handleUpdateConfig = (newCfg: Partial<FarmConfig>) => {
+    setConfig((prev) => {
+      const updatedCfg = { ...prev, ...newCfg };
+      const count = updatedCfg.turbineCount || 12;
+      const model = updatedCfg.modelName || 'GE 2.5-120';
+      
+      let mwPerTurbine = 2.5;
+      if (model.includes('14.0') || model.includes('14MW')) mwPerTurbine = 14.0;
+      else if (model.includes('3.4')) mwPerTurbine = 3.4;
+      else if (model.includes('2.1')) mwPerTurbine = 2.1;
+      else if (model.includes('2.0')) mwPerTurbine = 2.0;
+
+      const estimatedNetAep = Math.round(count * mwPerTurbine * 8.76 * 0.35 * 0.94 * 10) / 10;
+
+      if (activeProject) {
+        const updatedProject: ProjectSummary = {
+          ...activeProject,
+          turbine_count: count,
+          turbine_model: model,
+          net_aep: estimatedNetAep,
+          updated_at: 'Just now',
+        };
+        setActiveProject(updatedProject);
+        setProjects((list) => {
+          const next = list.map((p) => (p.id === updatedProject.id ? updatedProject : p));
+          try {
+            const stored = JSON.parse(localStorage.getItem('aqw_user_projects') || '[]');
+            const updatedStored = stored.map((p: any) => (p.id === updatedProject.id ? updatedProject : p));
+            if (!updatedStored.some((p: any) => p.id === updatedProject.id)) {
+              updatedStored.unshift(updatedProject);
+            }
+            localStorage.setItem('aqw_user_projects', JSON.stringify(updatedStored));
+          } catch (_) {}
+          return next;
+        });
+
+        // Persist to backend database as well
+        createProject({
+          id: activeProject.id,
+          name: activeProject.name,
+          location_name: activeProject.location_name,
+          latitude: activeProject.latitude,
+          longitude: activeProject.longitude,
+          area_km2: activeProject.area_km2,
+          turbine_count: count,
+          turbine_model: model,
+          net_aep: estimatedNetAep,
+          status: activeProject.status || 'configured',
+          boundary: site.boundary as any,
+        }).catch(() => {});
+      }
+
+      return updatedCfg;
+    });
   };
 
   const handleGenerateLayout = async () => {
@@ -438,47 +525,87 @@ export function App() {
 
       const res = await generateInitialLayout(payload);
       if (res && res.turbines) {
+        // Enforce 100% boundary containment
+        const containedTurbines = ensureTurbinesInsideBoundary(
+          res.turbines,
+          site.boundary,
+          site.lat,
+          site.lon
+        );
+        const containedCandidates = res.candidate_positions
+          ? ensureTurbinesInsideBoundary(res.candidate_positions, site.boundary, site.lat, site.lon)
+          : containedTurbines;
+
+        const grossAep = res.gross_aep_gwh || (res as any).estimated_aep_gwh || Math.round(config.turbineCount * 8.5 * 10) / 10;
+        const netAep = res.net_aep_gwh || Math.round(grossAep * (1 - (res.wake_loss_percent || 6.12) / 100) * 10) / 10;
+
         setLayoutData({
-          turbines: res.turbines,
-          candidates: res.candidate_positions || res.candidates || [],
-          candidate_positions: res.candidate_positions || res.candidates || [],
-          gross_aep_gwh: res.gross_aep_gwh,
-          net_aep_gwh: res.net_aep_gwh,
-          wake_loss_percent: res.wake_loss_percent,
-          min_spacing_m: res.min_spacing_m,
+          turbines: containedTurbines,
+          candidates: containedCandidates,
+          candidate_positions: containedCandidates,
+          gross_aep_gwh: grossAep,
+          net_aep_gwh: netAep,
+          wake_loss_percent: res.wake_loss_percent || 6.12,
+          min_spacing_m: res.min_spacing_m || 600,
           conflicts_count: res.conflicts_count || 0,
           wind_speed_mps: site.windSpeedMps,
           wind_direction_deg: config.windDirectionDeg,
         });
 
-        // Update active project status
+        // Update active project status and turbine count
         if (activeProject) {
           const updated: ProjectSummary = {
             ...activeProject,
-            net_aep: res.net_aep_gwh,
-            wake_loss_percent: res.wake_loss_percent,
+            turbine_count: config.turbineCount,
+            turbine_model: config.modelName,
+            net_aep: netAep,
+            wake_loss_percent: res.wake_loss_percent || 6.12,
             status: 'Analysis Complete',
+            updated_at: 'Just now',
           };
           setActiveProject(updated);
           setProjects(prev => prev.map(p => p.id === updated.id ? updated : p));
+          try {
+            const stored = JSON.parse(localStorage.getItem('aqw_user_projects') || '[]');
+            localStorage.setItem('aqw_user_projects', JSON.stringify(stored.map((p: any) => p.id === updated.id ? updated : p)));
+          } catch (_) {}
         }
       }
     } catch (e) {
-      console.warn('Initial layout generation error, falling back to mock:', e);
-      const currentRadius = site.radiusKm || Math.sqrt((site.areaKm2 || 28.3) / Math.PI) || 3.0;
-      const turbs = generateMockTurbines(site.lat, site.lon, config.turbineCount, currentRadius);
+      console.warn('Initial layout generation error, falling back to boundary-enclosed mock:', e);
+      const turbs = generatePolygonEnclosedTurbines(site.boundary, config.turbineCount, site.lat, site.lon, site.windSpeedMps);
+      const grossAep = Math.round(config.turbineCount * 8.5 * 10) / 10;
+      const netAep = Math.round(config.turbineCount * 7.4 * 10) / 10;
       setLayoutData({
         turbines: turbs,
         candidates: turbs,
         candidate_positions: turbs,
-        gross_aep_gwh: Math.round(config.turbineCount * 8.5 * 10) / 10,
-        net_aep_gwh: Math.round(config.turbineCount * 7.4 * 10) / 10,
+        gross_aep_gwh: grossAep,
+        net_aep_gwh: netAep,
         wake_loss_percent: 12.8,
         min_spacing_m: 600,
         conflicts_count: 0,
         wind_speed_mps: site.windSpeedMps,
         wind_direction_deg: config.windDirectionDeg,
       });
+
+      if (activeProject) {
+        const updated: ProjectSummary = {
+          ...activeProject,
+          turbine_count: config.turbineCount,
+          turbine_model: config.modelName,
+          net_aep: netAep,
+          wake_loss_percent: 12.8,
+          status: 'Analysis Complete',
+          updated_at: 'Just now',
+        };
+        setActiveProject(updated);
+        setProjects(prev => prev.map(p => p.id === updated.id ? updated : p));
+        try {
+          const stored = JSON.parse(localStorage.getItem('aqw_user_projects') || '[]');
+          localStorage.setItem('aqw_user_projects', JSON.stringify(stored.map((p: any) => p.id === updated.id ? updated : p)));
+        } catch (_) {}
+      }
     }
     setCurrentScreen('s3_analysis');
   };
@@ -505,7 +632,7 @@ export function App() {
 
       const res = await runOptimization(payload);
       if (res && res.layout) {
-        const optTurbs = res.layout.map((t: any, i: number) => ({
+        const rawOptTurbs = res.layout.map((t: any, i: number) => ({
           id: t.id ? `T${t.id}` : `T${i + 1}`,
           label: `T-${String(i + 1).padStart(2, '0')}`,
           lat: t.lat,
@@ -514,20 +641,24 @@ export function App() {
           effective_mps: t.effective_mps || 7.8,
           wake_deficit_pct: t.wake_deficit_pct || 2.4,
         }));
+        const optTurbs = ensureTurbinesInsideBoundary(rawOptTurbs, site.boundary, site.lat, site.lon);
+
+        const bestAep = res.aep_gwh ? Math.round(res.aep_gwh * 10) / 10 : Math.round(layoutData.net_aep_gwh * 1.085 * 10) / 10;
+        const bestWakeLoss = res.wake_loss_pct ?? Math.max(3.5, Math.round(layoutData.wake_loss_percent * 0.43 * 10) / 10);
 
         setOptimizationData({
           problem_name: activeProject ? activeProject.name : `${site.shortName} Wind Complex`,
-          variables_count: res.layout.length,
-          qubits_count: res.layout.length,
+          variables_count: optTurbs.length,
+          qubits_count: optTurbs.length,
           iterations_total: 100,
           current_iteration: 100,
           initial_aep_gwh: layoutData.gross_aep_gwh,
-          best_aep_gwh: res.aep_gwh || layoutData.net_aep_gwh * 1.085,
+          best_aep_gwh: bestAep,
           initial_wake_loss_pct: layoutData.wake_loss_percent,
-          best_wake_loss_pct: res.wake_loss_pct ?? Math.max(3.5, layoutData.wake_loss_percent * 0.43),
+          best_wake_loss_pct: bestWakeLoss,
           improvement_pct: 8.5,
           turbine_count_target: config.turbineCount,
-          turbine_count_actual: res.layout.length,
+          turbine_count_actual: optTurbs.length,
           minimum_spacing_required_m: 600,
           minimum_spacing_actual_m: 612,
           optimized_turbines: optTurbs,
@@ -540,18 +671,32 @@ export function App() {
         if (activeProject) {
           const updated: ProjectSummary = {
             ...activeProject,
-            net_aep: Math.round((res.aep_gwh || layoutData.net_aep_gwh * 1.085) * 10) / 10,
-            wake_loss_percent: Math.round((res.wake_loss_pct || 6.12) * 10) / 10,
+            turbine_count: config.turbineCount,
+            turbine_model: config.modelName,
+            net_aep: bestAep,
+            wake_loss_percent: bestWakeLoss,
             status: 'Optimized',
+            updated_at: 'Just now',
           };
           setActiveProject(updated);
           setProjects(prev => prev.map(p => p.id === updated.id ? updated : p));
+          try {
+            const stored = JSON.parse(localStorage.getItem('aqw_user_projects') || '[]');
+            localStorage.setItem('aqw_user_projects', JSON.stringify(stored.map((p: any) => p.id === updated.id ? updated : p)));
+          } catch (_) {}
         }
       }
     } catch (e) {
       console.warn('Optimization API call failed, generating physical layout fallback:', e);
-      const currentRadius = site.radiusKm || Math.sqrt((site.areaKm2 || 28.3) / Math.PI) || 3.0;
-      const optTurbs = generateMockTurbines(site.lat, site.lon, Math.min(8, config.turbineCount), currentRadius);
+      const optTurbs = generatePolygonEnclosedTurbines(
+        site.boundary,
+        Math.min(8, config.turbineCount),
+        site.lat,
+        site.lon,
+        site.windSpeedMps
+      );
+      const bestAep = Math.round(layoutData.net_aep_gwh * 1.085 * 10) / 10;
+      const bestWakeLoss = Math.max(3.5, Math.round(layoutData.wake_loss_percent * 0.43 * 10) / 10);
       setOptimizationData({
         problem_name: activeProject ? activeProject.name : `${site.shortName} Wind Farm`,
         variables_count: optTurbs.length,
@@ -559,9 +704,9 @@ export function App() {
         iterations_total: 100,
         current_iteration: 100,
         initial_aep_gwh: layoutData.gross_aep_gwh,
-        best_aep_gwh: layoutData.net_aep_gwh * 1.085,
+        best_aep_gwh: bestAep,
         initial_wake_loss_pct: layoutData.wake_loss_percent,
-        best_wake_loss_pct: Math.max(3.5, layoutData.wake_loss_percent * 0.43),
+        best_wake_loss_pct: bestWakeLoss,
         improvement_pct: 8.5,
         turbine_count_target: config.turbineCount,
         turbine_count_actual: optTurbs.length,
@@ -575,12 +720,19 @@ export function App() {
       if (activeProject) {
         const updated: ProjectSummary = {
           ...activeProject,
-          net_aep: Math.round(layoutData.net_aep_gwh * 1.085 * 10) / 10,
-          wake_loss_percent: 6.12,
+          turbine_count: config.turbineCount,
+          turbine_model: config.modelName,
+          net_aep: bestAep,
+          wake_loss_percent: bestWakeLoss,
           status: 'Optimized',
+          updated_at: 'Just now',
         };
         setActiveProject(updated);
         setProjects(prev => prev.map(p => p.id === updated.id ? updated : p));
+        try {
+          const stored = JSON.parse(localStorage.getItem('aqw_user_projects') || '[]');
+          localStorage.setItem('aqw_user_projects', JSON.stringify(stored.map((p: any) => p.id === updated.id ? updated : p)));
+        } catch (_) {}
       }
     }
   };
@@ -725,7 +877,7 @@ export function App() {
             <Screen2Config
               site={site}
               config={config}
-              onUpdateConfig={(newCfg) => setConfig((prev) => ({ ...prev, ...newCfg }))}
+              onUpdateConfig={handleUpdateConfig}
               onGenerateLayout={handleGenerateLayout}
               onBack={() => setCurrentScreen('s1_site')}
             />
@@ -835,24 +987,7 @@ export function App() {
   );
 }
 
-// Helper: Generates realistic geodetic coordinates for candidate layout visualization scaled to concession radius
-function generateMockTurbines(clat: number, clon: number, count: number, radiusKm: number = 3.0): Turbine[] {
-  const turbs: Turbine[] = [];
-  const radiusDeg = (Math.max(0.5, radiusKm) * 0.72) / 111.0;
-  for (let i = 0; i < count; i++) {
-    const angle = (i / count) * 2 * Math.PI;
-    const r = radiusDeg * (0.35 + 0.65 * ((i % 3) / 2));
-    const lat = clat + r * Math.cos(angle);
-    const lon = clon + (r * Math.sin(angle)) / Math.cos((clat * Math.PI) / 180);
-    turbs.push({
-      id: `T${i + 1}`,
-      label: `T-${String(i + 1).padStart(2, '0')}`,
-      lat: Number(lat.toFixed(6)),
-      lon: Number(lon.toFixed(6)),
-      elevation_m: 42 + (i % 5) * 4,
-      effective_mps: Number((7.2 + (i % 4) * 0.2).toFixed(2)),
-      wake_deficit_pct: Number((2.5 + (i % 3) * 1.1).toFixed(1)),
-    });
-  }
-  return turbs;
+// Helper: Generates realistic geodetic coordinates for candidate layout strictly enclosed within boundary
+function generateMockTurbines(clat: number, clon: number, count: number, _radiusKm: number = 3.0): Turbine[] {
+  return generatePolygonEnclosedTurbines(undefined, count, clat, clon);
 }

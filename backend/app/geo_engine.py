@@ -56,6 +56,10 @@ def normalize_coord_pair(p: Union[List[float], Tuple[float, float]]) -> Tuple[fl
     # If the first element is > 90 in magnitude, it is definitely a longitude in [lon, lat] format
     if abs(p0) > 90.0 and abs(p1) <= 90.0:
         return p1, p0
+    # In India and Southern Asia (longitude ~65-100°E, latitude ~5-40°N):
+    # If p0 > 55.0 and p1 <= 40.0, p0 is definitely longitude and p1 is latitude
+    if p0 > 55.0 and abs(p1) <= 40.0:
+        return p1, p0
     return p0, p1
 
 
@@ -268,6 +272,8 @@ class CandidateGenerationEngine:
             self.boundary_latlon = norm_boundary
             self.area_km2 = calculate_polygon_area_km2(norm_boundary)
             self.radius_km = math.sqrt(max(0.5, self.area_km2) / math.pi)
+            self.center_lat = float(np.mean([v[0] for v in norm_boundary]))
+            self.center_lon = float(np.mean([v[1] for v in norm_boundary]))
         elif radius_km and radius_km > 0:
             self.radius_km = float(radius_km)
             self.boundary_latlon = generate_geographic_circle_polygon(center_lat, center_lon, radius_km)

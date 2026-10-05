@@ -22,6 +22,7 @@ import { OptimizationData, SiteInfo, Turbine } from '../../types';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { CesiumGlobeView } from '../gis/CesiumGlobeView';
+import { ensureTurbinesInsideBoundary, generatePolygonEnclosedTurbines } from '../../utils/geometry';
 
 interface Screen5InspectProps {
   site: SiteInfo;
@@ -63,34 +64,26 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
   const baseLayersRef = useRef<{ satellite?: any; terrain?: any }>({});
   const markerLayersRef = useRef<any[]>([]);
   const wakeLayersRef = useRef<any[]>([]);
-function generateFallbackTurbines(clat: number, clon: number, count: number = 8, radiusKm: number = 3.0): Turbine[] {
-  const turbs: Turbine[] = [];
-  const radiusDeg = (Math.max(0.5, radiusKm) * 0.72) / 111.0;
-  for (let i = 0; i < count; i++) {
-    const angle = (i / count) * 2 * Math.PI;
-    const r = radiusDeg * (0.35 + 0.65 * ((i % 3) / 2));
-    const lat = clat + r * Math.cos(angle);
-    const lon = clon + (r * Math.sin(angle)) / Math.cos((clat * Math.PI) / 180);
-    turbs.push({
-      id: `T${i + 1}`,
-      label: `T-${String(i + 1).padStart(2, '0')}`,
-      lat: Number(lat.toFixed(6)),
-      lon: Number(lon.toFixed(6)),
-      elevation_m: 42 + (i % 5) * 4,
-      effective_mps: Number((7.2 + (i % 4) * 0.2).toFixed(2)),
-      wake_deficit_pct: Number((2.5 + (i % 3) * 1.1).toFixed(1)),
-    });
-  }
-  return turbs;
-}
-
   const polygonLayerRef = useRef<any>(null);
 
-  const fallbackList = useMemo(() => generateFallbackTurbines(site.lat, site.lon, 8, site.radiusKm || 3.0), [site.lat, site.lon, site.radiusKm]);
-  const optTurbines = (optimizationData?.optimized_turbines && optimizationData.optimized_turbines.length > 0)
+  const targetCount = optimizationData?.optimized_turbines?.length || baselineTurbines.length || 8;
+  const fallbackList = useMemo(
+    () => generatePolygonEnclosedTurbines(site.boundary, targetCount, site.lat, site.lon, site.windSpeedMps || 7.5),
+    [site.boundary, targetCount, site.lat, site.lon, site.windSpeedMps]
+  );
+
+  const rawOptTurbines = (optimizationData?.optimized_turbines && optimizationData.optimized_turbines.length > 0)
     ? optimizationData.optimized_turbines
     : (baselineTurbines.length > 0 ? baselineTurbines : fallbackList);
-  const activeTurbines = (layoutMode === 'before' && baselineTurbines.length > 0) ? baselineTurbines : optTurbines;
+
+  const rawActiveTurbines = (layoutMode === 'before' && baselineTurbines.length > 0) ? baselineTurbines : rawOptTurbines;
+
+  // Guarantee 100% boundary containment
+  const activeTurbines = useMemo(
+    () => ensureTurbinesInsideBoundary(rawActiveTurbines, site.boundary, site.lat, site.lon),
+    [rawActiveTurbines, site.boundary, site.lat, site.lon]
+  );
+
   const windDir = site.windDirectionDeg || 300;
 
   const selectedTurbine = activeTurbines[selectedTurbineIdx] || activeTurbines[0] || {
