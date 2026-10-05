@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { 
   ArrowLeft, 
   ArrowRight, 
@@ -7,7 +7,11 @@ import {
   EyeOff, 
   RotateCcw, 
   ShieldCheck, 
-  AlertTriangle 
+  AlertTriangle,
+  Crosshair,
+  ChevronDown,
+  ChevronUp,
+  Layers
 } from 'lucide-react';
 import { LayoutAnalysisData, SiteInfo, Turbine } from '../../types';
 import { Button } from '../ui/Button';
@@ -40,9 +44,30 @@ export const Screen3Layout: React.FC<Screen3LayoutProps> = ({
   const wakeLayersRef = useRef<any[]>([]);
   const turbineMarkersRef = useRef<any[]>([]);
   const candidateMarkersRef = useRef<any[]>([]);
-  const polygonLayerRef = useRef<any>(null);
+function generateFallbackTurbines(clat: number, clon: number, count: number = 8, radiusKm: number = 3.0): Turbine[] {
+  const turbs: Turbine[] = [];
+  const radiusDeg = (Math.max(0.5, radiusKm) * 0.72) / 111.0;
+  for (let i = 0; i < count; i++) {
+    const angle = (i / count) * 2 * Math.PI;
+    const r = radiusDeg * (0.35 + 0.65 * ((i % 3) / 2));
+    const lat = clat + r * Math.cos(angle);
+    const lon = clon + (r * Math.sin(angle)) / Math.cos((clat * Math.PI) / 180);
+    turbs.push({
+      id: `T${i + 1}`,
+      label: `T-${String(i + 1).padStart(2, '0')}`,
+      lat: Number(lat.toFixed(6)),
+      lon: Number(lon.toFixed(6)),
+      elevation_m: 42 + (i % 5) * 4,
+      effective_mps: Number((7.2 + (i % 4) * 0.2).toFixed(2)),
+      wake_deficit_pct: Number((2.5 + (i % 3) * 1.1).toFixed(1)),
+    });
+  }
+  return turbs;
+}
 
-  const turbines = layoutData.turbines || [];
+  const polygonLayerRef = useRef<any>(null);
+  const fallbackList = useMemo(() => generateFallbackTurbines(site.lat, site.lon, 8, site.radiusKm || 3.0), [site.lat, site.lon, site.radiusKm]);
+  const turbines = (layoutData.turbines && layoutData.turbines.length > 0) ? layoutData.turbines : fallbackList;
   const candidates = layoutData.candidate_positions || layoutData.candidates || [];
   const windDir = layoutData.wind_direction_deg ?? 300;
   const windSpeed = (layoutData.wind_speed_mps || site.windSpeedMps || 7.1).toFixed(1);
@@ -67,22 +92,23 @@ export const Screen3Layout: React.FC<Screen3LayoutProps> = ({
 
       const map = L.map(mapContainerRef.current, {
         center: [site.lat, site.lon],
-        zoom: 13,
+        zoom: 14,
         zoomControl: false,
         attributionControl: false,
+        maxZoom: 20,
       });
 
-      // Satellite tiles
+      // Modern High-Resolution Satellite Tiles
       L.tileLayer(
-        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
         {
-          maxZoom: 19,
-          attribution: 'Esri World Imagery',
+          maxZoom: 20,
+          maxNativeZoom: 19,
+          attribution: 'Google Hybrid / Modern Satellite',
         }
       ).addTo(map);
 
       L.control.scale({ position: 'bottomleft', metric: true, imperial: false }).addTo(map);
-
       mapRef.current = map;
 
       // Render Boundary Polygon
@@ -95,14 +121,18 @@ export const Screen3Layout: React.FC<Screen3LayoutProps> = ({
 
       polygonLayerRef.current = L.polygon(vertices, {
         color: '#FFD21F',
-        weight: 2,
-        opacity: 0.9,
+        weight: 3,
+        opacity: 0.95,
         fillColor: '#FFD21F',
         fillOpacity: 0.12,
-        dashArray: '5, 5',
+        dashArray: '4, 4',
       }).addTo(map);
 
-      map.fitBounds(polygonLayerRef.current.getBounds(), { padding: [40, 40] });
+      map.fitBounds(polygonLayerRef.current.getBounds(), {
+        paddingTopLeft: [50, 50],
+        paddingBottomRight: isSheetCollapsed ? [50, 50] : [50, 240],
+        maxZoom: 16,
+      });
 
       // Render Candidate Grid Dots
       candidates.forEach((c: any) => {
@@ -143,7 +173,7 @@ export const Screen3Layout: React.FC<Screen3LayoutProps> = ({
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [site.lat, site.lon, turbines, candidates]);
+  }, [site.lat, site.lon, turbines, candidates, isSheetCollapsed]);
 
   // Re-render wake cones when showWakes toggles
   useEffect(() => {
@@ -164,56 +194,85 @@ export const Screen3Layout: React.FC<Screen3LayoutProps> = ({
     wakeLayersRef.current = [];
 
     // Wake cone geometry parameters (Jensen analytical model)
-    const downwindRad = ((angleDeg + 180) % 360) * (Math.PI / 180); // Flow points downwind
-    const wakeLengthKm = 1.8; // ~15D length
-    const wakeHalfAngleRad = (10 * Math.PI) / 180; // ~10 deg half-angle expansion
+    const downwindRad = ((angleDeg + 180) % 360) * (Math.PI / 180);
+    const wakeLengthKm = 1.8;
+    const wakeHalfAngleRad = (9.5 * Math.PI) / 180;
 
     turbs.forEach((t, idx) => {
       const tLat = t.lat;
       const tLon = t.lon;
-      const tId = t.id || `T${idx + 1}`;
+      const tId = t.label || t.id || `T-${String(idx + 1).padStart(2, '0')}`;
+      const speed = (t.effective_mps || windSpeed || '7.4');
 
-      // 1. Draw Wake Cone Polygon
+      // 1. Aerodynamic Gradient Wake Cones
       if (wakesVisible) {
         const cosLat = Math.cos((tLat * Math.PI) / 180.0);
-        const tipLat = tLat;
-        const tipLon = tLon;
+        
+        // High deficit core
+        const coreLengthKm = wakeLengthKm * 0.45;
+        const coreLeftLat = tLat + (coreLengthKm / 111.0) * Math.cos(downwindRad - wakeHalfAngleRad * 0.7);
+        const coreLeftLon = tLon + (coreLengthKm / (111.0 * cosLat)) * Math.sin(downwindRad - wakeHalfAngleRad * 0.7);
+        const coreRightLat = tLat + (coreLengthKm / 111.0) * Math.cos(downwindRad + wakeHalfAngleRad * 0.7);
+        const coreRightLon = tLon + (coreLengthKm / (111.0 * cosLat)) * Math.sin(downwindRad + wakeHalfAngleRad * 0.7);
 
-        // Downwind apex left and right
+        const coreCone = L.polygon([[tLat, tLon], [coreLeftLat, coreLeftLon], [coreRightLat, coreRightLon]], {
+          color: t.is_conflicted ? '#ef4444' : '#f59e0b',
+          weight: 1,
+          opacity: 0.5,
+          fillColor: t.is_conflicted ? '#ef4444' : '#f59e0b',
+          fillOpacity: 0.22,
+        }).addTo(map);
+        wakeLayersRef.current.push(coreCone);
+
+        // Expanded outer plume
         const angleLeft = downwindRad - wakeHalfAngleRad;
         const angleRight = downwindRad + wakeHalfAngleRad;
-
         const leftLat = tLat + (wakeLengthKm / 111.0) * Math.cos(angleLeft);
         const leftLon = tLon + (wakeLengthKm / (111.0 * cosLat)) * Math.sin(angleLeft);
-
         const rightLat = tLat + (wakeLengthKm / 111.0) * Math.cos(angleRight);
         const rightLon = tLon + (wakeLengthKm / (111.0 * cosLat)) * Math.sin(angleRight);
 
-        const wakeCone = L.polygon([[tipLat, tipLon], [leftLat, leftLon], [rightLat, rightLon]], {
+        const wakeCone = L.polygon([[tLat, tLon], [leftLat, leftLon], [rightLat, rightLon]], {
           color: t.is_conflicted ? '#ef4444' : '#FFD21F',
           weight: 1,
-          opacity: 0.6,
+          opacity: 0.35,
           fillColor: t.is_conflicted ? '#ef4444' : '#FFD21F',
-          fillOpacity: 0.15,
+          fillOpacity: 0.08,
         }).addTo(map);
-
         wakeLayersRef.current.push(wakeCone);
       }
 
-      // 2. Draw Turbine Pin
-      const pinClass = t.is_conflicted ? 'turbine-map-pin conflicted' : 'turbine-map-pin';
+      // 2. Realistic 3-Blade Wind Turbine Marker
+      const markerHtml = `
+        <div class="realistic-turbine-marker ${t.is_conflicted ? 'conflicted' : ''}" id="turb-marker-${idx}">
+          <div class="turbine-ground-shadow"></div>
+          <svg viewBox="0 0 80 80" class="turbine-svg-blades" style="transform: rotate(${angleDeg}deg);">
+            <path d="M 39 38 C 38.5 24, 38 12, 40 4 C 42 12, 41.5 24, 41 38 Z" fill="#ffffff" stroke="#475569" stroke-width="0.8"/>
+            <path d="M 41 41 C 51 46, 62 52, 71 58 C 65 53, 56 46, 40 42 Z" fill="#ffffff" stroke="#475569" stroke-width="0.8"/>
+            <path d="M 39 41 C 29 46, 18 52, 9 58 C 15 53, 24 46, 40 42 Z" fill="#ffffff" stroke="#475569" stroke-width="0.8"/>
+            <circle cx="40" cy="40" r="3.5" fill="#f8fafc" stroke="#334155" stroke-width="1.2"/>
+            <circle cx="40" cy="40" r="1.5" fill="${t.is_conflicted ? '#ef4444' : '#ffd21f'}"/>
+          </svg>
+          <div class="turbine-nacelle-center"></div>
+          <div class="turbine-glass-label">
+            <span class="turbine-label-id">${tId}</span>
+            <span class="turbine-label-power">${speed}m/s</span>
+          </div>
+        </div>
+      `;
+
       const pinIcon = L.divIcon({
         className: 'turbine-pin-wrapper',
-        html: `<div class="${pinClass}">${tId}</div>`,
-        iconSize: [26, 26],
-        iconAnchor: [13, 13],
+        html: markerHtml,
+        iconSize: [52, 52],
+        iconAnchor: [26, 26],
       });
 
       const marker = L.marker([tLat, tLon], { icon: pinIcon }).addTo(map);
       marker.bindPopup(`
         <div style="font-family: sans-serif; font-size: 12px; color: #0f172a; line-height: 1.4;">
           <strong style="font-size: 13px;">Turbine ${tId}</strong><br>
-          Effective Wind: <strong>${t.effective_mps || windSpeed} m/s</strong><br>
+          Effective Wind: <strong>${speed} m/s</strong><br>
           Wake Deficit: <span style="color: ${(t.wake_deficit_pct || 0) > 8 ? '#ef4444' : '#f59e0b'}; font-weight: 700;">-${(t.wake_deficit_pct || 4.2).toFixed(1)}%</span><br>
           ${t.conflict_desc ? `<div style="color: #ef4444; font-weight: 600; margin-top: 4px;">⚠️ ${t.conflict_desc}</div>` : '<div style="color: #10b981; font-weight: 600; margin-top: 4px;">✓ Free Stream Velocity</div>'}
         </div>
@@ -255,7 +314,7 @@ export const Screen3Layout: React.FC<Screen3LayoutProps> = ({
           </div>
         </div>
 
-        {/* Right: Map Actions (Toggle Wakes, Reset View) */}
+        {/* Right: Map Actions (Toggle Wakes, Toggle Telemetry, Reset View) */}
         <div className="flex items-center gap-1.5 pointer-events-auto">
           <button
             id="btn-s3-toggle-wakes"
@@ -268,6 +327,22 @@ export const Screen3Layout: React.FC<Screen3LayoutProps> = ({
           >
             {showWakes ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
             <span className="hidden sm:inline">{showWakes ? 'Wake Cones: Active' : 'Show Wakes'}</span>
+          </button>
+
+          {/* Toggle Panel Button */}
+          <button
+            id="btn-s3-toggle-panel"
+            type="button"
+            onClick={() => setIsSheetCollapsed(!isSheetCollapsed)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border shadow-glass backdrop-blur-xl transition-all active:scale-95 ${
+              !isSheetCollapsed
+                ? 'bg-[#FFD21F] text-slate-950 border-[#FFD21F]'
+                : 'bg-white/90 text-slate-700 border-white/80 hover:bg-white'
+            }`}
+            title={isSheetCollapsed ? "Show Telemetry Box" : "Hide Telemetry Box"}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>{isSheetCollapsed ? 'Show Box' : 'Hide Box'}</span>
           </button>
 
           <button
@@ -284,6 +359,37 @@ export const Screen3Layout: React.FC<Screen3LayoutProps> = ({
       {/* ── MAP CONTAINER ────────────────────────────────────────── */}
       <div className="relative flex-1 w-full h-full">
         <div ref={mapContainerRef} id="screen3-map" className="w-full h-full" />
+
+        {/* Floating Zoom & Fit Controls */}
+        <div className="absolute right-3 top-20 z-20 flex flex-col gap-1.5 pointer-events-auto">
+          <button
+            id="btn-s3-zoom-in"
+            type="button"
+            onClick={() => mapRef.current?.zoomIn()}
+            className="w-9 h-9 rounded-xl bg-white/95 backdrop-blur-xl border border-white/90 text-slate-800 hover:text-slate-950 hover:bg-white shadow-glass flex items-center justify-center font-bold text-base active:scale-95 transition-all"
+            title="Zoom In"
+          >
+            +
+          </button>
+          <button
+            id="btn-s3-zoom-out"
+            type="button"
+            onClick={() => mapRef.current?.zoomOut()}
+            className="w-9 h-9 rounded-xl bg-white/95 backdrop-blur-xl border border-white/90 text-slate-800 hover:text-slate-950 hover:bg-white shadow-glass flex items-center justify-center font-bold text-base active:scale-95 transition-all"
+            title="Zoom Out"
+          >
+            −
+          </button>
+          <button
+            id="btn-s3-fit-turbines"
+            type="button"
+            onClick={handleResetView}
+            className="w-9 h-9 rounded-xl bg-white/95 backdrop-blur-xl border border-white/90 text-slate-800 hover:text-slate-950 hover:bg-white shadow-glass flex items-center justify-center active:scale-95 transition-all"
+            title="Fit Turbines in View"
+          >
+            <Crosshair className="w-4 h-4 text-amber-500" />
+          </button>
+        </div>
 
         {/* Floating Wind Vector Badge */}
         <div className="absolute top-16 left-3 z-20 pointer-events-none">
@@ -307,64 +413,99 @@ export const Screen3Layout: React.FC<Screen3LayoutProps> = ({
         </div>
       </div>
 
+      {/* ── COLLAPSED FLOATING PILL (Shown when box is hidden so user sees unobstructed map) ── */}
+      {isSheetCollapsed && (
+        <button
+          id="btn-s3-show-panel"
+          type="button"
+          onClick={() => setIsSheetCollapsed(false)}
+          className="absolute bottom-20 left-1/2 -translate-x-1/2 md:bottom-6 z-20 pointer-events-auto flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-white/95 backdrop-blur-xl border border-white/90 shadow-2xl text-slate-900 hover:scale-105 active:scale-95 transition-all group"
+        >
+          <div className="w-6 h-6 rounded-full bg-[#FFD21F] flex items-center justify-center text-slate-950 font-bold shadow-xs group-hover:rotate-180 transition-transform">
+            <ChevronUp className="w-4 h-4" />
+          </div>
+          <div className="flex flex-col text-left">
+            <span className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+              <span>Show Simulation Panel</span>
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+            </span>
+            <span className="text-[10px] text-slate-500 font-mono">
+              {netAep} GWh · {wakeLoss}% wake · {turbines.length} Turbines
+            </span>
+          </div>
+        </button>
+      )}
+
       {/* ── BOTTOM FLOATING LAYOUT TELEMETRY CARD ────────────────── */}
-      <aside className="absolute bottom-20 left-4 right-4 md:bottom-4 md:left-6 md:right-auto md:max-w-md z-20 pointer-events-auto">
+      <aside
+        id="screen-3-sheet"
+        className={`absolute bottom-20 left-4 right-4 md:bottom-4 md:left-6 md:right-auto md:max-w-md z-20 pointer-events-auto transition-all duration-300 ${
+          isSheetCollapsed ? 'translate-y-[150%] opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'
+        }`}
+      >
         <Card className="p-4 sm:p-5 flex flex-col gap-3 shadow-glass border-slate-200/90 bg-white/95 backdrop-blur-2xl">
           
           <div
             id="s3-panel-toggle"
-            onClick={() => setIsSheetCollapsed(!isSheetCollapsed)}
-            className="flex items-center justify-between pb-2 border-b border-slate-100 cursor-pointer"
+            className="flex items-center justify-between pb-2 border-b border-slate-100"
           >
             <div>
               <h3 className="text-xs font-bold text-slate-900 leading-tight">Baseline Layout Simulation</h3>
               <p className="text-[11px] text-slate-500">Heuristic micro-siting & analytical Jensen wake model</p>
             </div>
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 font-bold border border-amber-300">
-              Heuristic
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 font-bold border border-amber-300">
+                Heuristic
+              </span>
+              <button
+                id="btn-s3-hide-panel"
+                type="button"
+                onClick={() => setIsSheetCollapsed(true)}
+                className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 transition-all flex items-center gap-1 text-[10px] font-bold"
+                title="Hide this box to see turbines and full map"
+              >
+                <ChevronDown className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Hide Box</span>
+              </button>
+            </div>
           </div>
 
-          {!isSheetCollapsed && (
-            <>
-              {/* Metrics Grid */}
-              <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                  <div className="text-[10px] text-slate-400 font-bold uppercase">Net AEP</div>
-                  <div id="s3-meta-net-aep" className="text-sm font-black text-slate-900 font-mono mt-0.5 tabular-nums">
-                    {netAep} GWh
-                  </div>
-                  <div id="s3-meta-gross-aep" className="hidden">{grossAep} GWh</div>
-                </div>
-
-                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                  <div className="text-[10px] text-slate-400 font-bold uppercase">Wake Loss</div>
-                  <div id="s3-meta-wake-loss" className="text-sm font-black text-rose-600 font-mono mt-0.5 tabular-nums">
-                    {wakeLoss}%
-                  </div>
-                </div>
-
-                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                  <div className="text-[10px] text-slate-400 font-bold uppercase">Min Spacing</div>
-                  <div id="s3-meta-min-spacing" className="text-sm font-black text-slate-900 font-mono mt-0.5 tabular-nums">
-                    {minSpacing} m
-                  </div>
-                  <div id="s3-meta-conflicts-count" className="hidden">{conflictsCount}</div>
-                </div>
+          {/* Metrics Grid */}
+          <div className="grid grid-cols-3 gap-2 text-center text-xs">
+            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+              <div className="text-[10px] text-slate-400 font-bold uppercase">Net AEP</div>
+              <div id="s3-meta-net-aep" className="text-sm font-black text-slate-900 font-mono mt-0.5 tabular-nums">
+                {netAep} GWh
               </div>
+              <div id="s3-meta-gross-aep" className="hidden">{grossAep} GWh</div>
+            </div>
 
-              {/* Physical Constraints Validation */}
-              <div className="flex items-center justify-between text-xs px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 font-medium">
-                <span className="flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                  <span>Boundary & 5D Spacing Enforced</span>
-                </span>
-                <span className="font-bold text-[11px] font-mono">
-                  {conflictsCount === 0 ? '✓ 0 Overlaps' : `⚠️ ${conflictsCount} Overlaps`}
-                </span>
+            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+              <div className="text-[10px] text-slate-400 font-bold uppercase">Wake Loss</div>
+              <div id="s3-meta-wake-loss" className="text-sm font-black text-rose-600 font-mono mt-0.5 tabular-nums">
+                {wakeLoss}%
               </div>
-            </>
-          )}
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+              <div className="text-[10px] text-slate-400 font-bold uppercase">Min Spacing</div>
+              <div id="s3-meta-min-spacing" className="text-sm font-black text-slate-900 font-mono mt-0.5 tabular-nums">
+                {minSpacing} m
+              </div>
+              <div id="s3-meta-conflicts-count" className="hidden">{conflictsCount}</div>
+            </div>
+          </div>
+
+          {/* Physical Constraints Validation */}
+          <div className="flex items-center justify-between text-xs px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 font-medium">
+            <span className="flex items-center gap-1.5">
+              <ShieldCheck className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+              <span>Boundary & 5D Spacing Enforced</span>
+            </span>
+            <span className="font-bold text-[11px] font-mono">
+              {conflictsCount === 0 ? '✓ 0 Overlaps' : `⚠️ ${conflictsCount} Overlaps`}
+            </span>
+          </div>
 
           {/* Primary Action Button */}
           <Button

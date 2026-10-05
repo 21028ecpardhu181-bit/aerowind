@@ -368,18 +368,22 @@ export function App() {
   };
 
   // Workflow transitions: When user confirms site on Screen 1, dynamically create/register the new project!
-  const handleConfirmSite = async () => {
-    const cleanLocation = site.shortName || site.name.split(',')[0].trim();
+  const handleConfirmSite = async (confirmedSite?: Partial<SiteInfo>) => {
+    const effectiveSite = confirmedSite ? { ...site, ...confirmedSite } : site;
+    if (confirmedSite) {
+      setSite(effectiveSite);
+    }
+    const cleanLocation = effectiveSite.shortName || effectiveSite.name.split(',')[0].trim();
     const newProjId = `proj-${Date.now().toString(36)}`;
     const newProjName = `${cleanLocation} Wind Complex`;
     
     const newProject: ProjectSummary = {
       id: newProjId,
       name: newProjName,
-      location_name: site.name,
-      latitude: site.lat,
-      longitude: site.lon,
-      area_km2: site.areaKm2 || 24.8,
+      location_name: effectiveSite.name,
+      latitude: effectiveSite.lat,
+      longitude: effectiveSite.lon,
+      area_km2: effectiveSite.areaKm2 || 24.8,
       turbine_count: config.turbineCount || 12,
       turbine_model: config.modelName || 'GE 2.5-120',
       suitability: 'Preferred',
@@ -403,14 +407,14 @@ export function App() {
     createProject({
       id: newProjId,
       name: newProjName,
-      location_name: site.name,
-      latitude: site.lat,
-      longitude: site.lon,
-      area_km2: site.areaKm2,
+      location_name: effectiveSite.name,
+      latitude: effectiveSite.lat,
+      longitude: effectiveSite.lon,
+      area_km2: effectiveSite.areaKm2,
       turbine_count: config.turbineCount,
       turbine_model: config.modelName,
       status: 'configured',
-      boundary: site.boundary as any,
+      boundary: effectiveSite.boundary as any,
     }).catch(() => {});
 
     setCurrentScreen('s2_config');
@@ -460,7 +464,8 @@ export function App() {
       }
     } catch (e) {
       console.warn('Initial layout generation error, falling back to mock:', e);
-      const turbs = generateMockTurbines(site.lat, site.lon, config.turbineCount);
+      const currentRadius = site.radiusKm || Math.sqrt((site.areaKm2 || 28.3) / Math.PI) || 3.0;
+      const turbs = generateMockTurbines(site.lat, site.lon, config.turbineCount, currentRadius);
       setLayoutData({
         turbines: turbs,
         candidates: turbs,
@@ -544,7 +549,8 @@ export function App() {
       }
     } catch (e) {
       console.warn('Optimization API call failed, generating physical layout fallback:', e);
-      const optTurbs = generateMockTurbines(site.lat, site.lon, Math.min(8, config.turbineCount));
+      const currentRadius = site.radiusKm || Math.sqrt((site.areaKm2 || 28.3) / Math.PI) || 3.0;
+      const optTurbs = generateMockTurbines(site.lat, site.lon, Math.min(8, config.turbineCount), currentRadius);
       setOptimizationData({
         problem_name: activeProject ? activeProject.name : `${site.shortName} Wind Farm`,
         variables_count: optTurbs.length,
@@ -828,13 +834,13 @@ export function App() {
   );
 }
 
-// Helper: Generates realistic geodetic coordinates for candidate layout visualization
-function generateMockTurbines(clat: number, clon: number, count: number): Turbine[] {
+// Helper: Generates realistic geodetic coordinates for candidate layout visualization scaled to concession radius
+function generateMockTurbines(clat: number, clon: number, count: number, radiusKm: number = 3.0): Turbine[] {
   const turbs: Turbine[] = [];
-  const radiusDeg = 0.015;
+  const radiusDeg = (Math.max(0.5, radiusKm) * 0.72) / 111.0;
   for (let i = 0; i < count; i++) {
     const angle = (i / count) * 2 * Math.PI;
-    const r = radiusDeg * (0.4 + 0.6 * ((i % 3) / 2));
+    const r = radiusDeg * (0.35 + 0.65 * ((i % 3) / 2));
     const lat = clat + r * Math.cos(angle);
     const lon = clon + (r * Math.sin(angle)) / Math.cos((clat * Math.PI) / 180);
     turbs.push({

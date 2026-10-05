@@ -23,7 +23,7 @@ import { Button } from '../ui/Button';
 interface Screen1SiteProps {
   site: SiteInfo;
   telemetry: TelemetryData | null;
-  onConfirmSite: () => void;
+  onConfirmSite: (siteParams?: Partial<SiteInfo>) => void;
   onOpenDataSources: () => void;
   onSearchLocation: (query: string) => Promise<void> | void;
   onSelectRadius: (radiusKm: number) => void;
@@ -273,22 +273,19 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
     return perim;
   };
 
-  const generateDefaultVertices = (lat: number, lon: number, areaKm2: number): [number, number][] => {
-    const radiusKm = Math.sqrt(areaKm2) / 2.0;
-    const latDelta = radiusKm / 111.0;
-    const lonDelta = radiusKm / (111.0 * Math.cos((lat * Math.PI) / 180.0));
-    return [
-      [lat + latDelta * 1.1, lon - lonDelta * 0.1],
-      [lat + latDelta * 0.7, lon + lonDelta * 0.1],
-      [lat + latDelta * 0.2, lon + lonDelta * 0.45],
-      [lat - latDelta * 0.4, lon + lonDelta * 0.85],
-      [lat - latDelta * 0.9, lon + lonDelta * 0.95],
-      [lat - latDelta * 1.2, lon - lonDelta * 0.45],
-      [lat - latDelta * 0.6, lon - lonDelta * 1.1],
-      [lat - latDelta * 0.1, lon - lonDelta * 0.85],
-      [lat + latDelta * 0.25, lon - lonDelta * 0.65],
-      [lat + latDelta * 0.65, lon - lonDelta * 0.55],
-    ];
+  const generateCircleVertices = (centerLat: number, centerLon: number, radiusKm: number, steps: number = 48): [number, number][] => {
+    const vertices: [number, number][] = [];
+    const cosLat = Math.cos((centerLat * Math.PI) / 180.0) || 1e-6;
+    for (let i = 0; i < steps; i++) {
+      const angle = (i / steps) * 2 * Math.PI;
+      const dLat = (radiusKm / 111.0) * Math.cos(angle);
+      const dLon = (radiusKm / (111.0 * cosLat)) * Math.sin(angle);
+      vertices.push([
+        parseFloat((centerLat + dLat).toFixed(6)),
+        parseFloat((centerLon + dLon).toFixed(6)),
+      ]);
+    }
+    return vertices;
   };
 
   // 3. Render Boundary Polygon & Badges on Map
@@ -310,10 +307,12 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
       locationLabelRef.current = null;
     }
 
+    const currentRadius = selectedRadius || site.radiusKm || Math.sqrt(Math.max(1, areaKm2) / Math.PI) || 3.0;
+
     const vertices: [number, number][] =
       customBoundary && customBoundary.length >= 3
         ? customBoundary
-        : generateDefaultVertices(lat, lon, areaKm2);
+        : generateCircleVertices(lat, lon, currentRadius);
 
     const calcArea = calculatePolygonAreaKm2(vertices);
 
@@ -327,21 +326,24 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
       smoothFactor: 1,
     }).addTo(map);
 
-    // Add crisp vertex circle markers at each boundary corner so borders are vivid
+    // Add crisp vertex circle markers at each boundary corner
     drawnMarkersRef.current.forEach((m) => {
       try { map.removeLayer(m); } catch (_) {}
     });
     drawnMarkersRef.current = [];
 
-    vertices.forEach((pt: [number, number]) => {
-      const dot = L.circleMarker(pt, {
-        radius: 4,
-        color: '#0f172a',
-        weight: 1.5,
-        fillColor: '#FFD21F',
-        fillOpacity: 1.0,
-      }).addTo(map);
-      drawnMarkersRef.current.push(dot);
+    const stride = Math.max(1, Math.floor(vertices.length / 16));
+    vertices.forEach((pt: [number, number], i: number) => {
+      if (i % stride === 0) {
+        const dot = L.circleMarker(pt, {
+          radius: 3.5,
+          color: '#0f172a',
+          weight: 1.5,
+          fillColor: '#FFD21F',
+          fillOpacity: 1.0,
+        }).addTo(map);
+        drawnMarkersRef.current.push(dot);
+      }
     });
 
     map.fitBounds(polygonLayerRef.current.getBounds(), {
@@ -349,18 +351,18 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
       maxZoom: 15,
     });
 
-    // Single unified concession badge - NO OVERLAPPING TEXT
+    // Single unified concession badge
     const siteTitle = site.shortName || site.name.split(',')[0] || 'Selected Site';
     const unifiedBadgeIcon = L.divIcon({
       className: 'site-unified-badge-wrapper',
       html: `
         <div class="site-unified-badge">
           <div class="badge-title">${siteTitle}</div>
-          <div class="badge-sub">Concession Area: <strong>${calcArea.toFixed(1)} km²</strong></div>
+          <div class="badge-sub">Concession Area: <strong>${calcArea.toFixed(1)} km²</strong> · <strong>${currentRadius.toFixed(1)} km</strong></div>
         </div>
       `,
-      iconSize: [160, 48],
-      iconAnchor: [80, 24],
+      iconSize: [180, 52],
+      iconAnchor: [90, 26],
     });
     areaBadgeRef.current = L.marker([lat, lon], { icon: unifiedBadgeIcon }).addTo(map);
   };
@@ -438,16 +440,21 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
   // Direct Map Click
   const handleDirectMapSelection = (lat: number, lon: number) => {
     const shortName = `${lat.toFixed(3)}°N, ${lon.toFixed(3)}°E`;
+    const r = selectedRadius || site.radiusKm || 3.0;
+    const boundary = generateCircleVertices(lat, lon, r);
+    const areaKm2 = Math.round(Math.PI * r * r * 10) / 10;
     const newSite = {
       ...site,
       lat,
       lon,
       shortName,
       name: `${shortName}, Engineering Site`,
-      boundary: generateDefaultVertices(lat, lon, site.areaKm2),
+      radiusKm: r,
+      areaKm2,
+      boundary,
     };
     onSiteChange(newSite);
-    renderBoundary(lat, lon, site.areaKm2, newSite.boundary);
+    renderBoundary(lat, lon, areaKm2, boundary);
 
     // Reverse geocode quietly
     fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`)
@@ -566,9 +573,11 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
 
   // Reset to default boundary
   const handleResetBoundary = () => {
-    const defaultBoundary = generateDefaultVertices(site.lat, site.lon, 24.8);
-    onSiteChange({ areaKm2: 24.8, boundary: defaultBoundary });
-    renderBoundary(site.lat, site.lon, 24.8, defaultBoundary);
+    const r = selectedRadius || site.radiusKm || 3.0;
+    const defaultBoundary = generateCircleVertices(site.lat, site.lon, r);
+    const areaKm2 = Math.round(Math.PI * r * r * 10) / 10;
+    onSiteChange({ radiusKm: r, areaKm2, boundary: defaultBoundary });
+    renderBoundary(site.lat, site.lon, areaKm2, defaultBoundary);
   };
 
   // Fit camera to boundary
@@ -597,7 +606,7 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
       {/* ── DESKTOP FIXED SIDEBAR / MOBILE COLLAPSIBLE DRAWER ──────── */}
       <aside
         id="site-info-panel"
-        className={`fixed md:relative bottom-14 md:bottom-auto left-0 md:left-auto right-0 md:right-auto md:w-[410px] md:h-full bg-white/95 backdrop-blur-2xl md:bg-white border-t md:border-t-0 md:border-r border-slate-200/90 z-[1100] md:z-20 flex flex-col shrink-0 transition-transform duration-300 shadow-2xl md:shadow-none ${
+        className={`fixed md:relative bottom-14 md:bottom-auto left-0 md:left-auto right-0 md:right-auto md:w-[410px] md:h-full bg-white/95 backdrop-blur-2xl md:bg-white border-t md:border-t-0 md:border-r border-slate-200/90 z-[1250] md:z-20 flex flex-col shrink-0 transition-transform duration-300 shadow-2xl md:shadow-none ${
           isSheetCollapsed ? 'translate-y-[calc(100%-60px)] md:translate-y-0' : 'translate-y-0'
         } max-h-[82vh] md:max-h-full`}
       >
@@ -635,7 +644,10 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
               id="btn-confirm-site-peek"
               onClick={(e) => {
                 e.stopPropagation();
-                onConfirmSite();
+                const r = selectedRadius || site.radiusKm || 3.0;
+                const boundary = site.boundary && site.boundary.length >= 3 ? site.boundary : generateCircleVertices(site.lat, site.lon, r);
+                const areaKm2 = site.areaKm2 || Math.round(Math.PI * r * r * 10) / 10;
+                onConfirmSite({ ...site, radiusKm: r, areaKm2, boundary });
               }}
               className="md:hidden flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[#FFD21F] text-slate-950 text-xs font-black shadow-sm active:scale-95 transition-all"
             >
@@ -770,17 +782,39 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
           )}
 
           {mode === 'radius' && (
-            <div id="radius-mode-container" className="flex flex-col gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-              <span className="text-[11px] font-bold text-slate-600">Concession Radius:</span>
+            <div id="radius-mode-container" className="flex flex-col gap-2.5 p-3 rounded-xl bg-slate-50 border border-slate-200">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-700">Concession Radius:</span>
+                <span className="text-xs font-mono font-black text-amber-600">
+                  {(selectedRadius || site.radiusKm || 3).toFixed(1)} km · {((Math.PI * Math.pow(selectedRadius || site.radiusKm || 3, 2))).toFixed(1)} km²
+                </span>
+              </div>
+
+              {/* Slider for smooth live sizing */}
+              <div className="flex items-center gap-2">
+                <input
+                  type="range"
+                  min="0.5"
+                  max="30"
+                  step="0.5"
+                  value={selectedRadius || site.radiusKm || 3}
+                  onChange={(e) => handleApplyRadius(parseFloat(e.target.value))}
+                  className="w-full accent-[#FFD21F] cursor-pointer"
+                  title="Drag to adjust concession radius"
+                />
+              </div>
+
+              {/* Presets including 3km */}
               <div className="flex flex-wrap gap-1.5">
-                {[1, 5, 10, 25, 50, 100].map((r) => (
+                {[1, 2, 3, 5, 8, 10, 15, 20, 25].map((r) => (
                   <button
                     key={r}
                     type="button"
+                    id={`btn-radius-${r}km`}
                     onClick={() => handleApplyRadius(r)}
                     className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-                      selectedRadius === r
-                        ? 'bg-[#FFD21F] text-slate-950 shadow-xs'
+                      (selectedRadius || site.radiusKm || 3) === r
+                        ? 'bg-[#FFD21F] text-slate-950 shadow-xs ring-1 ring-amber-400'
                         : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
                     }`}
                   >
@@ -788,16 +822,18 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
                   </button>
                 ))}
               </div>
-              <div className="flex items-center gap-1.5 mt-1">
+
+              {/* Custom km or km² input */}
+              <div className="flex items-center gap-1.5 mt-0.5">
                 <input
                   id="custom-radius-input"
                   type="number"
                   min="0.5"
                   max="200"
-                  step="0.5"
+                  step="0.1"
                   value={customRadius}
                   onChange={(e) => setCustomRadius(e.target.value)}
-                  placeholder="Custom km"
+                  placeholder="Radius km"
                   className="w-24 px-2 py-1 text-xs rounded-lg bg-white border border-slate-200 focus:outline-none focus:ring-1 focus:ring-[#FFD21F]"
                 />
                 <button
@@ -809,7 +845,23 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
                   }}
                   className="px-3 py-1 rounded-lg bg-[#FFD21F] text-slate-950 text-xs font-bold hover:bg-[#F2C50F]"
                 >
-                  Apply
+                  Apply km
+                </button>
+
+                <button
+                  type="button"
+                  id="btn-apply-as-area"
+                  onClick={() => {
+                    const targetArea = parseFloat(customRadius);
+                    if (!isNaN(targetArea) && targetArea > 0) {
+                      const r = Math.sqrt(targetArea / Math.PI);
+                      handleApplyRadius(Math.round(r * 10) / 10);
+                    }
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-slate-200 text-slate-800 text-[11px] font-bold hover:bg-slate-300"
+                  title="Treat custom number as total Area in km²"
+                >
+                  As km²
                 </button>
               </div>
             </div>
@@ -969,7 +1021,12 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
               id="btn-confirm-site"
               variant="energy"
               size="md"
-              onClick={onConfirmSite}
+              onClick={() => {
+                const r = selectedRadius || site.radiusKm || 3.0;
+                const boundary = site.boundary && site.boundary.length >= 3 ? site.boundary : generateCircleVertices(site.lat, site.lon, r);
+                const areaKm2 = site.areaKm2 || Math.round(Math.PI * r * r * 10) / 10;
+                onConfirmSite({ ...site, radiusKm: r, areaKm2, boundary });
+              }}
               className="w-full bg-[#FFD21F] hover:bg-[#F2C50F] text-slate-950 font-black shadow-md py-3 text-xs"
             >
               <span>Confirm Site Boundary</span>
@@ -1065,6 +1122,26 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
                 <Box className="w-3 h-3" />
                 <span>3D</span>
               </button>
+            </div>
+
+            {/* Quick Concession Radius Buttons on Mobile Map */}
+            <div className="flex items-center gap-0.5 bg-white/95 backdrop-blur-xl border border-white/80 p-0.5 rounded-xl shadow-xs">
+              <span className="text-[9px] font-bold text-slate-500 pl-1">Radius:</span>
+              {[1, 2, 3, 5, 10].map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  id={`btn-mobile-radius-${r}km`}
+                  onClick={() => handleApplyRadius(r)}
+                  className={`px-1.5 py-0.5 rounded-lg text-[10px] font-black transition-all ${
+                    (selectedRadius || site.radiusKm || 3) === r
+                      ? 'bg-[#FFD21F] text-slate-950 shadow-xs ring-1 ring-amber-400'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  {r}k
+                </button>
+              ))}
             </div>
 
             {/* Presets Quick Dropdown / Chips on Mobile */}

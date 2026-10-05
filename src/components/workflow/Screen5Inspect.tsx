@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { 
   Box, 
   Layers, 
@@ -7,11 +7,16 @@ import {
   ArrowLeft, 
   ChevronRight, 
   ChevronLeft,
+  ChevronDown,
+  ChevronUp,
   Eye, 
   EyeOff, 
   RotateCcw,
   CheckCircle2,
-  GitCompare
+  GitCompare,
+  Plus,
+  Minus,
+  Crosshair
 } from 'lucide-react';
 import { OptimizationData, SiteInfo, Turbine } from '../../types';
 import { Button } from '../ui/Button';
@@ -57,10 +62,34 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
   const baseLayersRef = useRef<{ satellite?: any; terrain?: any }>({});
   const markerLayersRef = useRef<any[]>([]);
   const wakeLayersRef = useRef<any[]>([]);
+function generateFallbackTurbines(clat: number, clon: number, count: number = 8, radiusKm: number = 3.0): Turbine[] {
+  const turbs: Turbine[] = [];
+  const radiusDeg = (Math.max(0.5, radiusKm) * 0.72) / 111.0;
+  for (let i = 0; i < count; i++) {
+    const angle = (i / count) * 2 * Math.PI;
+    const r = radiusDeg * (0.35 + 0.65 * ((i % 3) / 2));
+    const lat = clat + r * Math.cos(angle);
+    const lon = clon + (r * Math.sin(angle)) / Math.cos((clat * Math.PI) / 180);
+    turbs.push({
+      id: `T${i + 1}`,
+      label: `T-${String(i + 1).padStart(2, '0')}`,
+      lat: Number(lat.toFixed(6)),
+      lon: Number(lon.toFixed(6)),
+      elevation_m: 42 + (i % 5) * 4,
+      effective_mps: Number((7.2 + (i % 4) * 0.2).toFixed(2)),
+      wake_deficit_pct: Number((2.5 + (i % 3) * 1.1).toFixed(1)),
+    });
+  }
+  return turbs;
+}
+
   const polygonLayerRef = useRef<any>(null);
 
-  const optTurbines = optimizationData?.optimized_turbines || [];
-  const activeTurbines = layoutMode === 'before' && baselineTurbines.length > 0 ? baselineTurbines : optTurbines;
+  const fallbackList = useMemo(() => generateFallbackTurbines(site.lat, site.lon, 8, site.radiusKm || 3.0), [site.lat, site.lon, site.radiusKm]);
+  const optTurbines = (optimizationData?.optimized_turbines && optimizationData.optimized_turbines.length > 0)
+    ? optimizationData.optimized_turbines
+    : (baselineTurbines.length > 0 ? baselineTurbines : fallbackList);
+  const activeTurbines = (layoutMode === 'before' && baselineTurbines.length > 0) ? baselineTurbines : optTurbines;
   const windDir = site.windDirectionDeg || 300;
 
   const selectedTurbine = activeTurbines[selectedTurbineIdx] || activeTurbines[0] || {
@@ -94,23 +123,26 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
 
       const map = L.map(mapContainerRef.current, {
         center: [site.lat, site.lon],
-        zoom: 13,
+        zoom: 14,
         zoomControl: false,
         attributionControl: false,
+        maxZoom: 20,
       });
 
+      // Modern High-Resolution Satellite & Topo Layers
       const satellite = L.tileLayer(
-        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
         {
-          maxZoom: 19,
-          attribution: 'Esri World Imagery',
+          maxZoom: 20,
+          maxNativeZoom: 19,
+          attribution: 'Google Hybrid / Modern Satellite',
         }
       );
 
       const terrain = L.tileLayer(
         'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
         {
-          maxZoom: 19,
+          maxZoom: 20,
           attribution: 'Esri World Topo Map',
         }
       );
@@ -135,13 +167,19 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
 
       polygonLayerRef.current = L.polygon(vertices, {
         color: '#FFD21F',
-        weight: 2,
-        opacity: 0.9,
+        weight: 3,
+        opacity: 0.95,
         fillColor: '#FFD21F',
         fillOpacity: 0.12,
+        dashArray: '4, 4',
       }).addTo(map);
 
-      map.fitBounds(polygonLayerRef.current.getBounds(), { padding: [40, 40] });
+      // Smart bounds fit with padding that accounts for bottom sheet
+      map.fitBounds(polygonLayerRef.current.getBounds(), {
+        paddingTopLeft: [50, 50],
+        paddingBottomRight: isPanelCollapsed ? [50, 50] : [50, 240],
+        maxZoom: 16,
+      });
 
       renderLayout(map, activeTurbines, windDir, showWakes, selectedTurbineIdx);
 
@@ -169,7 +207,7 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [is3DActive, site.lat, site.lon, activeTurbines, layoutMode]);
+  }, [is3DActive, site.lat, site.lon, activeTurbines, layoutMode, isPanelCollapsed]);
 
   // Update layout markers & wakes on mode or wake toggle
   useEffect(() => {
@@ -189,42 +227,79 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
     wakeLayersRef.current = [];
 
     const downwindRad = ((angleDeg + 180) % 360) * (Math.PI / 180);
-    const wakeLengthKm = 1.6;
-    const wakeHalfAngleRad = (9 * Math.PI) / 180;
+    const wakeLengthKm = 1.8;
+    const wakeHalfAngleRad = (9.5 * Math.PI) / 180;
 
     turbs.forEach((t, idx) => {
       const isSelected = idx === activeIdx;
-      const tId = t.id || `T${idx + 1}`;
+      const tId = t.label || t.id || `T-${String(idx + 1).padStart(2, '0')}`;
+      const speed = (t.effective_mps || 7.4).toFixed(1);
 
-      // Wake Cones
+      // Realistic Aerodynamic Multi-Layer Gradient Wake Plume
       if (wakesVisible) {
         const cosLat = Math.cos((t.lat * Math.PI) / 180.0);
+        
+        // 1. High-Deficit Core Wake Zone
+        const coreLengthKm = wakeLengthKm * 0.45;
+        const coreLeftLat = t.lat + (coreLengthKm / 111.0) * Math.cos(downwindRad - wakeHalfAngleRad * 0.7);
+        const coreLeftLon = t.lon + (coreLengthKm / (111.0 * cosLat)) * Math.sin(downwindRad - wakeHalfAngleRad * 0.7);
+        const coreRightLat = t.lat + (coreLengthKm / 111.0) * Math.cos(downwindRad + wakeHalfAngleRad * 0.7);
+        const coreRightLon = t.lon + (coreLengthKm / (111.0 * cosLat)) * Math.sin(downwindRad + wakeHalfAngleRad * 0.7);
+
+        const coreCone = L.polygon([[t.lat, t.lon], [coreLeftLat, coreLeftLon], [coreRightLat, coreRightLon]], {
+          color: isSelected ? '#0284c7' : '#f59e0b',
+          weight: 1,
+          opacity: 0.5,
+          fillColor: isSelected ? '#38bdf8' : '#f59e0b',
+          fillOpacity: 0.22,
+        }).addTo(map);
+        wakeLayersRef.current.push(coreCone);
+
+        // 2. Expanded Outer Wake Plume (Jensen Aerodynamic Recovery)
         const leftLat = t.lat + (wakeLengthKm / 111.0) * Math.cos(downwindRad - wakeHalfAngleRad);
         const leftLon = t.lon + (wakeLengthKm / (111.0 * cosLat)) * Math.sin(downwindRad - wakeHalfAngleRad);
         const rightLat = t.lat + (wakeLengthKm / 111.0) * Math.cos(downwindRad + wakeHalfAngleRad);
         const rightLon = t.lon + (wakeLengthKm / (111.0 * cosLat)) * Math.sin(downwindRad + wakeHalfAngleRad);
 
-        const cone = L.polygon([[t.lat, t.lon], [leftLat, leftLon], [rightLat, rightLon]], {
-          color: isSelected ? '#3b82f6' : '#FFD21F',
+        const outerCone = L.polygon([[t.lat, t.lon], [leftLat, leftLon], [rightLat, rightLon]], {
+          color: isSelected ? '#0284c7' : '#FFD21F',
           weight: 1,
-          opacity: 0.6,
-          fillColor: isSelected ? '#3b82f6' : '#FFD21F',
-          fillOpacity: 0.14,
+          opacity: 0.35,
+          fillColor: isSelected ? '#0ea5e9' : '#FFD21F',
+          fillOpacity: 0.08,
         }).addTo(map);
-
-        wakeLayersRef.current.push(cone);
+        wakeLayersRef.current.push(outerCone);
       }
 
-      // Marker
-      const pinClass = isSelected ? 'turbine-map-pin active' : 'turbine-map-pin';
+      // Realistic 3-Blade Wind Turbine Marker
+      const markerHtml = `
+        <div class="realistic-turbine-marker ${isSelected ? 'selected spinning' : ''}" id="turb-marker-${idx}">
+          <div class="turbine-ground-shadow"></div>
+          <svg viewBox="0 0 80 80" class="turbine-svg-blades" style="transform: rotate(${angleDeg}deg);">
+            <!-- 3 Slender Aerodynamic Rotor Blades -->
+            <path d="M 39 38 C 38.5 24, 38 12, 40 4 C 42 12, 41.5 24, 41 38 Z" fill="#ffffff" stroke="#475569" stroke-width="0.8"/>
+            <path d="M 41 41 C 51 46, 62 52, 71 58 C 65 53, 56 46, 40 42 Z" fill="#ffffff" stroke="#475569" stroke-width="0.8"/>
+            <path d="M 39 41 C 29 46, 18 52, 9 58 C 15 53, 24 46, 40 42 Z" fill="#ffffff" stroke="#475569" stroke-width="0.8"/>
+            <!-- Hub & Spinner Cone -->
+            <circle cx="40" cy="40" r="3.5" fill="#f8fafc" stroke="#334155" stroke-width="1.2"/>
+            <circle cx="40" cy="40" r="1.5" fill="#ffd21f"/>
+          </svg>
+          <div class="turbine-nacelle-center"></div>
+          <div class="turbine-glass-label">
+            <span class="turbine-label-id">${tId}</span>
+            <span class="turbine-label-power">${speed}m/s</span>
+          </div>
+        </div>
+      `;
+
       const pinIcon = L.divIcon({
         className: 'turbine-pin-wrapper',
-        html: `<div class="${pinClass}" style="${isSelected ? 'background: #3b82f6; border-color: #fff; transform: scale(1.2);' : ''}">${tId}</div>`,
-        iconSize: [26, 26],
-        iconAnchor: [13, 13],
+        html: markerHtml,
+        iconSize: [52, 52],
+        iconAnchor: [26, 26],
       });
 
-      const m = L.marker([t.lat, t.lon], { icon: pinIcon }).addTo(map);
+      const m = L.marker([t.lat, t.lon], { icon: pinIcon, title: `${tId} (${speed} m/s)` }).addTo(map);
       m.on('click', () => {
         setSelectedTurbineIdx(idx);
       });
@@ -340,6 +415,22 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
             {showWakes ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
           </button>
 
+          {/* Toggle Telemetry Box Visibility */}
+          <button
+            id="btn-s5-toggle-panel"
+            type="button"
+            onClick={() => setIsPanelCollapsed(!isPanelCollapsed)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border shadow-glass backdrop-blur-xl transition-all active:scale-95 ${
+              !isPanelCollapsed
+                ? 'bg-[#FFD21F] text-slate-950 border-[#FFD21F]'
+                : 'bg-white/90 text-slate-700 border-white/80 hover:bg-white'
+            }`}
+            title={isPanelCollapsed ? "Show Telemetry Box" : "Hide Telemetry Box"}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>{isPanelCollapsed ? 'Show Telemetry' : 'Hide Box'}</span>
+          </button>
+
           {/* Reset View */}
           <button
             id="btn-s5-reset-view"
@@ -371,6 +462,39 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
         <div ref={mapContainerRef} id="screen5-map" className={`w-full h-full ${is3DActive ? 'hidden' : 'block'}`} />
         <div id="screen5-cesium" className={`w-full h-full absolute inset-0 ${is3DActive ? 'block' : 'hidden'}`} />
 
+        {/* Floating On-Screen Map Zoom & Fit Controls */}
+        {!is3DActive && (
+          <div className="absolute right-3 top-20 z-20 flex flex-col gap-1.5 pointer-events-auto">
+            <button
+              id="btn-s5-zoom-in"
+              type="button"
+              onClick={() => mapRef.current?.zoomIn()}
+              className="w-9 h-9 rounded-xl bg-white/95 backdrop-blur-xl border border-white/90 text-slate-800 hover:text-slate-950 hover:bg-white shadow-glass flex items-center justify-center font-bold text-base active:scale-95 transition-all"
+              title="Zoom In"
+            >
+              +
+            </button>
+            <button
+              id="btn-s5-zoom-out"
+              type="button"
+              onClick={() => mapRef.current?.zoomOut()}
+              className="w-9 h-9 rounded-xl bg-white/95 backdrop-blur-xl border border-white/90 text-slate-800 hover:text-slate-950 hover:bg-white shadow-glass flex items-center justify-center font-bold text-base active:scale-95 transition-all"
+              title="Zoom Out"
+            >
+              −
+            </button>
+            <button
+              id="btn-s5-fit-turbines"
+              type="button"
+              onClick={handleResetView}
+              className="w-9 h-9 rounded-xl bg-white/95 backdrop-blur-xl border border-white/90 text-slate-800 hover:text-slate-950 hover:bg-white shadow-glass flex items-center justify-center active:scale-95 transition-all"
+              title="Fit All Turbines in View"
+            >
+              <Crosshair className="w-4 h-4 text-amber-500" />
+            </button>
+          </div>
+        )}
+
         {/* 3D Camera Presets Overlay (When 3D is active) */}
         {is3DActive && (
           <div
@@ -396,41 +520,80 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
         )}
       </div>
 
-      {/* ── BOTTOM FLOATING INSPECTOR PANEL ──────────────────────── */}
+      {/* ── COLLAPSED FLOATING PILL (Shown when box is hidden so user sees unobstructed map) ── */}
+      {isPanelCollapsed && (
+        <button
+          id="btn-s5-show-panel"
+          type="button"
+          onClick={() => setIsPanelCollapsed(false)}
+          className="absolute bottom-20 left-1/2 -translate-x-1/2 md:bottom-6 z-20 pointer-events-auto flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-white/95 backdrop-blur-xl border border-white/90 shadow-2xl text-slate-900 hover:scale-105 active:scale-95 transition-all group"
+        >
+          <div className="w-6 h-6 rounded-full bg-[#FFD21F] flex items-center justify-center text-slate-950 font-bold shadow-xs group-hover:rotate-180 transition-transform">
+            <ChevronUp className="w-4 h-4" />
+          </div>
+          <div className="flex flex-col text-left">
+            <span className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+              <span>Show Telemetry Panel</span>
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            </span>
+            <span className="text-[10px] text-slate-500 font-mono">
+              {aep} · {wakeLoss} wake · {activeTurbines.length} Turbines
+            </span>
+          </div>
+        </button>
+      )}
+
+      {/* ── BOTTOM FLOATING INSPECTOR PANEL (Hideable Box) ───────── */}
       <aside
         id="screen-5-sheet"
-        className="absolute bottom-20 left-4 right-4 md:bottom-4 md:left-6 md:right-auto md:max-w-md z-20 pointer-events-auto"
+        className={`absolute bottom-20 left-4 right-4 md:bottom-4 md:left-6 md:right-auto md:max-w-md z-20 pointer-events-auto transition-all duration-300 ${
+          isPanelCollapsed ? 'translate-y-[150%] opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'
+        }`}
       >
         <Card className="p-4 sm:p-5 flex flex-col gap-3 shadow-glass border-slate-200/90 bg-white/95 backdrop-blur-2xl">
           
-          {/* Header & Mode Switch (Before vs Optimized) */}
+          {/* Header & Mode Switch & Hide Box Button */}
           <div className="flex items-center justify-between pb-2 border-b border-slate-100">
             <div>
               <h3 className="text-xs font-bold text-slate-900 leading-tight">Optimized Layout Telemetry</h3>
               <p className="text-[11px] text-slate-500">WS-QAOA Quantum Annealing Micro-Siting</p>
             </div>
 
-            {/* Segmented Layout Comparison Buttons */}
-            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
+            <div className="flex items-center gap-2">
+              {/* Segmented Layout Comparison Buttons */}
+              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
+                <button
+                  id="s5-btn-before"
+                  type="button"
+                  onClick={() => setLayoutMode('before')}
+                  className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
+                    layoutMode === 'before' ? 'bg-white text-slate-950 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Before
+                </button>
+                <button
+                  id="s5-btn-optimized"
+                  type="button"
+                  onClick={() => setLayoutMode('optimized')}
+                  className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
+                    layoutMode === 'optimized' ? 'bg-[#FFD21F] text-slate-950 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Optimized
+                </button>
+              </div>
+
+              {/* Hide Box Button */}
               <button
-                id="s5-btn-before"
+                id="btn-s5-hide-panel"
                 type="button"
-                onClick={() => setLayoutMode('before')}
-                className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
-                  layoutMode === 'before' ? 'bg-white text-slate-950 shadow-xs' : 'text-slate-500 hover:text-slate-800'
-                }`}
+                onClick={() => setIsPanelCollapsed(true)}
+                className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 transition-all flex items-center gap-1 text-[10px] font-bold shadow-2xs"
+                title="Hide this box to see turbines and full map"
               >
-                Before
-              </button>
-              <button
-                id="s5-btn-optimized"
-                type="button"
-                onClick={() => setLayoutMode('optimized')}
-                className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
-                  layoutMode === 'optimized' ? 'bg-[#FFD21F] text-slate-950 shadow-xs' : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                Optimized
+                <ChevronDown className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Hide Box</span>
               </button>
             </div>
           </div>

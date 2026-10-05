@@ -193,6 +193,123 @@
   border: none !important;
 }
 
+/* Realistic 3-Blade Wind Turbine Marker */
+.realistic-turbine-marker {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  pointer-events: auto;
+  user-select: none;
+}
+
+/* Terrain Ground Shadow */
+.turbine-ground-shadow {
+  position: absolute;
+  width: 38px;
+  height: 14px;
+  background: radial-gradient(ellipse at center, rgba(15, 23, 42, 0.45) 0%, rgba(15, 23, 42, 0) 72%);
+  border-radius: 50%;
+  bottom: 6px;
+  left: 50%;
+  transform: translateX(-40%) rotate(-15deg);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Rotating / Yawed Aerodynamic Blades SVG */
+.turbine-svg-blades {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  z-index: 3;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.4));
+}
+
+.realistic-turbine-marker.spinning .turbine-svg-blades {
+  animation: turbine-blade-spin 8s linear infinite;
+}
+
+@keyframes turbine-blade-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Central Nacelle & Rotor Hub */
+.turbine-nacelle-center {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #ffffff 0%, #cbd5e1 55%, #64748b 100%);
+  border: 1.5px solid #0f172a;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  z-index: 4;
+}
+
+/* Selected Aura & Glow Ring */
+.realistic-turbine-marker.selected .turbine-nacelle-center {
+  background: radial-gradient(circle at 35% 35%, #ffffff 0%, #38bdf8 60%, #0284c7 100%);
+  border-color: #ffffff;
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.4), 0 0 12px rgba(14, 165, 233, 0.8);
+}
+
+.realistic-turbine-marker.selected .turbine-svg-blades {
+  filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.7));
+}
+
+/* Sleek Apple Liquid Glass ID Label Pill */
+.turbine-glass-label {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 9999px;
+  padding: 1px 6px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 5;
+  transition: all 0.2s ease;
+}
+
+.realistic-turbine-marker.selected .turbine-glass-label {
+  background: rgba(2, 132, 199, 0.95);
+  border-color: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 0 10px rgba(14, 165, 233, 0.6);
+  transform: translateX(-50%) scale(1.08);
+}
+
+.turbine-label-id {
+  font-family: monospace;
+  font-size: 9.5px;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.turbine-label-power {
+  font-size: 8.5px;
+  font-weight: 700;
+  color: #fde047;
+}
+
+.realistic-turbine-marker:hover .turbine-glass-label {
+  transform: translateX(-50%) scale(1.1);
+  background: rgba(15, 23, 42, 0.95);
+}
+
+/* Legacy fallback pin for backward compatibility */
 .turbine-map-pin {
   display: flex;
   align-items: center;
