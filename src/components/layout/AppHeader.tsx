@@ -2,6 +2,7 @@ import React from 'react';
 import { Search, Bell, Sun, Wind } from 'lucide-react';
 import { TelemetryData } from '../../types';
 import { DesktopNavigation } from './DesktopNavigation';
+import { AeroQuantumLogo } from '../ui/AeroQuantumLogo';
 
 interface AppHeaderProps {
   currentTab: string;
@@ -23,21 +24,24 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   user,
 }) => {
   return (
-    <header className="sticky top-0 z-[1300] w-full bg-white/80 backdrop-blur-md border-b border-slate-200/80 px-4 md:px-6 py-2.5 flex items-center justify-between gap-4 transition-all">
+    <header className="sticky top-0 z-[1300] w-full bg-white/70 backdrop-blur-xl border-b border-white/50 px-4 md:px-6 py-2 flex items-center justify-between gap-4 transition-all">
       {/* Brand & Wordmark */}
       <div className="flex items-center gap-3">
         <button
           onClick={() => onTabChange('projects')}
-          className="flex items-center gap-1.5 text-left focus:outline-none group"
+          className="flex items-center gap-2 text-left focus:outline-none group select-none"
         >
-          <div className="w-8 h-8 rounded-lg bg-[#FFD21F] flex items-center justify-center font-black text-slate-950 shadow-sm group-hover:bg-[#F2C50F] transition-colors">
-            AQ
-          </div>
-          <div className="text-lg font-bold tracking-tight text-slate-900 flex items-center">
-            AeroQuantum<span className="text-[#FFD21F] font-black">Wind</span>
+          <AeroQuantumLogo size={36} />
+          <div className="flex flex-col leading-tight">
+            <div className="text-base sm:text-lg font-black tracking-tight text-slate-900 flex items-center">
+              AeroQuantum<span className="text-[#FFD21F] font-black">Wind</span>
+            </div>
+            <span className="text-[10px] text-slate-500 font-medium tracking-tight">
+              Engineering a Cleaner Tomorrow
+            </span>
           </div>
         </button>
-        <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono text-slate-500 bg-slate-100 border border-slate-200">
+        <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono text-slate-500 bg-white/80 border border-slate-200/80 shadow-xs">
           v2.4 - GIS
         </span>
       </div>
@@ -81,24 +85,24 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
 
         {/* Notification Bell */}
         <button
-          className="relative p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors"
+          className="relative w-9 h-9 rounded-full bg-white/80 backdrop-blur-md border border-white/70 shadow-xs flex items-center justify-center text-slate-700 hover:text-slate-950 hover:bg-white active:scale-95 transition-all"
           aria-label="Notifications"
         >
           <Bell className="w-4 h-4" />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white" />
+          <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white" />
         </button>
 
         {/* User Sign In / Avatar Button */}
         <button
           id="btn-open-auth"
           onClick={onOpenAuth}
-          className="flex items-center gap-1.5 p-1 sm:px-2.5 sm:py-1 rounded-full sm:rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-300 text-xs font-bold text-slate-800 transition-all select-none shadow-xs"
+          className="flex items-center gap-2 p-0.5 sm:px-2.5 sm:py-1 rounded-full bg-white/80 hover:bg-white border border-white/70 sm:border-slate-200 shadow-xs active:scale-95 transition-all select-none"
           title={user ? `Signed in as ${user.username}` : 'Sign In / Account'}
         >
-          <div className="w-6 h-6 rounded-full bg-[#FFD21F] text-slate-950 font-black flex items-center justify-center text-[10px]">
-            {user ? user.username.slice(0, 2).toUpperCase() : 'AQ'}
+          <div className="w-8 h-8 rounded-full bg-amber-500/15 border border-amber-500/30 flex items-center justify-center p-0.5">
+            <AeroQuantumLogo size={22} />
           </div>
-          <span className="hidden sm:inline" id="header-user-label">
+          <span className="hidden sm:inline text-xs font-bold text-slate-800 pr-1" id="header-user-label">
             {user ? user.username : 'Sign In'}
           </span>
         </button>
