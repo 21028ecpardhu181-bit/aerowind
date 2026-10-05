@@ -98,13 +98,13 @@ function generateFallbackTurbines(clat: number, clon: number, count: number = 8,
         maxZoom: 20,
       });
 
-      // Modern High-Resolution Satellite Tiles
+      // High-Resolution Satellite Tiles via Local Cache Proxy
       L.tileLayer(
-        'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+        '/api/geo/tiles/satellite/{z}/{x}/{y}',
         {
           maxZoom: 20,
           maxNativeZoom: 19,
-          attribution: 'Google Hybrid / Modern Satellite',
+          attribution: 'Esri World Imagery',
         }
       ).addTo(map);
 
@@ -242,18 +242,44 @@ function generateFallbackTurbines(clat: number, clon: number, count: number = 8,
         wakeLayersRef.current.push(wakeCone);
       }
 
-      // 2. Realistic 3-Blade Wind Turbine Marker
+      // 2. Authentic CAD-Grade 3-Blade Wind Turbine Marker with Yawed Nacelle & Red Tips
+      const nacelleYaw = (angleDeg + 180) % 360;
+      const spinSpeedS = Math.max(1.8, Math.min(5.5, 22.0 / Math.max(2.5, parseFloat(String(speed)) || 7.5)));
       const markerHtml = `
         <div class="realistic-turbine-marker ${t.is_conflicted ? 'conflicted' : ''}" id="turb-marker-${idx}">
           <div class="turbine-ground-shadow"></div>
-          <svg viewBox="0 0 80 80" class="turbine-svg-blades" style="transform: rotate(${angleDeg}deg);">
-            <path d="M 39 38 C 38.5 24, 38 12, 40 4 C 42 12, 41.5 24, 41 38 Z" fill="#ffffff" stroke="#475569" stroke-width="0.8"/>
-            <path d="M 41 41 C 51 46, 62 52, 71 58 C 65 53, 56 46, 40 42 Z" fill="#ffffff" stroke="#475569" stroke-width="0.8"/>
-            <path d="M 39 41 C 29 46, 18 52, 9 58 C 15 53, 24 46, 40 42 Z" fill="#ffffff" stroke="#475569" stroke-width="0.8"/>
-            <circle cx="40" cy="40" r="3.5" fill="#f8fafc" stroke="#334155" stroke-width="1.2"/>
-            <circle cx="40" cy="40" r="1.5" fill="${t.is_conflicted ? '#ef4444' : '#ffd21f'}"/>
+
+          <!-- Yawed Aerodynamic Nacelle Body -->
+          <svg viewBox="0 0 80 80" class="turbine-svg-nacelle">
+            <g transform="rotate(${nacelleYaw} 40 40)">
+              <rect x="36.5" y="34" width="7" height="18" rx="3.5" fill="#f8fafc" stroke="#334155" stroke-width="1.0"/>
+              <rect x="37.5" y="46" width="5" height="5" rx="1" fill="#334155"/>
+              <circle cx="40" cy="48" r="1.2" fill="${t.is_conflicted ? '#ef4444' : '#ef4444'}"/>
+            </g>
           </svg>
-          <div class="turbine-nacelle-center"></div>
+
+          <!-- Continuously Rotating 3-Blade Airfoil Assembly -->
+          <svg viewBox="0 0 80 80" class="turbine-svg-blades" style="animation: turbine-blade-spin ${spinSpeedS.toFixed(1)}s linear infinite;">
+            <!-- Blade 1 (0 deg) -->
+            <g transform="rotate(0 40 40)">
+              <path d="M 38.6 38 C 37.8 26, 36.8 14, 39.6 4 C 40.4 4, 43.2 14, 42.4 26 C 41.6 34, 41.4 38, 41.4 38 Z" fill="#ffffff" stroke="#334155" stroke-width="0.75"/>
+              <path d="M 37.5 13 C 37.2 8, 38.8 4, 39.6 4 C 40.4 4, 42.0 8, 41.7 13 Z" fill="#ef4444"/>
+            </g>
+            <!-- Blade 2 (120 deg) -->
+            <g transform="rotate(120 40 40)">
+              <path d="M 38.6 38 C 37.8 26, 36.8 14, 39.6 4 C 40.4 4, 43.2 14, 42.4 26 C 41.6 34, 41.4 38, 41.4 38 Z" fill="#ffffff" stroke="#334155" stroke-width="0.75"/>
+              <path d="M 37.5 13 C 37.2 8, 38.8 4, 39.6 4 C 40.4 4, 42.0 8, 41.7 13 Z" fill="#ef4444"/>
+            </g>
+            <!-- Blade 3 (240 deg) -->
+            <g transform="rotate(240 40 40)">
+              <path d="M 38.6 38 C 37.8 26, 36.8 14, 39.6 4 C 40.4 4, 43.2 14, 42.4 26 C 41.6 34, 41.4 38, 41.4 38 Z" fill="#ffffff" stroke="#334155" stroke-width="0.75"/>
+              <path d="M 37.5 13 C 37.2 8, 38.8 4, 39.6 4 C 40.4 4, 42.0 8, 41.7 13 Z" fill="#ef4444"/>
+            </g>
+            <!-- Center Bullet Spinner Nose Cone -->
+            <circle cx="40" cy="40" r="4.2" fill="#ffffff" stroke="#1e293b" stroke-width="1.2"/>
+            <circle cx="40" cy="40" r="2.0" fill="${t.is_conflicted ? '#ef4444' : '#ffd21f'}"/>
+          </svg>
+
           <div class="turbine-glass-label">
             <span class="turbine-label-id">${tId}</span>
             <span class="turbine-label-power">${speed}m/s</span>

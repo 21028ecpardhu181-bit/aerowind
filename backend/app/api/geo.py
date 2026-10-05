@@ -13,8 +13,11 @@ Endpoints:
 from __future__ import annotations
 
 import math
+import os
+import urllib.request
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, Response, status
 
 try:
     from backend.app.geo_utils import generate_grid_candidates, get_nominatim_client
@@ -432,5 +435,64 @@ async def get_environmental_stack(
     }
 
 
+# High-Performance Local Tile Cache for Production Geospatial Maps
+TILES_CACHE_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "tiles"
+TILES_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 
+@router.get(
+    "/tiles/{layer}/{z}/{x}/{y}",
+    summary="High-speed GIS tile cache & proxy",
+    description="Serves local or cached satellite imagery, topographic terrain, and boundary labels without CORS or network limits.",
+)
+async def get_map_tile(layer: str, z: int, x: int, y: int) -> Response:
+    """
+    Proxies and caches Esri World Imagery, Topo terrain, and labels.
+    Prevents browser ERR_EMPTY_RESPONSE firewall drops and enables fast offline rendering.
+    """
+    ext = "jpg" if layer in ["satellite", "terrain"] else "png"
+    media_type = "image/jpeg" if ext == "jpg" else "image/png"
+    cache_path = TILES_CACHE_DIR / f"{layer}_{z}_{x}_{y}.{ext}"
+
+    # 1. Return from disk cache if present
+    if cache_path.exists() and cache_path.stat().st_size > 0:
+        with open(cache_path, "rb") as f:
+            return Response(content=f.read(), media_type=media_type, headers={"Cache-Control": "public, max-age=2592000"})
+
+    # 2. Map upstream source URLs
+    if layer == "satellite":
+        upstream_url = f"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+    elif layer == "terrain":
+        upstream_url = f"https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}"
+    elif layer == "labels":
+        upstream_url = f"https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
+    elif layer == "osm":
+        upstream_url = f"https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+    else:
+        raise HTTPException(status_code=400, detail=f"Unknown tile layer '{layer}'")
+
+    try:
+        req = urllib.request.Request(
+            upstream_url,
+            headers={
+                "User-Agent": "AeroQuantum-Wind/2.4 (OpenGIS; Real-World Wind Engineering)",
+                "Accept": "image/webp,image/apng,image/*,*/*;q=0.8",
+            }
+        )
+        with urllib.request.urlopen(req, timeout=8.0) as resp:
+            content = resp.read()
+            # Save to disk cache
+            try:
+                with open(cache_path, "wb") as f:
+                    f.write(content)
+            except Exception:
+                pass
+            return Response(
+                content=content,
+                media_type=media_type,
+                headers={"Cache-Control": "public, max-age=2592000"}
+            )
+    except Exception as exc:
+        # Fallback 1x1 transparent or tinted tile on network failure
+        fallback_jpeg = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x01\x00H\x00H\x00\x00\xff\xdb\x00C\x00\x08\x06\x06\x07\x06\x05\x08\x07\x07\x07\t\t\x08\n\x0c\x14\r\x0c\x0b\x0b\x0c\x19\x12\x13\x0f\x14\x1d\x1a\x1f\x1e\x1d\x1a\x1c\x1c $.' \",#\x1c\x1c(7),01444\x1f'9=82<.342\xff\xc0\x00\x0b\x08\x00\x01\x00\x01\x01\x01\x11\x00\xff\xc4\x00\x1f\x00\x00\x01\x05\x01\x01\x01\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04\x05\x06\x07\x08\t\n\x0b\xff\xda\x00\x08\x01\x01\x00\x00?\x00\xbf\x00\xff\xd9"
+        return Response(content=fallback_jpeg, media_type="image/jpeg", status_code=200)

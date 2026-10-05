@@ -220,14 +220,24 @@
   z-index: 1;
 }
 
+/* Static Yawed Aerodynamic Nacelle SVG */
+.turbine-svg-nacelle {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  z-index: 2;
+  pointer-events: none;
+  filter: drop-shadow(0 2px 4px rgba(15, 23, 42, 0.4));
+}
+
 /* Rotating / Yawed Aerodynamic Blades SVG */
 .turbine-svg-blades {
   position: absolute;
   width: 44px;
   height: 44px;
   z-index: 3;
-  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.4));
+  pointer-events: none;
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.35));
 }
 
 .realistic-turbine-marker.spinning .turbine-svg-blades {

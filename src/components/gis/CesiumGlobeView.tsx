@@ -83,9 +83,9 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
     }
 
     try {
-      // 1. High-Resolution Satellite Base Layer
+      // 1. High-Resolution Satellite Base Layer via Local Cache Proxy
       const satelliteProvider = new Cesium.UrlTemplateImageryProvider({
-        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        url: '/api/geo/tiles/satellite/{z}/{x}/{y}',
         maximumLevel: 20,
         credit: 'Esri World Imagery',
       });
@@ -102,6 +102,8 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
         selectionIndicator: false,
         creditContainer: document.createElement('div'), // Hidden credits container
         baseLayer: new Cesium.ImageryLayer(satelliteProvider),
+        shadows: true,
+        terrainShadows: Cesium.ShadowMode.ENABLED,
         contextOptions: {
           webgl: {
             alpha: false,
@@ -115,13 +117,18 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
 
       // 2. Superimpose High-Resolution Road Network & Place Labels for Real Geography
       const referenceLabelsProvider = new Cesium.UrlTemplateImageryProvider({
-        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+        url: '/api/geo/tiles/labels/{z}/{x}/{y}',
         maximumLevel: 20,
       });
       viewer.imageryLayers.addImageryProvider(referenceLabelsProvider);
 
       const scene = viewer.scene;
       scene.globe.depthTestAgainstTerrain = true;
+      scene.globe.enableLighting = true;
+      if (scene.shadowMap) {
+        scene.shadowMap.enabled = true;
+        scene.shadowMap.softShadows = true;
+      }
       if (scene.skyAtmosphere) scene.skyAtmosphere.show = true;
       if (scene.fog) {
         scene.fog.enabled = true;
@@ -345,8 +352,9 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
 
     if (!turbines || turbines.length === 0) return;
 
-    const windHeadingRad = Cesium.Math.toRadians((windDirectionDeg + 180) % 360);
-    const modelScale = Math.max(0.6, Math.min(1.8, rotorDiameter / 120.0));
+    // Real-world upwind alignment: rotor spinner points into the oncoming wind vector
+    const windHeadingRad = Cesium.Math.toRadians(windDirectionDeg);
+    const modelScale = Math.max(0.6, Math.min(2.0, rotorDiameter / 120.0));
 
     turbines.forEach((t, idx) => {
       const isSelected = idx === selectedTurbineIdx;
@@ -358,7 +366,7 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
       const labelText = t.label || `T-${String(idx + 1).padStart(2, '0')}`;
       const speedText = t.effective_mps ? `${t.effective_mps.toFixed(1)}m/s` : `${windSpeedMps.toFixed(1)}m/s`;
 
-      // 1. Real 3D GLB Industrial Wind Turbine Model
+      // 1. Certified Industrial 3D Wind Turbine Model with Active Rotor Spinning Animation
       const turbineEntity = viewer.entities.add({
         turbineIndex: idx,
         name: `Turbine ${labelText}`,
@@ -366,9 +374,11 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
         orientation: orientation,
         model: {
           uri: '/assets/models/wind_turbine.glb',
-          minimumPixelSize: 42,
-          maximumScale: 200,
+          minimumPixelSize: 48,
+          maximumScale: 300,
           scale: modelScale,
+          runAnimations: true,
+          clampAnimations: false,
           heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
           shadows: Cesium.ShadowMode.ENABLED,
           color: isSelected ? Cesium.Color.fromCssColorString('#FFD21F') : Cesium.Color.WHITE,
@@ -377,17 +387,18 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
         },
       });
 
-      // 2. Foundation Terrain Drop Shadow & Ground Target Ring
+      // 2. Heavy Structural Concrete Foundation Pad (R=12m) & Ground Ring
       const groundRing = viewer.entities.add({
         turbineIndex: idx,
-        position: Cesium.Cartesian3.fromDegrees(t.lon, t.lat, baseElev + 1.0),
+        position: Cesium.Cartesian3.fromDegrees(t.lon, t.lat, baseElev + 0.5),
         ellipse: {
-          semiMajorAxis: isSelected ? 34.0 : 22.0,
-          semiMinorAxis: isSelected ? 34.0 : 22.0,
-          material: Cesium.Color.fromCssColorString(isSelected ? 'rgba(255, 210, 31, 0.65)' : 'rgba(0, 0, 0, 0.45)'),
-          outline: isSelected,
-          outlineColor: Cesium.Color.fromCssColorString('#FFD21F'),
-          outlineWidth: 2,
+          semiMajorAxis: isSelected ? 24.0 : 16.0,
+          semiMinorAxis: isSelected ? 24.0 : 16.0,
+          material: Cesium.Color.fromCssColorString(isSelected ? 'rgba(255, 210, 31, 0.7)' : 'rgba(30, 41, 59, 0.5)'),
+          outline: true,
+          outlineColor: Cesium.Color.fromCssColorString(isSelected ? '#FFD21F' : 'rgba(100, 116, 139, 0.7)'),
+          outlineWidth: isSelected ? 3 : 1.5,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
         },
       });
 
@@ -453,25 +464,27 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
     }
   };
 
-  // Fly to single selected turbine
+  // Cinematic close inspection of selected industrial turbine
   const handleFlyToTurbine = (t: Turbine) => {
     const viewer = viewerRef.current;
     const Cesium = (window as any).Cesium;
     if (!viewer || viewer.isDestroyed() || !Cesium) return;
 
     const baseElev = (t.elevation_m !== undefined && t.elevation_m !== null) ? Number(t.elevation_m) : 40.0;
-    const distanceM = 240.0;
-    const windRad = Cesium.Math.toRadians((windDirectionDeg + 180) % 360);
-    const targetElev = baseElev + hubHeight * 0.85;
+    const distanceM = Math.max(150.0, rotorDiameter * 1.4);
+    // Position camera upwind & oblique from hub
+    const camHeading = (windDirectionDeg + 30) % 360;
+    const camRad = Cesium.Math.toRadians(camHeading);
+    const targetElev = baseElev + hubHeight;
 
-    const latOffset = (distanceM * Math.cos(windRad)) / 111000.0;
-    const lonOffset = (distanceM * Math.sin(windRad)) / (111000.0 * Math.cos(t.lat * Math.PI / 180.0));
+    const latOffset = (distanceM * Math.cos(camRad)) / 111000.0;
+    const lonOffset = (distanceM * Math.sin(camRad)) / (111000.0 * Math.cos(t.lat * Math.PI / 180.0));
 
     viewer.camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(t.lon - lonOffset, t.lat - latOffset, targetElev + 40.0),
+      destination: Cesium.Cartesian3.fromDegrees(t.lon - lonOffset, t.lat - latOffset, targetElev + 20.0),
       orientation: {
-        heading: Cesium.Math.toRadians(windDirectionDeg),
-        pitch: Cesium.Math.toRadians(-12.0),
+        heading: Cesium.Math.toRadians((windDirectionDeg + 210) % 360),
+        pitch: Cesium.Math.toRadians(-15.0),
         roll: 0.0,
       },
       duration: 1.2,

@@ -150,18 +150,18 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
         attributionControl: false,
       });
 
-      // Define Layers - Modern High-Resolution Hybrid Satellite with Roads & Place Labels
+      // Define Layers - High-Resolution Hybrid Satellite with Roads & Place Labels
       const satellite = L.tileLayer(
-        'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+        '/api/geo/tiles/satellite/{z}/{x}/{y}',
         {
           maxZoom: 20,
           maxNativeZoom: 19,
-          attribution: 'Google Hybrid / Modern Satellite',
+          attribution: 'Esri World Imagery',
         }
       );
 
       const street = L.tileLayer(
-        'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        '/api/geo/tiles/osm/{z}/{x}/{y}',
         {
           maxZoom: 19,
           attribution: '© OpenStreetMap contributors',
@@ -169,10 +169,10 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
       );
 
       const terrain = L.tileLayer(
-        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+        '/api/geo/tiles/terrain/{z}/{x}/{y}',
         {
           maxZoom: 19,
-          attribution: 'Esri, USGS, NOAA',
+          attribution: 'Esri World Topo Map',
         }
       );
 

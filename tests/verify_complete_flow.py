@@ -23,8 +23,14 @@ def verify_all_screens():
     console_errors = []
     page_errors = []
 
+    import os
+    proxy_server = os.environ.get("https_proxy") or os.environ.get("HTTP_PROXY")
+    launch_kwargs = {"headless": True, "args": ["--enable-webgl", "--use-gl=angle"]}
+    if proxy_server:
+        launch_kwargs["proxy"] = {"server": proxy_server, "bypass": "localhost,127.0.0.1"}
+
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True, args=["--enable-webgl", "--use-gl=angle"])
+        browser = p.chromium.launch(**launch_kwargs)
         
         # =========================================================================
         # 1. MOBILE VERIFICATION (390 x 844) - iPhone 14 Ergonomics
