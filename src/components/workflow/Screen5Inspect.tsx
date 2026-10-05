@@ -402,39 +402,43 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
 
         {/* Right: Controls (Basemap, 3D, Wakes, Presets) */}
         <div className="flex flex-wrap items-center gap-1.5 pointer-events-auto">
-          {/* Basemap Switcher */}
-          <div className="flex items-center gap-0.5 bg-white/90 backdrop-blur-xl border border-white/80 p-0.5 rounded-2xl shadow-glass">
-            <button
-              id="btn-s5-satellite"
-              onClick={() => handleToggleBasemap('satellite')}
-              className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all ${
-                activeBasemap === 'satellite' ? 'bg-[#FFD21F] text-slate-950 shadow-sm' : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              Satellite
-            </button>
-            <button
-              id="btn-s5-terrain"
-              onClick={() => handleToggleBasemap('terrain')}
-              className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all ${
-                activeBasemap === 'terrain' ? 'bg-[#FFD21F] text-slate-950 shadow-sm' : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              Terrain
-            </button>
-          </div>
+          {/* Basemap Switcher (2D Mode Only) */}
+          {!is3DActive && (
+            <div className="flex items-center gap-0.5 bg-white/90 backdrop-blur-xl border border-white/80 p-0.5 rounded-2xl shadow-glass">
+              <button
+                id="btn-s5-satellite"
+                onClick={() => handleToggleBasemap('satellite')}
+                className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all ${
+                  activeBasemap === 'satellite' ? 'bg-[#FFD21F] text-slate-950 shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                Satellite
+              </button>
+              <button
+                id="btn-s5-terrain"
+                onClick={() => handleToggleBasemap('terrain')}
+                className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all ${
+                  activeBasemap === 'terrain' ? 'bg-[#FFD21F] text-slate-950 shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                Terrain
+              </button>
+            </div>
+          )}
 
-          {/* Toggle Wakes */}
-          <button
-            id="btn-s5-toggle-wakes"
-            onClick={() => setShowWakes(!showWakes)}
-            className={`p-1.5 rounded-xl border shadow-glass backdrop-blur-xl transition-all active:scale-95 ${
-              showWakes ? 'bg-[#FFD21F] text-slate-950 border-[#FFD21F]' : 'bg-white/90 text-slate-700 border-white/80 hover:bg-white'
-            }`}
-            title="Toggle Wake Cones"
-          >
-            {showWakes ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-          </button>
+          {/* Toggle Wakes (2D Mode Only) */}
+          {!is3DActive && (
+            <button
+              id="btn-s5-toggle-wakes"
+              onClick={() => setShowWakes(!showWakes)}
+              className={`p-1.5 rounded-xl border shadow-glass backdrop-blur-xl transition-all active:scale-95 ${
+                showWakes ? 'bg-[#FFD21F] text-slate-950 border-[#FFD21F]' : 'bg-white/90 text-slate-700 border-white/80 hover:bg-white'
+              }`}
+              title="Toggle Wake Cones"
+            >
+              {showWakes ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+            </button>
+          )}
 
           {/* Toggle Telemetry Box Visibility */}
           <button
@@ -443,33 +447,35 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
             onClick={() => setIsPanelCollapsed(!isPanelCollapsed)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border shadow-glass backdrop-blur-xl transition-all active:scale-95 ${
               !isPanelCollapsed
-                ? 'bg-[#FFD21F] text-slate-950 border-[#FFD21F]'
-                : 'bg-white/90 text-slate-700 border-white/80 hover:bg-white'
+                ? 'bg-slate-900 text-white border-white/20'
+                : 'bg-white/90 text-slate-800 border-white/80 hover:bg-white'
             }`}
             title={isPanelCollapsed ? "Show Telemetry Box" : "Hide Telemetry Box"}
           >
             <Layers className="w-3.5 h-3.5" />
-            <span>{isPanelCollapsed ? 'Show Telemetry' : 'Hide Box'}</span>
+            <span className="hidden xs:inline">{isPanelCollapsed ? 'Show Telemetry' : 'Hide Box'}</span>
           </button>
 
-          {/* Reset View */}
-          <button
-            id="btn-s5-reset-view"
-            onClick={handleResetView}
-            className="p-1.5 rounded-xl bg-white/90 backdrop-blur-xl border border-white/80 text-slate-700 hover:bg-white shadow-glass transition-all active:scale-95"
-            title="Reset Map View"
-          >
-            <RotateCcw className="w-4 h-4" />
-          </button>
+          {/* Reset View (2D Mode Only) */}
+          {!is3DActive && (
+            <button
+              id="btn-s5-reset-view"
+              onClick={handleResetView}
+              className="p-1.5 rounded-xl bg-white/90 backdrop-blur-xl border border-white/80 text-slate-700 hover:bg-white shadow-glass transition-all active:scale-95"
+              title="Reset Map View"
+            >
+              <RotateCcw className="w-4 h-4" />
+            </button>
+          )}
 
-          {/* 3D Globe Toggle */}
+          {/* 3D Globe / 2D View Toggle */}
           <button
             id="btn-s5-toggle-3d"
             onClick={onToggle3D}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs border shadow-glass backdrop-blur-xl transition-all active:scale-95 ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs border backdrop-blur-xl transition-all active:scale-95 ${
               is3DActive
-                ? 'bg-[#FFD21F] text-slate-950 border-amber-300 shadow-md'
-                : 'bg-white/90 hover:bg-white text-slate-700 border-white/80'
+                ? 'bg-[#FFD21F] text-slate-950 border-amber-400 shadow-md font-black'
+                : 'bg-white/95 hover:bg-white text-slate-900 border-white/90 shadow-glass'
             }`}
           >
             <Box className="w-3.5 h-3.5" />
@@ -558,29 +564,6 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
           </div>
         )}
 
-        {/* 3D Camera Presets Overlay (When 3D is active) */}
-        {is3DActive && (
-          <div
-            id="s5-camera-presets-bar"
-            className="absolute top-16 left-3 z-20 flex items-center gap-1 bg-white/95 backdrop-blur-xl p-1 rounded-2xl border border-white/90 shadow-glass"
-          >
-            {['TOP', 'NORTH', 'SOUTH', 'OBLIQUE', 'FIT_SITE'].map((preset) => (
-              <button
-                key={preset}
-                type="button"
-                data-preset={preset}
-                onClick={() => handlePresetClick(preset)}
-                className={`camera-preset-btn px-2.5 py-1 rounded-xl text-xs font-bold transition-all ${
-                  activePreset === preset
-                    ? 'active bg-[#FFD21F] text-slate-950 shadow-xs'
-                    : 'text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                {preset}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
 
       {/* ── COLLAPSED FLOATING PILL (Shown when box is hidden so user sees unobstructed map) ── */}
@@ -589,17 +572,17 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
           id="btn-s5-show-panel"
           type="button"
           onClick={() => setIsPanelCollapsed(false)}
-          className="absolute bottom-20 left-1/2 -translate-x-1/2 md:bottom-6 z-20 pointer-events-auto flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-white/95 backdrop-blur-xl border border-white/90 shadow-2xl text-slate-900 hover:scale-105 active:scale-95 transition-all group"
+          className="absolute bottom-20 left-1/2 -translate-x-1/2 md:bottom-6 z-20 pointer-events-auto flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-slate-950/85 backdrop-blur-2xl border border-white/20 shadow-2xl text-white hover:scale-105 active:scale-95 transition-all group"
         >
           <div className="w-6 h-6 rounded-full bg-[#FFD21F] flex items-center justify-center text-slate-950 font-bold shadow-xs group-hover:rotate-180 transition-transform">
             <ChevronUp className="w-4 h-4" />
           </div>
           <div className="flex flex-col text-left">
-            <span className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+            <span className="text-xs font-black text-white flex items-center gap-1.5">
               <span>Show Telemetry Panel</span>
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
             </span>
-            <span className="text-[10px] text-slate-500 font-mono">
+            <span className="text-[10px] text-slate-300 font-mono">
               {aep} · {wakeLoss} wake · {activeTurbines.length} Turbines
             </span>
           </div>
@@ -613,15 +596,15 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
           isPanelCollapsed ? 'translate-y-[150%] opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'
         }`}
       >
-        <Card className="p-4 sm:p-5 flex flex-col gap-3 shadow-glass border-slate-200/90 bg-white/95 backdrop-blur-2xl">
+        <Card className="p-4 sm:p-5 flex flex-col gap-3 shadow-2xl border-white/20 bg-slate-950/90 backdrop-blur-2xl text-white">
           
           {/* Header & Mode Switch & Hide Box Button */}
-          <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+          <div className="flex items-center justify-between pb-2 border-b border-white/10">
             <div>
-              <h3 className="text-xs font-bold text-slate-900 leading-tight">
+              <h3 className="text-xs font-bold text-white leading-tight">
                 {isSiteUnsuitable ? 'Geospatial Feasibility Assessment' : 'Optimized Layout Telemetry'}
               </h3>
-              <p className="text-[11px] text-slate-500">
+              <p className="text-[11px] text-slate-400">
                 {isSiteUnsuitable ? 'IEC 61400 setback & environmental screening' : 'WS-QAOA Quantum Annealing Micro-Siting'}
               </p>
             </div>
@@ -629,13 +612,13 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
             <div className="flex items-center gap-2">
               {/* Segmented Layout Comparison Buttons */}
               {!isSiteUnsuitable && (
-                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
+                <div className="flex items-center gap-1 bg-white/10 p-1 rounded-xl border border-white/15">
                   <button
                     id="s5-btn-before"
                     type="button"
                     onClick={() => setLayoutMode('before')}
                     className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
-                      layoutMode === 'before' ? 'bg-white text-slate-950 shadow-xs active' : 'text-slate-500 hover:text-slate-800'
+                      layoutMode === 'before' ? 'bg-white text-slate-950 shadow-xs active' : 'text-slate-300 hover:text-white'
                     }`}
                   >
                     Before
@@ -645,7 +628,7 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
                     type="button"
                     onClick={() => setLayoutMode('optimized')}
                     className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
-                      layoutMode === 'optimized' ? 'bg-[#FFD21F] text-slate-950 shadow-xs active' : 'text-slate-500 hover:text-slate-800'
+                      layoutMode === 'optimized' ? 'bg-[#FFD21F] text-slate-950 shadow-xs active' : 'text-slate-300 hover:text-white'
                     }`}
                   >
                     Optimized
@@ -658,7 +641,7 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
                 id="btn-s5-hide-panel"
                 type="button"
                 onClick={() => setIsPanelCollapsed(true)}
-                className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 transition-all flex items-center gap-1 text-[10px] font-bold shadow-2xs"
+                className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-slate-200 transition-all flex items-center gap-1 text-[10px] font-bold shadow-2xs"
                 title="Hide this box to see turbines and full map"
               >
                 <ChevronDown className="w-3.5 h-3.5" />
@@ -669,37 +652,37 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
 
           {/* Unsuitable Alert or Metrics KPIs */}
           {isSiteUnsuitable ? (
-            <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-950 flex flex-col gap-1.5">
-              <div className="flex items-center gap-2 font-black text-rose-800">
-                <AlertTriangle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+            <div className="p-3.5 rounded-xl bg-rose-950/60 border border-rose-500/30 text-xs text-rose-200 flex flex-col gap-1.5">
+              <div className="flex items-center gap-2 font-black text-rose-300">
+                <AlertTriangle className="w-4 h-4 text-rose-400 flex-shrink-0" />
                 <span>Site unsuitable for wind-farm development</span>
               </div>
-              <p className="text-[11px] text-slate-700 leading-relaxed">
+              <p className="text-[11px] text-slate-300 leading-relaxed">
                 Mandatory residential setbacks (500m IEC 61400 noise/shadow buffer) or transportation/grid corridors exclude turbine siting inside this boundary.
               </p>
-              <div className="text-[10px] font-mono text-slate-600 bg-white/80 p-2 rounded-lg border border-rose-100">
+              <div className="text-[10px] font-mono text-rose-200 bg-rose-900/40 p-2 rounded-lg border border-rose-500/20">
                 0 feasible turbine positions identified. WS-QAOA optimizer halted to prevent hazardous civil placement.
               </div>
             </div>
           ) : (
             <div className="grid grid-cols-3 gap-2 text-center text-xs">
-              <div className="p-2 rounded-xl bg-slate-50 border border-slate-200">
+              <div className="p-2 rounded-xl bg-white/5 border border-white/10">
                 <div className="text-[10px] text-slate-400 font-bold uppercase">Net AEP</div>
-                <div id="s5-meta-aep" className="text-sm font-black text-slate-900 font-mono mt-0.5 tabular-nums">
+                <div id="s5-meta-aep" className="text-sm font-black text-white font-mono mt-0.5 tabular-nums">
                   {aep}
                 </div>
               </div>
 
-              <div className="p-2 rounded-xl bg-slate-50 border border-slate-200">
+              <div className="p-2 rounded-xl bg-white/5 border border-white/10">
                 <div className="text-[10px] text-slate-400 font-bold uppercase">Wake Loss</div>
-                <div id="s5-meta-wake-loss" className="text-sm font-black text-emerald-600 font-mono mt-0.5 tabular-nums">
+                <div id="s5-meta-wake-loss" className="text-sm font-black text-emerald-400 font-mono mt-0.5 tabular-nums">
                   {wakeLoss}
                 </div>
               </div>
 
-              <div className="p-2 rounded-xl bg-slate-50 border border-slate-200">
+              <div className="p-2 rounded-xl bg-white/5 border border-white/10">
                 <div className="text-[10px] text-slate-400 font-bold uppercase">Net Gain</div>
-                <div className="text-sm font-black text-emerald-600 font-mono mt-0.5 tabular-nums">
+                <div className="text-sm font-black text-emerald-400 font-mono mt-0.5 tabular-nums">
                   +{improvement}
                 </div>
               </div>
@@ -708,9 +691,9 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
 
           {/* Turbine Micro-Inspector (Only when turbines exist) */}
           {!isSiteUnsuitable && activeTurbines.length > 0 && (
-            <div id="s5-turbine-inspector" className="p-3 rounded-xl bg-slate-50/90 border border-slate-200 flex flex-col gap-2">
+            <div id="s5-turbine-inspector" className="p-3 rounded-xl bg-white/5 border border-white/10 flex flex-col gap-2">
               <div className="flex items-center justify-between">
-                <span id="s5-inspector-name" className="text-xs font-black text-slate-900">
+                <span id="s5-inspector-name" className="text-xs font-black text-white">
                   {selectedTurbine.label || `Turbine T-${String(selectedTurbineIdx + 1).padStart(2, '0')}`}
                 </span>
 
@@ -719,7 +702,7 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
                     id="btn-s5-prev-turbine"
                     type="button"
                     onClick={handlePrevTurbine}
-                    className="p-1 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 shadow-2xs"
+                    className="p-1 rounded-lg bg-white/10 border border-white/15 text-slate-200 hover:bg-white/20 shadow-2xs"
                     title="Previous Turbine"
                   >
                     <ChevronLeft className="w-3.5 h-3.5" />
@@ -728,7 +711,7 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
                     id="btn-s5-next-turbine"
                     type="button"
                     onClick={handleNextTurbine}
-                    className="p-1 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 shadow-2xs"
+                    className="p-1 rounded-lg bg-white/10 border border-white/15 text-slate-200 hover:bg-white/20 shadow-2xs"
                     title="Next Turbine"
                   >
                     <ChevronRight className="w-3.5 h-3.5" />
@@ -749,18 +732,18 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] font-mono text-slate-600 tabular-nums">
-                <div>Lat: <strong className="text-slate-900">{selectedTurbine.lat.toFixed(5)}°</strong></div>
-                <div>Lon: <strong className="text-slate-900">{selectedTurbine.lon.toFixed(5)}°</strong></div>
-                <div>Elev: <strong className="text-slate-900">{selectedTurbine.elevation_m || 42}m</strong></div>
-                <div>Wind: <strong className="text-emerald-600">{(selectedTurbine.effective_mps || 7.4).toFixed(1)}m/s</strong></div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] font-mono text-slate-300 tabular-nums">
+                <div>Lat: <strong className="text-white">{selectedTurbine.lat.toFixed(5)}°</strong></div>
+                <div>Lon: <strong className="text-white">{selectedTurbine.lon.toFixed(5)}°</strong></div>
+                <div>Elev: <strong className="text-white">{selectedTurbine.elevation_m || 42}m</strong></div>
+                <div>Wind: <strong className="text-emerald-400">{(selectedTurbine.effective_mps || 7.4).toFixed(1)}m/s</strong></div>
               </div>
             </div>
           )}
 
           {/* Preliminary Geotechnical Screening Label (Requirement 3) */}
-          <div className="text-[10px] text-slate-500 border-t border-slate-100 pt-2 flex flex-col gap-0.5">
-            <span className="font-semibold text-slate-700">Preliminary geotechnical screening (ISRIC SoilGrids v2.0)</span>
+          <div className="text-[10px] text-slate-400 border-t border-white/10 pt-2 flex flex-col gap-0.5">
+            <span className="font-semibold text-slate-200">Preliminary geotechnical screening (ISRIC SoilGrids v2.0)</span>
             <span className="text-[9px] text-slate-400">Detailed geotechnical investigation required before construction.</span>
           </div>
 

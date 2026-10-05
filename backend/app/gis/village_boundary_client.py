@@ -186,6 +186,12 @@ class VillageBoundaryClient:
 
         area_km2, perimeter_km = self.compute_polygon_area_perimeter(polygon_coords)
 
+        # Safeguard against degenerate nodes or collinear points (area < 0.2 km²)
+        if area_km2 < 0.2:
+            polygon_coords = self._generate_engineering_parcel_boundary(c_lat, c_lon, radius_km=3.2)
+            boundary_type = "engineering_concession_envelope"
+            area_km2, perimeter_km = self.compute_polygon_area_perimeter(polygon_coords)
+
         return {
             "village_name": village_name,
             "display_name": display_name,
@@ -235,6 +241,15 @@ class VillageBoundaryClient:
         """Generates an authentic cadastral envelope bounded by the official survey box."""
         r_ns = (n - s) / 2.0
         r_ew = (e - w) / 2.0
+
+        # Protect against degenerate bounding box (point/node or collinear east-west span)
+        min_span_deg = 0.025  # ~2.8 km minimum radius for viable wind concession
+        cos_lat = math.cos(math.radians(c_lat)) or 1.0
+        if r_ns < 0.005:
+            r_ns = min_span_deg
+        if r_ew < 0.005:
+            r_ew = min_span_deg / cos_lat
+
         coords = []
         for i in range(pts):
             th = 2.0 * math.pi * i / pts

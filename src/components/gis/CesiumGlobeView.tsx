@@ -382,15 +382,17 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
 
     turbines.forEach((t, idx) => {
       const isSelected = idx === selectedTurbineIdx;
-      const baseElev = (t.elevation_m !== undefined && t.elevation_m !== null) ? Number(t.elevation_m) : 40.0;
-      const groundPos = Cesium.Cartesian3.fromDegrees(t.lon, t.lat, baseElev);
+      const surfaceElev = (isTerrainReady || isGoogleTilesActive)
+        ? ((t.elevation_m !== undefined && t.elevation_m !== null) ? Number(t.elevation_m) : 40.0)
+        : 0.0;
+      const groundPos = Cesium.Cartesian3.fromDegrees(t.lon, t.lat, surfaceElev);
       const hpr = new Cesium.HeadingPitchRoll(turbineHeadingRad, 0, 0);
       const orientation = Cesium.Transforms.headingPitchRollQuaternion(groundPos, hpr);
 
       const labelText = t.label || `T-${String(idx + 1).padStart(2, '0')}`;
       const speedText = t.effective_mps ? `${t.effective_mps.toFixed(1)}m/s` : `${windSpeedMps.toFixed(1)}m/s`;
 
-      // 1. Certified Industrial 3D Wind Turbine Model with True 1:1 Metric Scale
+      // 1. Certified Industrial 3D Wind Turbine Model with True 1:1 Metric Scale & Minimum Pixel Size
       const turbineEntity = viewer.entities.add({
         turbineIndex: idx,
         name: `Turbine ${labelText}`,
@@ -399,6 +401,8 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
         model: {
           uri: '/assets/models/wind_turbine.glb',
           scale: modelScale,
+          minimumPixelSize: 64,
+          maximumScale: 10.0,
           runAnimations: true,
           clampAnimations: false,
           heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
@@ -409,10 +413,46 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
         },
       });
 
+      // 1b. Structural Monopile Tower (Ensures 3D mast is visible at any zoom)
+      const mastEntity = viewer.entities.add({
+        turbineIndex: idx,
+        name: `Mast ${labelText}`,
+        position: Cesium.Cartesian3.fromDegrees(t.lon, t.lat, surfaceElev + hubHeight / 2.0),
+        cylinder: {
+          length: hubHeight,
+          topRadius: 1.8,
+          bottomRadius: 3.4,
+          material: isSelected
+            ? Cesium.Color.fromCssColorString('#FFD21F')
+            : Cesium.Color.WHITE.withAlpha(0.96),
+          outline: true,
+          outlineColor: Cesium.Color.fromCssColorString('rgba(100, 116, 139, 0.4)'),
+          outlineWidth: 1.0,
+          shadows: Cesium.ShadowMode.ENABLED,
+          heightReference: Cesium.HeightReference.NONE,
+        },
+      });
+
+      // 1c. Nacelle Housing at Hub Height
+      const nacelleEntity = viewer.entities.add({
+        turbineIndex: idx,
+        name: `Nacelle ${labelText}`,
+        position: Cesium.Cartesian3.fromDegrees(t.lon, t.lat, surfaceElev + hubHeight),
+        orientation: orientation,
+        box: {
+          dimensions: new Cesium.Cartesian3(4.2, 13.0, 4.4),
+          material: isSelected
+            ? Cesium.Color.fromCssColorString('#FFD21F')
+            : Cesium.Color.fromCssColorString('#E2E8F0'),
+          shadows: Cesium.ShadowMode.ENABLED,
+          heightReference: Cesium.HeightReference.NONE,
+        },
+      });
+
       // 2. Heavy Structural Concrete Foundation Pad (R=16m)
       const groundRing = viewer.entities.add({
         turbineIndex: idx,
-        position: Cesium.Cartesian3.fromDegrees(t.lon, t.lat, baseElev + 0.5),
+        position: Cesium.Cartesian3.fromDegrees(t.lon, t.lat, surfaceElev + 0.5),
         ellipse: {
           semiMajorAxis: isSelected ? 22.0 : 16.0,
           semiMinorAxis: isSelected ? 22.0 : 16.0,
@@ -427,7 +467,7 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
       // 3. Floating Engineering Telemetry Tag (Anchored atop the hub)
       const label = viewer.entities.add({
         turbineIndex: idx,
-        position: Cesium.Cartesian3.fromDegrees(t.lon, t.lat, baseElev + hubHeight + rotorDiameter / 2.0 + 16.0),
+        position: Cesium.Cartesian3.fromDegrees(t.lon, t.lat, surfaceElev + hubHeight + rotorDiameter / 2.0 + 16.0),
         label: {
           text: `${labelText} · ${speedText}`,
           font: 'bold 11px JetBrains Mono, monospace',
@@ -440,7 +480,7 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
         },
       });
 
-      entitiesRef.current.turbines.push(turbineEntity, groundRing, label);
+      entitiesRef.current.turbines.push(turbineEntity, mastEntity, nacelleEntity, groundRing, label);
 
       // 4. Downwind Horizontal Aerodynamic Wake Plume Footprint (Draped on Terrain)
       // Physically derived Jensen expanding wake corridor (8.5D length, k=0.05 decay)
@@ -503,8 +543,8 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
           name: `Wake Centerline ${labelText}`,
           polyline: {
             positions: [
-              Cesium.Cartesian3.fromDegrees(t.lon, t.lat, baseElev + hubHeight),
-              Cesium.Cartesian3.fromDegrees(endLon, endLat, baseElev + hubHeight * 0.95),
+              Cesium.Cartesian3.fromDegrees(t.lon, t.lat, surfaceElev + hubHeight),
+              Cesium.Cartesian3.fromDegrees(endLon, endLat, surfaceElev + hubHeight * 0.95),
             ],
             width: 2.0,
             material: new Cesium.PolylineGlowMaterialProperty({
@@ -652,11 +692,11 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
 
       {/* Floating 3D Engineering & Flow Controls Dock (Top-Right, Non-Overlapping) */}
       <div 
-        className="absolute top-3 right-3 md:top-4 md:right-4 z-30 max-w-[calc(100vw-24px)] flex flex-wrap items-center gap-1.5 p-2 rounded-2xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-2xl border border-white/50 dark:border-white/10 shadow-[0_8px_32px_rgba(15,23,42,0.18)] pointer-events-auto"
+        className="absolute top-16 right-2 sm:top-16 sm:right-3 md:top-4 md:right-4 z-30 max-w-[calc(100vw-16px)] flex flex-wrap items-center gap-1.5 p-1.5 sm:p-2 rounded-2xl bg-slate-950/85 backdrop-blur-2xl border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.5)] pointer-events-auto text-white"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-black text-slate-500 uppercase tracking-wider">
-          <Compass className="w-3.5 h-3.5 text-amber-500" />
+        <div className="flex items-center gap-1 px-1.5 sm:px-2 py-0.5 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+          <Compass className="w-3.5 h-3.5 text-[#FFD21F]" />
           <span className="hidden sm:inline">3D View</span>
         </div>
 
@@ -671,10 +711,10 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
             key={p.key}
             type="button"
             onClick={(e) => handlePresetClick(p.key, e)}
-            className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all active:scale-95 ${
+            className={`px-2 sm:px-2.5 py-1 rounded-xl text-xs font-bold transition-all active:scale-95 ${
               activeCameraPreset === p.key
-                ? 'bg-[#FFD21F] text-slate-950 shadow-xs ring-1 ring-amber-400'
-                : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700'
+                ? 'bg-[#FFD21F] text-slate-950 shadow-md font-black ring-1 ring-amber-300'
+                : 'bg-white/10 text-slate-200 hover:bg-white/20 hover:text-white'
             }`}
           >
             {p.label}
@@ -688,10 +728,10 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
             e.stopPropagation();
             setShowFlowStreamlines(!showFlowStreamlines);
           }}
-          className={`flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold transition-all active:scale-95 ${
+          className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-xl text-xs font-bold transition-all active:scale-95 ${
             showFlowStreamlines
-              ? 'bg-sky-500 text-white shadow-xs'
-              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+              ? 'bg-sky-500 text-white shadow-xs font-black'
+              : 'bg-white/10 text-slate-300 hover:bg-white/20'
           }`}
           title="Toggle Atmospheric Wind & Energy Data Flow Streamlines"
         >
@@ -706,10 +746,10 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
             e.stopPropagation();
             setLocalShowWakes(!localShowWakes);
           }}
-          className={`flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold transition-all active:scale-95 ${
+          className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-xl text-xs font-bold transition-all active:scale-95 ${
             localShowWakes
-              ? 'bg-amber-500 text-white shadow-xs'
-              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+              ? 'bg-amber-500 text-white shadow-xs font-black'
+              : 'bg-white/10 text-slate-300 hover:bg-white/20'
           }`}
           title="Toggle Aerodynamic Jensen Wake Plumes"
         >
@@ -721,10 +761,10 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
           <button
             type="button"
             onClick={(e) => handleFlyToTurbine(turbines[selectedTurbineIdx], e)}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-slate-950 text-white hover:bg-slate-800 text-xs font-bold shadow-xs active:scale-95 transition-all"
+            className="flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-bold shadow-xs active:scale-95 transition-all border border-white/20"
             title="Inspect Selected Turbine Close-up"
           >
-            <Eye className="w-3 h-3 text-amber-400" />
+            <Eye className="w-3 h-3 text-[#FFD21F]" />
             <span>{turbines[selectedTurbineIdx].label || `T-${selectedTurbineIdx + 1}`}</span>
           </button>
         )}

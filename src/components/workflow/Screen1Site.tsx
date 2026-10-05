@@ -43,7 +43,8 @@ import {
   fetchLandData, 
   fetchIndiaHotspots, 
   fetchSoilTelemetry, 
-  fetchVillageBoundary 
+  fetchVillageBoundary,
+  generateEngineeringConcessionBoundary
 } from '../../services/api';
 import { CesiumGlobeView } from '../gis/CesiumGlobeView';
 
@@ -262,12 +263,19 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
 
     const currentRadius = selectedRadius || site.radiusKm || Math.sqrt(Math.max(1, areaKm2) / Math.PI) || 3.0;
 
-    const vertices: [number, number][] =
+    let vertices: [number, number][] =
       customBoundary && customBoundary.length >= 3
         ? customBoundary
         : (site.boundary && site.boundary.length >= 3 ? (site.boundary as [number, number][]) : generateCircleVertices(lat, lon, currentRadius));
 
-    const calcArea = calculatePolygonAreaKm2(vertices);
+    let calcArea = calculatePolygonAreaKm2(vertices);
+
+    // If vertices are degenerate (e.g. collinear points or calcArea < 0.2 km²), auto-derive an authentic engineering concession polygon
+    if (calcArea < 0.2) {
+      vertices = generateEngineeringConcessionBoundary(lat, lon, currentRadius);
+      calcArea = calculatePolygonAreaKm2(vertices);
+    }
+
     const hasPolygonBoundary = (customBoundary && customBoundary.length >= 3) || (site.boundary && site.boundary.length >= 3);
     const isCadastre = modeRef.current === 'village' || hasPolygonBoundary;
 
@@ -294,7 +302,7 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
       });
     } catch (_) {}
 
-    // Concession badge at center
+    // Concession badge at center — Apple Liquid Glass styling
     const siteTitle = site.shortName || site.name.split(',')[0] || 'Selected Concession';
     const isVillage = modeRef.current === 'village' || hasPolygonBoundary;
     const badgeSubtext = modeRef.current === 'radius'
@@ -304,9 +312,12 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
     const unifiedBadgeIcon = L.divIcon({
       className: 'site-unified-badge-wrapper',
       html: `
-        <div class="px-2.5 py-1.5 rounded-xl bg-white/95 backdrop-blur-xl border border-white/80 shadow-lg flex flex-col items-center select-none pointer-events-none text-center">
-          <div class="text-[11px] font-black text-slate-900 tracking-tight">${siteTitle}</div>
-          <div class="text-[9px] font-mono font-bold ${isVillage ? 'text-emerald-700' : 'text-amber-600'}">${badgeSubtext}</div>
+        <div class="px-3.5 py-2 rounded-2xl bg-slate-950/85 backdrop-blur-2xl border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.5)] flex flex-col items-center select-none pointer-events-none text-center">
+          <div class="flex items-center gap-1.5">
+            <span class="w-1.5 h-1.5 rounded-full ${isVillage ? 'bg-emerald-400' : 'bg-[#FFD21F]'} animate-pulse"></span>
+            <span class="text-[11px] font-black text-white tracking-tight">${siteTitle}</span>
+          </div>
+          <div class="text-[9px] font-mono font-bold ${isVillage ? 'text-emerald-400' : 'text-amber-400'} mt-0.5">${badgeSubtext}</div>
         </div>
       `,
       iconSize: [180, 48],
@@ -366,11 +377,10 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
       );
 
       const street = L.tileLayer(
-        'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
         {
-          subdomains: ['a', 'b', 'c', 'd'],
-          maxZoom: 20,
-          attribution: '© OpenStreetMap contributors © CARTO',
+          maxZoom: 19,
+          attribution: 'Tiles © Esri — Esri, DeLorme, NAVTEQ, TomTom, Intermap, iPC, USGS, METI',
         }
       );
 
