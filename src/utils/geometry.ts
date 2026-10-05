@@ -123,13 +123,13 @@ export function generatePolygonEnclosedTurbines(
     if (lon > maxLon) maxLon = lon;
   }
 
-  // Multi-pass interior candidate sampling
+  // Multi-pass interior candidate sampling with adaptive resolution
   let candidates: [number, number][] = [];
-  const setbackTrials = [120, 80, 50, 20, 0];
+  const setbackTrials = [80, 50, 25, 10, 0];
+  const steps = Math.max(50, Math.min(120, Math.ceil(Math.sqrt(targetCount) * 16)));
 
   for (const setback of setbackTrials) {
     candidates = [];
-    const steps = 30;
     const dLat = (maxLat - minLat) / steps;
     const dLon = (maxLon - minLon) / steps;
 
@@ -143,7 +143,24 @@ export function generatePolygonEnclosedTurbines(
         }
       }
     }
-    if (candidates.length >= targetCount) break;
+    if (candidates.length >= targetCount * 2) break;
+  }
+
+  // Dense adaptive sub-sampling if polygon is compact
+  if (candidates.length < targetCount * 2 && candidates.length > 0) {
+    const basePts = [...candidates];
+    const dLat = (maxLat - minLat) / (steps * 2);
+    const dLon = (maxLon - minLon) / (steps * 2);
+    for (const [pLat, pLon] of basePts) {
+      for (const [ox, oy] of [[0.5, 0.5], [-0.5, 0.5], [0.5, -0.5], [-0.5, -0.5]]) {
+        const subPt: [number, number] = [pLat + oy * dLat, pLon + ox * dLon];
+        if (isPointInPolygon(subPt, effectiveBoundary) && pointToPolygonDistMeters(subPt, effectiveBoundary) >= 5) {
+          candidates.push(subPt);
+          if (candidates.length >= targetCount * 3) break;
+        }
+      }
+      if (candidates.length >= targetCount * 3) break;
+    }
   }
 
   // If still empty (e.g. degenerate polygon), collapse slightly toward centroid
@@ -151,35 +168,43 @@ export function generatePolygonEnclosedTurbines(
     candidates.push([cLat, cLon]);
   }
 
-  // Spatial thinning / greedy dispersion
+  // Spatial thinning / greedy dispersion with progressive relaxation
   const cosLat = Math.cos((cLat * Math.PI) / 180);
-  const selected: [number, number][] = [];
+  const widthM = (maxLon - minLon) * 111320 * cosLat;
+  const heightM = (maxLat - minLat) * 110540;
+  const approxAreaM2 = Math.max(80000, widthM * heightM * 0.65);
   
   // Sort candidates by distance from boundary descending (prioritize deep interior)
   candidates.sort((a, b) => {
     return pointToPolygonDistMeters(b, effectiveBoundary) - pointToPolygonDistMeters(a, effectiveBoundary);
   });
 
-  const desiredSpacingM = Math.max(180, 500 - targetCount * 12);
+  let selected: [number, number][] = [];
+  let currentSpacingM = Math.max(50, Math.min(500, Math.sqrt(approxAreaM2 / targetCount) * 0.8));
 
-  for (const cand of candidates) {
-    let tooClose = false;
-    for (const sel of selected) {
-      const dx = (cand[1] - sel[1]) * 111320 * cosLat;
-      const dy = (cand[0] - sel[0]) * 110540;
-      if (Math.hypot(dx, dy) < desiredSpacingM) {
-        tooClose = true;
-        break;
+  // Multi-pass spacing relaxation until exactly targetCount are chosen
+  while (selected.length < targetCount && currentSpacingM >= 30) {
+    selected = [];
+    for (const cand of candidates) {
+      let tooClose = false;
+      for (const sel of selected) {
+        const dx = (cand[1] - sel[1]) * 111320 * cosLat;
+        const dy = (cand[0] - sel[0]) * 110540;
+        if (Math.hypot(dx, dy) < currentSpacingM) {
+          tooClose = true;
+          break;
+        }
+      }
+      if (!tooClose) {
+        selected.push(cand);
+        if (selected.length === targetCount) break;
       }
     }
-    if (!tooClose) {
-      selected.push(cand);
-      if (selected.length === targetCount) break;
-    }
+    currentSpacingM *= 0.72; // relax spacing threshold
   }
 
-  // If not enough selected, fill up remaining from available interior candidates with relaxed spacing
-  if (selected.length < targetCount && candidates.length > selected.length) {
+  // If still fewer than targetCount, fill remaining from available interior candidates
+  if (selected.length < targetCount) {
     for (const cand of candidates) {
       if (!selected.includes(cand)) {
         selected.push(cand);
@@ -188,7 +213,22 @@ export function generatePolygonEnclosedTurbines(
     }
   }
 
-  // Generate Turbine objects
+  // In extreme micro-polygons, synthesize interior points between centroid and selected
+  while (selected.length < targetCount) {
+    const idx = selected.length % Math.max(1, selected.length);
+    const base = selected[idx] || [cLat, cLon];
+    const synth: [number, number] = [
+      base[0] * 0.95 + cLat * 0.05 + (Math.sin(selected.length) * 0.0001),
+      base[1] * 0.95 + cLon * 0.05 + (Math.cos(selected.length) * 0.0001),
+    ];
+    if (isPointInPolygon(synth, effectiveBoundary)) {
+      selected.push(synth);
+    } else {
+      selected.push([cLat, cLon]);
+    }
+  }
+
+  // Generate Turbine objects (exact targetCount guaranteed)
   return selected.slice(0, targetCount).map((coords, idx) => {
     const lat = Number(coords[0].toFixed(6));
     const lon = Number(coords[1].toFixed(6));

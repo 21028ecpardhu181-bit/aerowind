@@ -97,8 +97,8 @@ class OptimizeRequest(BaseModel):
     K: int = Field(
         ...,
         ge=2,
-        le=8,
-        description="Target number of turbines to place (strictly 2 <= K <= 8)",
+        le=50,
+        description="Target number of turbines to place (strictly 2 <= K <= 50)",
     )
     wind_angle_deg: Optional[float] = Field(
         None,

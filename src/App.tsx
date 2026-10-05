@@ -625,7 +625,7 @@ export function App() {
           x_m: c.x_m,
           y_m: c.y_m,
         })),
-        K: Math.max(2, Math.min(8, config.turbineCount)),
+        K: Math.max(2, Math.min(50, config.turbineCount)),
         wind_angle_deg: config.windDirectionDeg,
         p: 2,
       };
@@ -690,7 +690,7 @@ export function App() {
       console.warn('Optimization API call failed, generating physical layout fallback:', e);
       const optTurbs = generatePolygonEnclosedTurbines(
         site.boundary,
-        Math.min(8, config.turbineCount),
+        Math.min(50, config.turbineCount),
         site.lat,
         site.lon,
         site.windSpeedMps

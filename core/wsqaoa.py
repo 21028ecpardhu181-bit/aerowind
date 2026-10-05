@@ -273,8 +273,8 @@ def optimize(
     J_arr = np.asarray(J, dtype=np.float64)
     N = len(h_arr)
 
-    # ── Classical fallback when qiskit not installed (e.g. Vercel) ─────────
-    if not _QISKIT_AVAILABLE:
+    # ── High-Qubit / Classical Warm-Start Relaxation (N > 12 or K > 8 or qiskit unavailable)
+    if not _QISKIT_AVAILABLE or N > 12 or K > 8:
         c_star = continuous_relaxation(h_arr, J_arr, K)
         top_k = set(np.argsort(c_star)[-K:].tolist())
         bs = "".join("1" if i in top_k else "0" for i in range(N))

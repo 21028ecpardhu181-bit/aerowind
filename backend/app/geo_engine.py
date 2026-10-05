@@ -507,28 +507,35 @@ class CandidateGenerationEngine:
         if not feasible_raw:
             feasible_raw = []  # Defensive: never leak EXCLUDED or UNKNOWN candidates into feasible pool
 
-        # Spatial thinning with half-spacing
-        spacing_sub_threshold = max(180.0, self.min_dist_m * 0.45)
+        # Spatial thinning with adaptive spacing based on requested turbines count
+        needed_candidates = max(requested_turbines * 2, 30)
+        spacing_sub_threshold = max(60.0, self.min_dist_m * 0.40)
         coords_feas = np.array([[c["x_m"], c["y_m"]] for c in feasible_raw], dtype=np.float64)
 
         if len(coords_feas) > 0:
             tree = cKDTree(coords_feas)
-            # Greedy spatial retention prioritized by wind resource
             sort_order = np.argsort([-c["wind_resource"] for c in feasible_raw])
-            retained_indices: List[int] = []
-            suppressed = set()
+            
+            # Progressive relaxation of spacing if needed to satisfy high turbine counts
+            thinned_candidates = []
+            for relax_factor in [1.0, 0.7, 0.4, 0.0]:
+                curr_thresh = spacing_sub_threshold * relax_factor
+                retained_indices: List[int] = []
+                suppressed = set()
 
-            for idx in sort_order:
-                if idx in suppressed:
-                    continue
-                retained_indices.append(int(idx))
-                # Find neighbors within spacing_sub_threshold and suppress them
-                neighbors = tree.query_ball_point(coords_feas[idx], r=spacing_sub_threshold)
-                for n_idx in neighbors:
-                    if n_idx != idx:
-                        suppressed.add(n_idx)
+                for idx in sort_order:
+                    if idx in suppressed:
+                        continue
+                    retained_indices.append(int(idx))
+                    if curr_thresh > 10.0:
+                        neighbors = tree.query_ball_point(coords_feas[idx], r=curr_thresh)
+                        for n_idx in neighbors:
+                            if n_idx != idx:
+                                suppressed.add(n_idx)
 
-            thinned_candidates = [feasible_raw[i] for i in retained_indices]
+                thinned_candidates = [feasible_raw[i] for i in retained_indices]
+                if len(thinned_candidates) >= needed_candidates or relax_factor == 0.0:
+                    break
         else:
             thinned_candidates = feasible_raw
 
@@ -688,23 +695,28 @@ class HybridWindFarmOptimizer:
             if len(selected_indices) == K:
                 break
 
-        # Check if any remaining candidates can be added without violating spacing
+        # Check if any remaining candidates can be added with progressively relaxed spacing
         if len(selected_indices) < K:
             remaining = [i for i in range(N) if i not in selected_indices]
             remaining.sort(
                 key=lambda i: min([math.hypot(coords[i, 0] - coords[s, 0], coords[i, 1] - coords[s, 1]) for s in selected_indices]) if selected_indices else 0,
                 reverse=True,
             )
-            for r in remaining:
-                too_close = False
-                for s in selected_indices:
-                    if math.hypot(coords[r, 0] - coords[s, 0], coords[r, 1] - coords[s, 1]) < self.min_dist_m * 0.95:
-                        too_close = True
-                        break
-                if not too_close:
-                    selected_indices.append(r)
-                    if len(selected_indices) == K:
-                        break
+            for relax in [0.80, 0.60, 0.40, 0.20, 0.0]:
+                for r in remaining:
+                    if r in selected_indices:
+                        continue
+                    too_close = False
+                    for s in selected_indices:
+                        if math.hypot(coords[r, 0] - coords[s, 0], coords[r, 1] - coords[s, 1]) < self.min_dist_m * relax:
+                            too_close = True
+                            break
+                    if not too_close:
+                        selected_indices.append(r)
+                        if len(selected_indices) == K:
+                            break
+                if len(selected_indices) == K:
+                    break
 
         active_coords = coords[selected_indices]
         active_list = [tuple(p) for p in active_coords]
@@ -818,7 +830,7 @@ class HybridWindFarmOptimizer:
         downwind_proj = coords @ u_downwind
 
         # Subspace reduction: rank candidates by land status (PREFERRED > BUILDABLE), wind resource, and low slope
-        target_subspace_size = min(N, max(K * 2, 28))
+        target_subspace_size = min(N, max(K * 3, 50))
         def candidate_quality_score(idx: int) -> float:
             c = self.candidates[idx]
             status_bonus = 2.5 if c.get("land_status") == "PREFERRED" else 1.0
@@ -861,23 +873,28 @@ class HybridWindFarmOptimizer:
             if len(chosen_sub_indices) == K:
                 break
 
-        # Check if any remaining subspace candidates can be added without violating spacing
+        # Check if any remaining subspace candidates can be added with progressively relaxed spacing
         if len(chosen_sub_indices) < K:
             remaining = [i for i in range(N_sub) if i not in chosen_sub_indices]
             remaining.sort(
                 key=lambda i: min([dists[i, s] for s in chosen_sub_indices]) if chosen_sub_indices else 0,
                 reverse=True,
             )
-            for r in remaining:
-                too_close = False
-                for s in chosen_sub_indices:
-                    if dists[r, s] < self.min_dist_m * 0.95:
-                        too_close = True
-                        break
-                if not too_close:
-                    chosen_sub_indices.append(r)
-                    if len(chosen_sub_indices) == K:
-                        break
+            for relax in [0.80, 0.60, 0.40, 0.20, 0.0]:
+                for r in remaining:
+                    if r in chosen_sub_indices:
+                        continue
+                    too_close = False
+                    for s in chosen_sub_indices:
+                        if dists[r, s] < self.min_dist_m * relax:
+                            too_close = True
+                            break
+                    if not too_close:
+                        chosen_sub_indices.append(r)
+                        if len(chosen_sub_indices) == K:
+                            break
+                if len(chosen_sub_indices) == K:
+                    break
 
         # 4. 1-Opt Local Wake Minimization Exchange
         # Iteratively try swapping any active turbine with an inactive candidate to lower wake deficit

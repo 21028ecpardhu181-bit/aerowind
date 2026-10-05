@@ -220,7 +220,7 @@ export async function runOptimization(payload: any): Promise<any> {
         x_m: c.x_m,
         y_m: c.y_m,
       })),
-      K: Math.max(2, Math.min(8, payload.turbine_count || payload.K || 4)),
+      K: Math.max(2, Math.min(50, payload.turbine_count || payload.K || 4)),
       wind_angle_deg: payload.wind_direction_deg ?? payload.wind_angle_deg ?? 300,
       p: payload.p || 2,
     };
@@ -233,7 +233,7 @@ export async function runOptimization(payload: any): Promise<any> {
         x_m: t.x_m,
         y_m: t.y_m,
       })),
-      K: Math.max(2, Math.min(8, payload.turbine_count || payload.K || payload.turbines.length)),
+      K: Math.max(2, Math.min(50, payload.turbine_count || payload.K || payload.turbines.length)),
       wind_angle_deg: payload.wind_direction_deg ?? payload.wind_angle_deg ?? 300,
       p: payload.p || 2,
     };

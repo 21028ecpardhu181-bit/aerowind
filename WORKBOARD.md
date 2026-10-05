@@ -2,42 +2,37 @@
 
 ## Assigned Agent: Antigravity
 
-### Active Task: Village Boundary Auto-Loading, Strict Turbine Polygon Containment, Apple Liquid Glass UI, Zero Emojis & Accurate Dynamic Project Dashboards
-- **Branch**: `feature/liquid-glass-village-boundaries-fix`
+### Active Task: Real vs Mockup Data Audit, 3D Globe Yellow Lights Fix, Atmospheric Wind & Telemetry Streamlines, Non-Overlapping 3D Controls, and Arbitrary Turbine Capacity (up to 50)
+- **Branch**: `feature/real-data-3d-globe-turbine-fix`
 - **Files Owned**:
-  - `src/components/workflow/Screen1Site.tsx`
-  - `src/components/workflow/Screen2Config.tsx`
-  - `src/components/workflow/Screen3Layout.tsx`
-  - `src/components/workflow/Screen4Optimize.tsx`
-  - `src/components/workflow/Screen5Inspect.tsx`
-  - `src/components/workflow/Screen6Blueprint.tsx`
-  - `src/components/dashboard/CreateNewProjectHero.tsx`
-  - `src/components/dashboard/ProjectCard.tsx`
-  - `src/components/dashboard/ProjectDashboard.tsx`
-  - `src/components/dashboard/ProjectHero.tsx`
-  - `src/components/dashboard/ProjectHome.tsx`
-  - `src/App.tsx`
-  - `src/services/api.ts`
+  - `src/components/gis/CesiumGlobeView.tsx`
   - `src/utils/geometry.ts`
+  - `src/services/api.ts`
+  - `src/App.tsx`
+  - `backend/app/schemas.py`
+  - `core/wsqaoa.py`
   - `backend/app/geo_engine.py`
-  - `backend/app/api/layout.py`
-  - `backend/data/aeroquantum.db`
+  - `backend/app/api/geo.py`
 
 ### Objectives & Completed Fixes:
-1. **Turbine Outside Boundary Bug Fixed**: 
-   - Root cause: unconstrained fallback generation `generateMockTurbines` placed turbines in a circle irrespective of polygon vertices.
-   - Fix: Created `src/utils/geometry.ts` with `isPointInPolygon` (ray-casting), `pointToPolygonDistMeters` (safety setback), `generatePolygonEnclosedTurbines` (dense interior grid sampling + spatial thinning), and `ensureTurbinesInsideBoundary`. Integrated into `Screen3Layout`, `Screen5Inspect`, and `App.tsx`. 100% of turbines strictly reside within the user boundary with zero boundary leakage.
-2. **Dynamic Project Metrics & Data Synchronization Fixed**:
-   - Root cause: Screen 1 created projects before Screen 2 configured them, `onUpdateConfig` didn't synchronize `activeProject` or `projects` state list, `ProjectCard.tsx` hardcoded `* 2.5`, and older test runs flooded SQLite with duplicate rows.
-   - Fix: Wired `handleUpdateConfig` in `App.tsx` to immediately synchronize `activeProject`, `projects` state, and `localStorage` with dynamic turbine counts and model ratings. Updated `ProjectCard.tsx`, `ProjectDashboard.tsx`, and `ProjectHero.tsx` to calculate MW capacity dynamically based on turbine model. Cleaned out test clutter from `backend/data/aeroquantum.db`.
-3. **Village Boundary Cadastral Auto-Loading**:
-   - Village borders automatically query and display official OSM cadastral borders upon any search or map tap. Normalized in `src/services/api.ts` and automated in `Screen1Site.tsx`.
-4. **Zero Emojis Enforced**:
-   - 100% of emojis removed across all frontend source files. Replaced with monochrome Lucide SVG icons (`Layers`, `Wind`, `Compass`, `ShieldCheck`, `MapPin`, etc.).
-5. **Apple Liquid Glass Aesthetic**:
-   - `CreateNewProjectHero.tsx` redesigned with deep backdrop blur (`backdrop-blur-3xl`), semi-translucent glass, specular rim highlights, prominent typography, and vibrant sunrise wind farm photography clearly visible through the glass.
-6. **Test Verification**:
-   - `tests/verify_project_dashboards_accuracy.py`: PASS (exit code 0). Verified unique turbine counts `{12, 14, 16, 18, 20}` and dynamic MW capacities.
-   - `tests/verify_liquid_soil_village.py`: PASS (exit code 0). Verified Apple Liquid Glass, ISRIC soil telemetry, OSM village boundaries, Photoshop lasso polygon tool, and strict boundary containment.
-   - `tests/verify_complete_flow.py`: PASS (exit code 0). Verified Screens 1 through 6 on both mobile (390px) and desktop (1280px).
+1. **Real vs Mockup Data Audit Conducted**:
+   - Live external APIs confirmed active: Copernicus DEM GLO-30 / SRTM (via Open-Meteo elevation), Open-Meteo 100m/80m/10m atmospheric weather, ISRIC SoilGrids v2.0 (bulk density, pH, clay/sand/silt), OpenStreetMap Overpass (physical buildings, powerlines, roads, waterways setbacks), OpenStreetMap Nominatim (cadastral village polygons), and NREL FLORIS 4.x / Jensen kinematic wake engine.
+   - Replaced mathematical sine formula in `/api/geo/wind-resource` with real downscaled 100m hub-height wind telemetry.
+2. **3D Globe "Yellow Lights Going Up" Bug Fixed**:
+   - Root cause: Cesium `cylinder` entities instantiated without orientation quaternion defaulted along the normal/Z-axis (straight up into the sky).
+   - Solution: Replaced cylinders with horizontal aerodynamic wake footprints draped onto the terrain surface (`HeightReference.CLAMP_TO_GROUND`) expanding downwind at $(windDirectionDeg + 180)^\circ$ with realistic deficit gradients.
+3. **Wind & SCADA Telemetry Data Flow Streamlines**:
+   - Implemented dynamic atmospheric wind flow streamlines traversing across the wind farm aligned with the wind direction vector using `PolylineGlowMaterialProperty`.
+   - Implemented inter-turbine electrical and SCADA telemetry collection grid lines pulsing with golden energy toward collector nodes.
+   - Added interactive toggle buttons for both streamlines and wake footprints in the 3D dock.
+4. **3D Globe Controls Alignment & Click Conflicts Fixed**:
+   - Relocated 3D controls to `top-3 right-3 md:top-4 md:right-4 z-30` in an Apple Liquid Glass dock with `e.stopPropagation()` on all click handlers, completely eliminating collision with Screen 1 search bar and Screen 5 headers.
+5. **Turbine Clamping Fixed (Up to 50 Turbines)**:
+   - Root cause: Pydantic schemas hard-clamped `K <= 8`, and geometry generators had restrictive spacing that dropped turbines.
+   - Fix: Expanded `K` up to 50 in `backend/app/schemas.py`, `src/services/api.ts`, and `src/App.tsx`. Added continuous QP relaxation in `core/wsqaoa.py` for $K > 8$. Upgraded `src/utils/geometry.ts` and `backend/app/geo_engine.py` with multi-scale interior sampling and progressive spacing relaxation so 100% of requested turbines are always placed strictly within boundary.
+6. **Verification**:
+   - `npm run build`: PASS (clean build, 0 TypeScript errors).
+   - `tests/verify_project_dashboards_accuracy.py`: PASS (exit code 0).
+   - `tests/verify_liquid_soil_village.py`: PASS (exit code 0).
+   - Zero emojis verified across all modified files.
 
