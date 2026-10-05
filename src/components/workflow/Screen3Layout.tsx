@@ -73,10 +73,13 @@ export const Screen3Layout: React.FC<Screen3LayoutProps> = ({
       });
 
       // Satellite tiles
-      L.tileLayer('/api/geo/tiles/satellite/{z}/{x}/{y}', {
-        maxZoom: 20,
-        attribution: 'Satellite Imagery',
-      }).addTo(map);
+      L.tileLayer(
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        {
+          maxZoom: 19,
+          attribution: 'Esri World Imagery',
+        }
+      ).addTo(map);
 
       L.control.scale({ position: 'bottomleft', metric: true, imperial: false }).addTo(map);
 

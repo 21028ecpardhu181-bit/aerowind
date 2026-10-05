@@ -99,15 +99,21 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
         attributionControl: false,
       });
 
-      const satellite = L.tileLayer('/api/geo/tiles/satellite/{z}/{x}/{y}', {
-        maxZoom: 20,
-        attribution: 'Satellite Imagery',
-      });
+      const satellite = L.tileLayer(
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        {
+          maxZoom: 19,
+          attribution: 'Esri World Imagery',
+        }
+      );
 
-      const terrain = L.tileLayer('/api/geo/tiles/terrain/{z}/{x}/{y}', {
-        maxZoom: 20,
-        attribution: 'Terrain Imagery',
-      });
+      const terrain = L.tileLayer(
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+        {
+          maxZoom: 19,
+          attribution: 'Esri World Topo Map',
+        }
+      );
 
       baseLayersRef.current = { satellite, terrain };
       if (activeBasemap === 'terrain') {

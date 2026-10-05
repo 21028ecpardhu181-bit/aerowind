@@ -120,20 +120,29 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
       });
 
       // Define Layers
-      const satellite = L.tileLayer('/api/geo/tiles/satellite/{z}/{x}/{y}', {
-        maxZoom: 20,
-        attribution: 'Satellite Imagery',
-      });
+      const satellite = L.tileLayer(
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        {
+          maxZoom: 19,
+          attribution: 'Esri, Maxar, Earthstar Geographics',
+        }
+      );
 
-      const street = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: 'OpenStreetMap',
-      });
+      const street = L.tileLayer(
+        'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        {
+          maxZoom: 19,
+          attribution: '© OpenStreetMap contributors',
+        }
+      );
 
-      const terrain = L.tileLayer('/api/geo/tiles/terrain/{z}/{x}/{y}', {
-        maxZoom: 20,
-        attribution: 'Terrain Imagery',
-      });
+      const terrain = L.tileLayer(
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+        {
+          maxZoom: 19,
+          attribution: 'Esri, USGS, NOAA',
+        }
+      );
 
       baseLayersRef.current = { satellite, street, terrain };
 

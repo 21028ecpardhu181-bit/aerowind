@@ -88,24 +88,25 @@ async def get_map_tile(layer: str, z: int, x: int, y: int):
         return Response(content=_TILE_CACHE[cache_key], media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
 
     if layer == "satellite":
-        url = f"https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"
+        url = f"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
     elif layer == "terrain":
-        url = f"https://mt1.google.com/vt/lyrs=p&x={x}&y={y}&z={z}"
+        url = f"https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}"
     else:
-        url = f"https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
+        url = f"https://tile.openstreetmap.org/{z}/{x}/{y}.png"
 
     try:
         req = urllib.request.Request(
             url,
             headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                "User-Agent": "AeroQuantumWind/2.4 (clean-energy-hackathon; contact@aeroquantum.org)"
             }
         )
         with urllib.request.urlopen(req, timeout=10.0) as resp:
             data = resp.read()
-            if len(_TILE_CACHE) < 500:
+            media_type = "image/png" if layer not in ("satellite", "terrain") else "image/jpeg"
+            if len(_TILE_CACHE) < 1000:
                 _TILE_CACHE[cache_key] = data
-            return Response(content=data, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
+            return Response(content=data, media_type=media_type, headers={"Cache-Control": "public, max-age=86400"})
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Failed to fetch tile: {e}")
 
