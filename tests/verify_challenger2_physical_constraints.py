@@ -204,10 +204,7 @@ def test_physical_constraints_all_cities():
             "pairs_under_570m": spacing_violations_570m,
         }
 
-        # ---------------------------------------------------------
-        # 3. DIAGNOSTIC EXCLUSION REASONS
-        # ---------------------------------------------------------
-        excluded_candidates = [c for c in all_eval if c.get("land_status") == "EXCLUDED"]
+        excluded_candidates = [c for c in all_eval if c.get("land_status") in ["EXCLUDED", "HARD EXCLUSION"]]
         print(f"  Diagnostic Reasons Check: {len(excluded_candidates)} EXCLUDED candidates evaluated")
         total_excluded = len(excluded_candidates)
         with_explicit_reasons = 0
@@ -238,7 +235,7 @@ def test_physical_constraints_all_cities():
         for t in qaoa_turbines:
             for c in all_eval:
                 if c["latitude"] == t["lat"] and c["longitude"] == t["lon"]:
-                    assert c["land_status"] in ["PREFERRED", "BUILDABLE"], f"Leakage! Turbine placed in {c['land_status']} land: {t}"
+                    assert c["land_status"] in ["PREFERRED", "BUILDABLE", "FEASIBLE"], f"Leakage! Turbine placed in {c['land_status']} land: {t}"
 
         results["diagnostic_reasons"][city_name] = {
             "total_excluded": total_excluded,

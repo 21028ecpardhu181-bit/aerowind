@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Bell, Sun, Wind, ChevronLeft } from 'lucide-react';
+import { Search, Bell, Sun, Moon, Wind, ChevronLeft, MessageSquare, Settings } from 'lucide-react';
 import { TelemetryData } from '../../types';
 import { DesktopNavigation } from './DesktopNavigation';
 import { AeroQuantumLogo } from '../ui/AeroQuantumLogo';
@@ -30,7 +30,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   return (
     <header className="sticky top-0 z-[1300] w-full bg-white/35 hover:bg-white/45 backdrop-blur-2xl border-b border-white/35 shadow-[0_4px_24px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.7)] px-3 sm:px-4 md:px-6 py-2.5 flex items-center justify-between gap-3 sm:gap-4 transition-all">
       {/* Brand & Wordmark with Back Button */}
-      <div className="flex items-center gap-2 sm:gap-3">
+      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
         {canGoBack && onBack && (
           <button
             id="btn-header-back"
@@ -48,19 +48,16 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           className="flex items-center gap-2 sm:gap-2.5 text-left focus:outline-none group select-none active:scale-98 transition-transform"
           title="Return to Home"
         >
-          <AeroQuantumLogo size={38} />
+          <AeroQuantumLogo size={36} />
           <div className="flex flex-col leading-none">
-            <div className="text-lg sm:text-2xl font-black tracking-tight text-slate-950 flex items-center">
+            <div className="text-xl sm:text-2xl font-black tracking-tight text-slate-950 flex items-center">
               AeroQuantum<span className="text-[#FFD21F] font-black drop-shadow-xs">Wind</span>
             </div>
-            <span className="text-[10px] text-slate-600 font-bold tracking-wide uppercase mt-0.5">
+            <span className="hidden sm:block text-[10px] text-slate-500 font-bold tracking-wide uppercase mt-0.5">
               Quantum GIS Wind Farm Micro-Siting
             </span>
           </div>
         </button>
-        <span className="hidden sm:inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-mono font-black text-amber-900 bg-[#FFD21F]/25 border border-[#FFD21F]/50 shadow-xs">
-          v2.5 · LIVE GIS
-        </span>
       </div>
 
       {/* Center Nav Tabs (Desktop) */}
@@ -100,9 +97,36 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           </div>
         )}
 
+        {/* Chat / Message Button */}
+        <button
+          className="hidden lg:flex w-8 h-8 rounded-full bg-white/70 hover:bg-white backdrop-blur-md border border-white/80 shadow-xs items-center justify-center text-slate-700 hover:text-slate-950 active:scale-95 transition-all"
+          aria-label="Messages"
+          title="Team & AI Messages"
+        >
+          <MessageSquare className="w-3.5 h-3.5" />
+        </button>
+
+        {/* Settings Button */}
+        <button
+          className="hidden lg:flex w-8 h-8 rounded-full bg-white/70 hover:bg-white backdrop-blur-md border border-white/80 shadow-xs items-center justify-center text-slate-700 hover:text-slate-950 active:scale-95 transition-all"
+          aria-label="Settings"
+          title="System Settings"
+        >
+          <Settings className="w-3.5 h-3.5" />
+        </button>
+
+        {/* Sun / Moon Toggle */}
+        <button
+          className="hidden lg:flex w-8 h-8 rounded-full bg-white/70 hover:bg-white backdrop-blur-md border border-white/80 shadow-xs items-center justify-center text-slate-700 hover:text-slate-950 active:scale-95 transition-all"
+          aria-label="Toggle Theme"
+          title="Theme"
+        >
+          <Moon className="w-3.5 h-3.5" />
+        </button>
+
         {/* Notification Bell */}
         <button
-          className="relative w-9 h-9 rounded-full bg-white/80 backdrop-blur-md border border-white/70 shadow-xs flex items-center justify-center text-slate-700 hover:text-slate-950 hover:bg-white active:scale-95 transition-all"
+          className="relative w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white/80 backdrop-blur-md border border-white/80 shadow-xs flex items-center justify-center text-slate-700 hover:text-slate-950 hover:bg-white active:scale-95 transition-all"
           aria-label="Notifications"
         >
           <Bell className="w-4 h-4" />
@@ -113,11 +137,11 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
         <button
           id="btn-open-auth"
           onClick={onOpenAuth}
-          className="flex items-center gap-2 p-0.5 sm:px-2.5 sm:py-1 rounded-full bg-white/80 hover:bg-white border border-white/70 sm:border-slate-200 shadow-xs active:scale-95 transition-all select-none"
+          className="flex items-center gap-2 p-0.5 sm:px-2.5 sm:py-1 rounded-full bg-white/80 hover:bg-white border border-white/80 shadow-xs active:scale-95 transition-all select-none cursor-pointer"
           title={user ? `Signed in as ${user.username}` : 'Sign In / Account'}
         >
-          <div className="w-8 h-8 rounded-full bg-amber-500/15 border border-amber-500/30 flex items-center justify-center p-0.5">
-            <AeroQuantumLogo size={22} />
+          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-amber-500/15 border border-amber-500/30 flex items-center justify-center p-0.5">
+            <AeroQuantumLogo size={20} />
           </div>
           <span className="hidden sm:inline text-xs font-bold text-slate-800 pr-1" id="header-user-label">
             {user ? user.username : 'Sign In'}

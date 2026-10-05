@@ -256,54 +256,18 @@ export function generatePolygonEnclosedTurbines(
 export function ensureTurbinesInsideBoundary(
   turbines: Turbine[],
   boundary: [number, number][] | number[][] | undefined,
-  centerLat: number,
-  centerLon: number
+  _centerLat?: number,
+  _centerLon?: number
 ): Turbine[] {
   if (!turbines || turbines.length === 0) {
-    return generatePolygonEnclosedTurbines(boundary, 8, centerLat, centerLon);
+    return [];
   }
   if (!boundary || boundary.length < 3) {
     return turbines;
   }
 
   const validBoundary = boundary as [number, number][];
-  let needsFixing = false;
-
-  for (const t of turbines) {
-    if (!isPointInPolygon([t.lat, t.lon], validBoundary)) {
-      needsFixing = true;
-      break;
-    }
-  }
-
-  if (!needsFixing) {
-    return turbines;
-  }
-
-  // Generate valid interior slots
-  const validReplacements = generatePolygonEnclosedTurbines(
-    validBoundary,
-    turbines.length,
-    centerLat,
-    centerLon
-  );
-
-  return turbines.map((t, idx) => {
-    if (isPointInPolygon([t.lat, t.lon], validBoundary)) {
-      return t;
-    }
-    // Replace with guaranteed interior position
-    const rep = validReplacements[idx] || validReplacements[0];
-    return {
-      ...t,
-      lat: rep.lat,
-      lon: rep.lon,
-      elevation_m: rep.elevation_m,
-      effective_mps: rep.effective_mps,
-      wake_deficit_pct: rep.wake_deficit_pct,
-      is_conflicted: false,
-    };
-  });
+  return turbines.filter((t) => isPointInPolygon([t.lat, t.lon], validBoundary));
 }
 
 function generateFallbackCircle(centerLat: number, centerLon: number, radiusKm: number): [number, number][] {

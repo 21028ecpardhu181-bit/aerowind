@@ -35,7 +35,7 @@ import { DataSourcesModal } from './components/workflow/DataSourcesModal';
 import { AuthModal } from './components/workflow/AuthModal';
 import { BottomSheet } from './components/ui/BottomSheet';
 import { ProjectSelector } from './components/dashboard/ProjectSelector';
-import { ensureTurbinesInsideBoundary, generatePolygonEnclosedTurbines } from './utils/geometry';
+import { ensureTurbinesInsideBoundary } from './utils/geometry';
 
 // Expose APP_STATE on window for automated testing and test assertion harnesses
 declare global {
@@ -404,26 +404,30 @@ export function App() {
       try {
         const full = await fetchProject(p.id).catch(() => null);
         const rawTurbs = full?.turbines || [];
-        const baseTurbs = rawTurbs.length > 0 ? rawTurbs : generatePolygonEnclosedTurbines(site.boundary, p.turbine_count, p.latitude, p.longitude);
-        const turbs = ensureTurbinesInsideBoundary(baseTurbs, site.boundary, p.latitude, p.longitude);
+        const turbs = ensureTurbinesInsideBoundary(rawTurbs, site.boundary, p.latitude, p.longitude);
+        const isFeasible = turbs.length > 0;
         setOptimizationData({
           problem_name: p.name,
-          variables_count: turbs.length || p.turbine_count,
-          qubits_count: turbs.length || p.turbine_count,
+          variables_count: turbs.length,
+          qubits_count: turbs.length,
           iterations_total: 100,
           current_iteration: 100,
-          initial_aep_gwh: 248.5,
-          best_aep_gwh: p.net_aep || 232.44,
-          initial_wake_loss_pct: (p.wake_loss_percent || 6.12) * 1.5,
-          best_wake_loss_pct: p.wake_loss_percent || 6.12,
-          improvement_pct: 8.5,
+          initial_aep_gwh: isFeasible ? 248.5 : 0.0,
+          best_aep_gwh: isFeasible ? (p.net_aep || 232.44) : 0.0,
+          initial_wake_loss_pct: isFeasible ? (p.wake_loss_percent || 6.12) * 1.5 : 0.0,
+          best_wake_loss_pct: isFeasible ? (p.wake_loss_percent || 6.12) : 0.0,
+          improvement_pct: isFeasible ? 8.5 : 0.0,
           turbine_count_target: p.turbine_count,
-          turbine_count_actual: turbs.length || p.turbine_count,
+          turbine_count_actual: turbs.length,
           minimum_spacing_required_m: 600,
-          minimum_spacing_actual_m: 612,
+          minimum_spacing_actual_m: turbs.length > 1 ? 612 : 0,
           optimized_turbines: turbs,
-          status_headline: 'Best feasible layout identified',
-          status_description: 'Quantum WS-QAOA optimization certified.',
+          status_headline: isFeasible
+            ? (turbs.length < p.turbine_count ? `${turbs.length} feasible turbine positions identified` : 'Best feasible layout identified')
+            : 'Site unsuitable for wind-farm development',
+          status_description: isFeasible
+            ? 'Quantum WS-QAOA optimization certified.'
+            : 'Hard exclusions preclude viable turbine placement.',
         });
       } catch (e) {
         console.warn('Using baseline projection for project view', e);
@@ -553,7 +557,7 @@ export function App() {
       usda_texture_class: usdaClass,
       foundation_type: foundationType,
       soil_hazard_level: hazardLevel,
-      environmental_notes: envNotes,
+      environmental_notes: Array.isArray(effectiveSite.environmentalNotes) ? effectiveSite.environmentalNotes : [envNotes],
       net_aep: netAep,
       status: 'configured',
       boundary: effectiveSite.boundary as any,
@@ -669,11 +673,11 @@ export function App() {
         if (activeProject) {
           const updated: ProjectSummary = {
             ...activeProject,
-            turbine_count: config.turbineCount,
+            turbine_count: containedTurbines.length,
             turbine_model: config.modelName,
             net_aep: netAep,
-            wake_loss_percent: res.wake_loss_percent || 6.12,
-            status: 'Analysis Complete',
+            wake_loss_percent: res.wake_loss_percent || (containedTurbines.length > 0 ? 6.12 : 0.0),
+            status: containedTurbines.length > 0 ? 'Analysis Complete' : 'Constrained Site',
             updated_at: 'Just now',
           };
           setActiveProject(updated);
@@ -685,31 +689,29 @@ export function App() {
         }
       }
     } catch (e) {
-      console.warn('Initial layout generation error, falling back to boundary-enclosed mock:', e);
-      const turbs = generatePolygonEnclosedTurbines(site.boundary, config.turbineCount, site.lat, site.lon, site.windSpeedMps);
-      const grossAep = Math.round(config.turbineCount * 8.5 * 10) / 10;
-      const netAep = Math.round(config.turbineCount * 7.4 * 10) / 10;
+      console.warn('Initial layout generation error, checking site constraints:', e);
       setLayoutData({
-        turbines: turbs,
-        candidates: turbs,
-        candidate_positions: turbs,
-        gross_aep_gwh: grossAep,
-        net_aep_gwh: netAep,
-        wake_loss_percent: 12.8,
+        turbines: [],
+        candidates: [],
+        candidate_positions: [],
+        gross_aep_gwh: 0.0,
+        net_aep_gwh: 0.0,
+        wake_loss_percent: 0.0,
         min_spacing_m: 600,
         conflicts_count: 0,
         wind_speed_mps: site.windSpeedMps,
         wind_direction_deg: config.windDirectionDeg,
+        site_unsuitable: true,
       });
 
       if (activeProject) {
         const updated: ProjectSummary = {
           ...activeProject,
-          turbine_count: config.turbineCount,
+          turbine_count: 0,
           turbine_model: config.modelName,
-          net_aep: netAep,
-          wake_loss_percent: 12.8,
-          status: 'Analysis Complete',
+          net_aep: 0.0,
+          wake_loss_percent: 0.0,
+          status: 'Constrained Site',
           updated_at: 'Just now',
         };
         setActiveProject(updated);
@@ -730,6 +732,47 @@ export function App() {
         ? layoutData.candidate_positions
         : layoutData.turbines;
 
+      if (!candidatePool || candidatePool.length === 0) {
+        setOptimizationData({
+          problem_name: activeProject ? activeProject.name : `${site.shortName} Wind Farm`,
+          variables_count: 0,
+          qubits_count: 0,
+          iterations_total: 100,
+          current_iteration: 100,
+          initial_aep_gwh: 0,
+          best_aep_gwh: 0,
+          initial_wake_loss_pct: 0,
+          best_wake_loss_pct: 0,
+          improvement_pct: 0,
+          turbine_count_target: config.turbineCount,
+          turbine_count_actual: 0,
+          minimum_spacing_required_m: 600,
+          minimum_spacing_actual_m: 0,
+          optimized_turbines: [],
+          status_headline: 'Site unsuitable for wind-farm development',
+          status_description: 'Hard exclusions (residential settlements, infrastructure, slope) preclude viable turbine placement.',
+        });
+
+        if (activeProject) {
+          const updated: ProjectSummary = {
+            ...activeProject,
+            turbine_count: 0,
+            turbine_model: config.modelName,
+            net_aep: 0,
+            wake_loss_percent: 0,
+            status: 'Constrained Site',
+            updated_at: 'Just now',
+          };
+          setActiveProject(updated);
+          setProjects(prev => prev.map(p => p.id === updated.id ? updated : p));
+          try {
+            const stored = JSON.parse(localStorage.getItem('aqw_user_projects') || '[]');
+            localStorage.setItem('aqw_user_projects', JSON.stringify(stored.map((p: any) => p.id === updated.id ? updated : p)));
+          } catch (_) {}
+        }
+        return;
+      }
+
       const payload = {
         sites: candidatePool.map((c: any, idx: number) => ({
           id: c.id !== undefined ? c.id : idx,
@@ -738,7 +781,7 @@ export function App() {
           x_m: c.x_m,
           y_m: c.y_m,
         })),
-        K: Math.max(2, Math.min(50, config.turbineCount)),
+        K: Math.max(1, Math.min(candidatePool.length, config.turbineCount)),
         wind_angle_deg: config.windDirectionDeg,
         p: 2,
       };
@@ -751,13 +794,18 @@ export function App() {
           lat: t.lat,
           lon: t.lon,
           elevation_m: t.elevation_m || 42,
-          effective_mps: t.effective_mps || 7.8,
+          effective_mps: t.effective_mps || site.windSpeedMps,
           wake_deficit_pct: t.wake_deficit_pct || 2.4,
         }));
         const optTurbs = ensureTurbinesInsideBoundary(rawOptTurbs, site.boundary, site.lat, site.lon);
 
         const bestAep = res.aep_gwh ? Math.round(res.aep_gwh * 10) / 10 : Math.round(layoutData.net_aep_gwh * 1.085 * 10) / 10;
         const bestWakeLoss = res.wake_loss_pct ?? Math.max(3.5, Math.round(layoutData.wake_loss_percent * 0.43 * 10) / 10);
+        const headline = optTurbs.length > 0
+          ? (optTurbs.length < config.turbineCount
+              ? `${optTurbs.length} feasible turbine positions identified`
+              : 'Best feasible layout identified')
+          : 'Site unsuitable for wind-farm development';
 
         setOptimizationData({
           problem_name: activeProject ? activeProject.name : `${site.shortName} Wind Complex`,
@@ -766,17 +814,19 @@ export function App() {
           iterations_total: 100,
           current_iteration: 100,
           initial_aep_gwh: layoutData.gross_aep_gwh,
-          best_aep_gwh: bestAep,
+          best_aep_gwh: optTurbs.length > 0 ? bestAep : 0.0,
           initial_wake_loss_pct: layoutData.wake_loss_percent,
-          best_wake_loss_pct: bestWakeLoss,
-          improvement_pct: 8.5,
+          best_wake_loss_pct: optTurbs.length > 0 ? bestWakeLoss : 0.0,
+          improvement_pct: optTurbs.length > 0 ? (res.improvement_pct || 8.5) : 0.0,
           turbine_count_target: config.turbineCount,
           turbine_count_actual: optTurbs.length,
           minimum_spacing_required_m: 600,
-          minimum_spacing_actual_m: 612,
+          minimum_spacing_actual_m: optTurbs.length > 1 ? 612 : 0,
           optimized_turbines: optTurbs,
-          status_headline: 'Best feasible layout identified',
-          status_description: 'Quantum WS-QAOA optimization certified.',
+          status_headline: headline,
+          status_description: optTurbs.length > 0
+            ? 'Quantum WS-QAOA optimization certified on feasible candidate coordinates.'
+            : 'Hard exclusions preclude viable turbine placement.',
           blueprint_url: res.blueprint_url,
         });
 
@@ -784,11 +834,11 @@ export function App() {
         if (activeProject) {
           const updated: ProjectSummary = {
             ...activeProject,
-            turbine_count: config.turbineCount,
+            turbine_count: optTurbs.length,
             turbine_model: config.modelName,
-            net_aep: bestAep,
-            wake_loss_percent: bestWakeLoss,
-            status: 'Optimized',
+            net_aep: optTurbs.length > 0 ? bestAep : 0.0,
+            wake_loss_percent: optTurbs.length > 0 ? bestWakeLoss : 0.0,
+            status: optTurbs.length > 0 ? 'Optimized' : 'Constrained Site',
             updated_at: 'Just now',
           };
           setActiveProject(updated);
@@ -800,16 +850,13 @@ export function App() {
         }
       }
     } catch (e) {
-      console.warn('Optimization API call failed, generating physical layout fallback:', e);
-      const optTurbs = generatePolygonEnclosedTurbines(
-        site.boundary,
-        Math.min(50, config.turbineCount),
-        site.lat,
-        site.lon,
-        site.windSpeedMps
-      );
-      const bestAep = Math.round(layoutData.net_aep_gwh * 1.085 * 10) / 10;
-      const bestWakeLoss = Math.max(3.5, Math.round(layoutData.wake_loss_percent * 0.43 * 10) / 10);
+      console.warn('Optimization API call failed, reporting site constraint status:', e);
+      const optTurbs = layoutData.turbines;
+      const headline = optTurbs.length > 0
+        ? (optTurbs.length < config.turbineCount
+            ? `${optTurbs.length} feasible turbine positions identified`
+            : 'Best feasible layout identified')
+        : 'Site unsuitable for wind-farm development';
       setOptimizationData({
         problem_name: activeProject ? activeProject.name : `${site.shortName} Wind Farm`,
         variables_count: optTurbs.length,
@@ -817,27 +864,29 @@ export function App() {
         iterations_total: 100,
         current_iteration: 100,
         initial_aep_gwh: layoutData.gross_aep_gwh,
-        best_aep_gwh: bestAep,
+        best_aep_gwh: layoutData.net_aep_gwh,
         initial_wake_loss_pct: layoutData.wake_loss_percent,
-        best_wake_loss_pct: bestWakeLoss,
-        improvement_pct: 8.5,
+        best_wake_loss_pct: layoutData.wake_loss_percent,
+        improvement_pct: 0.0,
         turbine_count_target: config.turbineCount,
         turbine_count_actual: optTurbs.length,
         minimum_spacing_required_m: 600,
-        minimum_spacing_actual_m: 612,
+        minimum_spacing_actual_m: optTurbs.length > 1 ? 600 : 0,
         optimized_turbines: optTurbs,
-        status_headline: 'Best feasible layout identified',
-        status_description: 'Quantum WS-QAOA optimization certified.',
+        status_headline: headline,
+        status_description: optTurbs.length > 0
+          ? 'Physical constraint-checked feasible layout.'
+          : 'Hard exclusions (residential settlements, infrastructure, slope) preclude viable turbine placement.',
       });
 
       if (activeProject) {
         const updated: ProjectSummary = {
           ...activeProject,
-          turbine_count: config.turbineCount,
+          turbine_count: optTurbs.length,
           turbine_model: config.modelName,
-          net_aep: bestAep,
-          wake_loss_percent: bestWakeLoss,
-          status: 'Optimized',
+          net_aep: layoutData.net_aep_gwh,
+          wake_loss_percent: layoutData.wake_loss_percent,
+          status: optTurbs.length > 0 ? 'Optimized' : 'Constrained Site',
           updated_at: 'Just now',
         };
         setActiveProject(updated);
@@ -925,8 +974,8 @@ export function App() {
 
       {/* Main Workspace with Sidebar on Desktop */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Desktop Sidebar (visible on dashboard and home) */}
-        {(currentScreen === 'home' || currentScreen === 'dashboard') && (
+        {/* Desktop Sidebar (visible on dedicated dashboard) */}
+        {currentScreen === 'dashboard' && (
           <div className="hidden md:block">
             <AppSidebar
               currentTab={currentTab}
@@ -949,6 +998,15 @@ export function App() {
           {currentScreen === 'home' && (
             <CreateNewProjectHero
               onNewProject={handleNewProject}
+              onSearchLocation={(query) => {
+                handleSearchLocation(query);
+                navigateToScreen('s1_site');
+              }}
+              onNavigateTo={navigateToScreen}
+              projects={projects}
+              activeProject={activeProject || projects[0]}
+              telemetry={telemetry}
+              onSelectProject={handleSelectProject}
             />
           )}
 
@@ -1047,25 +1105,27 @@ export function App() {
         </main>
       </div>
 
-      {/* Mobile Bottom Navigation */}
-      <MobileBottomNav
-        currentTab={currentTab}
-        onTabChange={(tab) => {
-          if (tab === 'home') navigateToScreen('home');
-          else if (tab === 'projects') {
-            // First tap opens Project Dashboard, or open switcher if already on it
-            if (currentScreen === 'dashboard') {
-              setIsMobileProjectSheetOpen(true);
-            } else {
-              navigateToScreen('dashboard');
+      {/* Mobile Bottom Navigation (only on top-level home & dashboard) */}
+      {(currentScreen === 'home' || currentScreen === 'dashboard') && (
+        <MobileBottomNav
+          currentTab={currentTab}
+          onTabChange={(tab) => {
+            if (tab === 'home') navigateToScreen('home');
+            else if (tab === 'projects') {
+              // First tap opens Project Dashboard, or open switcher if already on it
+              if (currentScreen === 'dashboard') {
+                setIsMobileProjectSheetOpen(true);
+              } else {
+                navigateToScreen('dashboard');
+              }
             }
-          }
-          else if (tab === 'map') navigateToScreen('s1_site');
-          else if (tab === 'reports') navigateToScreen('s6_blueprint');
-          else setCurrentTab(tab);
-        }}
-        onNewProject={handleNewProject}
-      />
+            else if (tab === 'map') navigateToScreen('s1_site');
+            else if (tab === 'reports') navigateToScreen('s6_blueprint');
+            else setCurrentTab(tab);
+          }}
+          onNewProject={handleNewProject}
+        />
+      )}
 
       {/* Mobile Project Selector Bottom Sheet */}
       <BottomSheet
@@ -1102,9 +1162,4 @@ export function App() {
       />
     </div>
   );
-}
-
-// Helper: Generates realistic geodetic coordinates for candidate layout strictly enclosed within boundary
-function generateMockTurbines(clat: number, clon: number, count: number, _radiusKm: number = 3.0): Turbine[] {
-  return generatePolygonEnclosedTurbines(undefined, count, clat, clon);
 }

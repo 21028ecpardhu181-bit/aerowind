@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 import time
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from fastapi import APIRouter, Header, HTTPException, status
 from pydantic import BaseModel, Field
@@ -44,7 +44,7 @@ class ProjectCreateRequest(BaseModel):
     usda_texture_class: Optional[str] = None
     foundation_type: Optional[str] = "GRAVITY_BASE"
     soil_hazard_level: Optional[str] = "SAFE"
-    environmental_notes: Optional[List[str]] = None
+    environmental_notes: Optional[Union[List[str], str]] = None
     gross_aep: Optional[float] = None
     net_aep: Optional[float] = None
     wake_loss_percent: Optional[float] = None
@@ -195,7 +195,11 @@ def create_project(req: ProjectCreateRequest, authorization: Optional[str] = Hea
 
     turbines_json = json.dumps(req.turbines or [])
     boundary_json = json.dumps(req.boundary or [])
-    env_notes_json = json.dumps(req.environmental_notes or [])
+    if isinstance(req.environmental_notes, str):
+        env_notes = [req.environmental_notes]
+    else:
+        env_notes = req.environmental_notes or []
+    env_notes_json = json.dumps(env_notes)
 
     with get_db_connection() as conn:
         cursor = conn.cursor()

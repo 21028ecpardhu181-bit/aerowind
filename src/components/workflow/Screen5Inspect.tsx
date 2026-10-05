@@ -16,13 +16,14 @@ import {
   GitCompare,
   Plus,
   Minus,
-  Crosshair
+  Crosshair,
+  AlertTriangle
 } from 'lucide-react';
 import { OptimizationData, SiteInfo, Turbine } from '../../types';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { CesiumGlobeView } from '../gis/CesiumGlobeView';
-import { ensureTurbinesInsideBoundary, generatePolygonEnclosedTurbines } from '../../utils/geometry';
+import { ensureTurbinesInsideBoundary } from '../../utils/geometry';
 
 interface Screen5InspectProps {
   site: SiteInfo;
@@ -66,15 +67,14 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
   const wakeLayersRef = useRef<any[]>([]);
   const polygonLayerRef = useRef<any>(null);
 
-  const targetCount = optimizationData?.optimized_turbines?.length || baselineTurbines.length || 8;
-  const fallbackList = useMemo(
-    () => generatePolygonEnclosedTurbines(site.boundary, targetCount, site.lat, site.lon, site.windSpeedMps || 7.5),
-    [site.boundary, targetCount, site.lat, site.lon, site.windSpeedMps]
+  const isSiteUnsuitable = Boolean(
+    (optimizationData?.optimized_turbines && optimizationData.optimized_turbines.length === 0) ||
+    (optimizationData?.status_headline && optimizationData.status_headline.toLowerCase().includes('unsuitable'))
   );
 
   const rawOptTurbines = (optimizationData?.optimized_turbines && optimizationData.optimized_turbines.length > 0)
     ? optimizationData.optimized_turbines
-    : (baselineTurbines.length > 0 ? baselineTurbines : fallbackList);
+    : (baselineTurbines.length > 0 ? baselineTurbines : []);
 
   const rawActiveTurbines = (layoutMode === 'before' && baselineTurbines.length > 0) ? baselineTurbines : rawOptTurbines;
 
@@ -220,15 +220,16 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
     wakeLayersRef.current = [];
 
     const downwindRad = ((angleDeg + 180) % 360) * (Math.PI / 180);
-    const wakeLengthKm = 1.8;
-    const wakeHalfAngleRad = (9.5 * Math.PI) / 180;
+    const rotorDiameterM = 120.0;
+    const wakeLengthKm = Math.min(1.2, Math.max(0.75, (rotorDiameterM * 8.5) / 1000.0));
+    const wakeHalfAngleRad = (8.5 * Math.PI) / 180;
 
     turbs.forEach((t, idx) => {
       const isSelected = idx === activeIdx;
       const tId = t.label || t.id || `T-${String(idx + 1).padStart(2, '0')}`;
       const speed = (t.effective_mps || 7.4).toFixed(1);
 
-      // Realistic Aerodynamic Multi-Layer Gradient Wake Plume
+      // Realistic Aerodynamic Multi-Layer Gradient Wake Plume (8.5D Jensen)
       if (wakesVisible) {
         const cosLat = Math.cos((t.lat * Math.PI) / 180.0);
         
@@ -264,8 +265,8 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
         wakeLayersRef.current.push(outerCone);
       }
 
-      // Authentic CAD-Grade 3-Blade Wind Turbine Marker with Yawed Nacelle & Red Tips
-      const nacelleYaw = (angleDeg + 180) % 360;
+      // Authentic CAD-Grade 3-Blade Wind Turbine Marker (Faces strictly UPWIND into oncoming wind)
+      const nacelleYaw = angleDeg;
       const spinSpeedS = Math.max(1.8, Math.min(5.5, 22.0 / Math.max(2.5, parseFloat(speed) || 7.5)));
       const markerHtml = `
         <div class="realistic-turbine-marker ${isSelected ? 'selected' : ''}" id="turb-marker-${idx}">
@@ -501,6 +502,29 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
           )}
         </div>
 
+        {/* Floating Wind Vector Badge */}
+        {!is3DActive && (
+          <div className="absolute top-16 left-3 z-20 pointer-events-none">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-white/95 backdrop-blur-xl border border-white/90 shadow-glass text-xs font-mono font-bold text-slate-800">
+              <svg
+                id="s5-wind-arrow-svg"
+                className="w-4 h-4 text-amber-500 transition-transform duration-300"
+                style={{ transform: `rotate(${(windDir + 180 - 90) % 360}deg)` }}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+              >
+                <line x1="5" y1="12" x2="19" y2="12" />
+                <polyline points="12 5 19 12 12 19" />
+              </svg>
+              <span id="s5-wind-vector-text">
+                Wind FROM: {windDir}° · {(site.windSpeedMps || 7.4).toFixed(1)} m/s
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Floating On-Screen Map Zoom & Fit Controls */}
         {!is3DActive && (
           <div className="absolute right-3 top-20 z-20 flex flex-col gap-1.5 pointer-events-auto">
@@ -594,34 +618,40 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
           {/* Header & Mode Switch & Hide Box Button */}
           <div className="flex items-center justify-between pb-2 border-b border-slate-100">
             <div>
-              <h3 className="text-xs font-bold text-slate-900 leading-tight">Optimized Layout Telemetry</h3>
-              <p className="text-[11px] text-slate-500">WS-QAOA Quantum Annealing Micro-Siting</p>
+              <h3 className="text-xs font-bold text-slate-900 leading-tight">
+                {isSiteUnsuitable ? 'Geospatial Feasibility Assessment' : 'Optimized Layout Telemetry'}
+              </h3>
+              <p className="text-[11px] text-slate-500">
+                {isSiteUnsuitable ? 'IEC 61400 setback & environmental screening' : 'WS-QAOA Quantum Annealing Micro-Siting'}
+              </p>
             </div>
 
             <div className="flex items-center gap-2">
               {/* Segmented Layout Comparison Buttons */}
-              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
-                <button
-                  id="s5-btn-before"
-                  type="button"
-                  onClick={() => setLayoutMode('before')}
-                  className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
-                    layoutMode === 'before' ? 'bg-white text-slate-950 shadow-xs active' : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  Before
-                </button>
-                <button
-                  id="s5-btn-optimized"
-                  type="button"
-                  onClick={() => setLayoutMode('optimized')}
-                  className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
-                    layoutMode === 'optimized' ? 'bg-[#FFD21F] text-slate-950 shadow-xs active' : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  Optimized
-                </button>
-              </div>
+              {!isSiteUnsuitable && (
+                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
+                  <button
+                    id="s5-btn-before"
+                    type="button"
+                    onClick={() => setLayoutMode('before')}
+                    className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
+                      layoutMode === 'before' ? 'bg-white text-slate-950 shadow-xs active' : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    Before
+                  </button>
+                  <button
+                    id="s5-btn-optimized"
+                    type="button"
+                    onClick={() => setLayoutMode('optimized')}
+                    className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
+                      layoutMode === 'optimized' ? 'bg-[#FFD21F] text-slate-950 shadow-xs active' : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    Optimized
+                  </button>
+                </div>
+              )}
 
               {/* Hide Box Button */}
               <button
@@ -637,78 +667,101 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
             </div>
           </div>
 
-          {/* Metrics KPIs */}
-          <div className="grid grid-cols-3 gap-2 text-center text-xs">
-            <div className="p-2 rounded-xl bg-slate-50 border border-slate-200">
-              <div className="text-[10px] text-slate-400 font-bold uppercase">Net AEP</div>
-              <div id="s5-meta-aep" className="text-sm font-black text-slate-900 font-mono mt-0.5 tabular-nums">
-                {aep}
+          {/* Unsuitable Alert or Metrics KPIs */}
+          {isSiteUnsuitable ? (
+            <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-950 flex flex-col gap-1.5">
+              <div className="flex items-center gap-2 font-black text-rose-800">
+                <AlertTriangle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+                <span>Site unsuitable for wind-farm development</span>
+              </div>
+              <p className="text-[11px] text-slate-700 leading-relaxed">
+                Mandatory residential setbacks (500m IEC 61400 noise/shadow buffer) or transportation/grid corridors exclude turbine siting inside this boundary.
+              </p>
+              <div className="text-[10px] font-mono text-slate-600 bg-white/80 p-2 rounded-lg border border-rose-100">
+                0 feasible turbine positions identified. WS-QAOA optimizer halted to prevent hazardous civil placement.
               </div>
             </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-2 text-center text-xs">
+              <div className="p-2 rounded-xl bg-slate-50 border border-slate-200">
+                <div className="text-[10px] text-slate-400 font-bold uppercase">Net AEP</div>
+                <div id="s5-meta-aep" className="text-sm font-black text-slate-900 font-mono mt-0.5 tabular-nums">
+                  {aep}
+                </div>
+              </div>
 
-            <div className="p-2 rounded-xl bg-slate-50 border border-slate-200">
-              <div className="text-[10px] text-slate-400 font-bold uppercase">Wake Loss</div>
-              <div id="s5-meta-wake-loss" className="text-sm font-black text-emerald-600 font-mono mt-0.5 tabular-nums">
-                {wakeLoss}
+              <div className="p-2 rounded-xl bg-slate-50 border border-slate-200">
+                <div className="text-[10px] text-slate-400 font-bold uppercase">Wake Loss</div>
+                <div id="s5-meta-wake-loss" className="text-sm font-black text-emerald-600 font-mono mt-0.5 tabular-nums">
+                  {wakeLoss}
+                </div>
+              </div>
+
+              <div className="p-2 rounded-xl bg-slate-50 border border-slate-200">
+                <div className="text-[10px] text-slate-400 font-bold uppercase">Net Gain</div>
+                <div className="text-sm font-black text-emerald-600 font-mono mt-0.5 tabular-nums">
+                  +{improvement}
+                </div>
               </div>
             </div>
+          )}
 
-            <div className="p-2 rounded-xl bg-slate-50 border border-slate-200">
-              <div className="text-[10px] text-slate-400 font-bold uppercase">Net Gain</div>
-              <div className="text-sm font-black text-emerald-600 font-mono mt-0.5 tabular-nums">
-                +{improvement}
+          {/* Turbine Micro-Inspector (Only when turbines exist) */}
+          {!isSiteUnsuitable && activeTurbines.length > 0 && (
+            <div id="s5-turbine-inspector" className="p-3 rounded-xl bg-slate-50/90 border border-slate-200 flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span id="s5-inspector-name" className="text-xs font-black text-slate-900">
+                  {selectedTurbine.label || `Turbine T-${String(selectedTurbineIdx + 1).padStart(2, '0')}`}
+                </span>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    id="btn-s5-prev-turbine"
+                    type="button"
+                    onClick={handlePrevTurbine}
+                    className="p-1 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 shadow-2xs"
+                    title="Previous Turbine"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    id="btn-s5-next-turbine"
+                    type="button"
+                    onClick={handleNextTurbine}
+                    className="p-1 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 shadow-2xs"
+                    title="Next Turbine"
+                  >
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    id="btn-s5-fly-turbine"
+                    type="button"
+                    onClick={() => {
+                      panToTurbine(selectedTurbine);
+                      if (!is3DActive) onToggle3D();
+                    }}
+                    className="px-2 py-1 rounded-lg bg-[#FFD21F] hover:bg-[#F2C50F] text-slate-950 font-bold text-[10px] shadow-2xs flex items-center gap-1"
+                    title="Inspect in 3D"
+                  >
+                    <Eye className="w-3 h-3" />
+                    <span>3D Focus</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] font-mono text-slate-600 tabular-nums">
+                <div>Lat: <strong className="text-slate-900">{selectedTurbine.lat.toFixed(5)}°</strong></div>
+                <div>Lon: <strong className="text-slate-900">{selectedTurbine.lon.toFixed(5)}°</strong></div>
+                <div>Elev: <strong className="text-slate-900">{selectedTurbine.elevation_m || 42}m</strong></div>
+                <div>Wind: <strong className="text-emerald-600">{(selectedTurbine.effective_mps || 7.4).toFixed(1)}m/s</strong></div>
               </div>
             </div>
-          </div>
+          )}
 
-          {/* Turbine Micro-Inspector */}
-          <div id="s5-turbine-inspector" className="p-3 rounded-xl bg-slate-50/90 border border-slate-200 flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <span id="s5-inspector-name" className="text-xs font-black text-slate-900">
-                {selectedTurbine.label || `Turbine T-${String(selectedTurbineIdx + 1).padStart(2, '0')}`}
-              </span>
-
-              <div className="flex items-center gap-1">
-                <button
-                  id="btn-s5-prev-turbine"
-                  type="button"
-                  onClick={handlePrevTurbine}
-                  className="p-1 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 shadow-2xs"
-                  title="Previous Turbine"
-                >
-                  <ChevronLeft className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  id="btn-s5-next-turbine"
-                  type="button"
-                  onClick={handleNextTurbine}
-                  className="p-1 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 shadow-2xs"
-                  title="Next Turbine"
-                >
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  id="btn-s5-fly-turbine"
-                  type="button"
-                  onClick={() => {
-                    panToTurbine(selectedTurbine);
-                    if (!is3DActive) onToggle3D();
-                  }}
-                  className="px-2 py-1 rounded-lg bg-[#FFD21F] hover:bg-[#F2C50F] text-slate-950 font-bold text-[10px] shadow-2xs flex items-center gap-1"
-                  title="Inspect in 3D"
-                >
-                  <Eye className="w-3 h-3" />
-                  <span>3D Focus</span>
-                </button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] font-mono text-slate-600 tabular-nums">
-              <div>Lat: <strong className="text-slate-900">{selectedTurbine.lat.toFixed(5)}°</strong></div>
-              <div>Lon: <strong className="text-slate-900">{selectedTurbine.lon.toFixed(5)}°</strong></div>
-              <div>Elev: <strong className="text-slate-900">{selectedTurbine.elevation_m || 42}m</strong></div>
-              <div>Wind: <strong className="text-emerald-600">{(selectedTurbine.effective_mps || 7.4).toFixed(1)}m/s</strong></div>
-            </div>
+          {/* Preliminary Geotechnical Screening Label (Requirement 3) */}
+          <div className="text-[10px] text-slate-500 border-t border-slate-100 pt-2 flex flex-col gap-0.5">
+            <span className="font-semibold text-slate-700">Preliminary geotechnical screening (ISRIC SoilGrids v2.0)</span>
+            <span className="text-[9px] text-slate-400">Detailed geotechnical investigation required before construction.</span>
           </div>
 
           {/* Action Button */}
@@ -716,10 +769,10 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
             id="btn-screen5-export"
             variant="energy"
             size="md"
-            onClick={onExportBlueprint}
+            onClick={isSiteUnsuitable ? onBack : onExportBlueprint}
             className="w-full bg-[#FFD21F] hover:bg-[#F2C50F] text-slate-950 font-black py-3 text-xs shadow-md mt-1"
           >
-            <span>Proceed to Engineering Blueprint</span>
+            <span>{isSiteUnsuitable ? 'Select Feasible Rural Site' : 'Proceed to Engineering Blueprint'}</span>
             <ArrowRight className="w-4 h-4 stroke-[2.5]" />
           </Button>
         </Card>

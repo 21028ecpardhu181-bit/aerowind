@@ -367,9 +367,9 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
 
     if (!turbines || turbines.length === 0) return;
 
-    // Real-world upwind alignment: rotor spinner points into oncoming wind
-    const windHeadingRad = Cesium.Math.toRadians(windDirectionDeg);
-    const modelScale = Math.max(0.6, Math.min(2.0, rotorDiameter / 120.0));
+    // Canonical upwind alignment: glTF model +Z rotor disk faces directly into oncoming meteorological wind vector
+    const turbineHeadingRad = Cesium.Math.toRadians((windDirectionDeg + 180) % 360);
+    const modelScale = Math.max(0.8, Math.min(1.8, rotorDiameter / 120.0));
 
     // Downwind vector
     const downwindDeg = (windDirectionDeg + 180) % 360;
@@ -384,13 +384,13 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
       const isSelected = idx === selectedTurbineIdx;
       const baseElev = (t.elevation_m !== undefined && t.elevation_m !== null) ? Number(t.elevation_m) : 40.0;
       const groundPos = Cesium.Cartesian3.fromDegrees(t.lon, t.lat, baseElev);
-      const hpr = new Cesium.HeadingPitchRoll(windHeadingRad, 0, 0);
+      const hpr = new Cesium.HeadingPitchRoll(turbineHeadingRad, 0, 0);
       const orientation = Cesium.Transforms.headingPitchRollQuaternion(groundPos, hpr);
 
       const labelText = t.label || `T-${String(idx + 1).padStart(2, '0')}`;
       const speedText = t.effective_mps ? `${t.effective_mps.toFixed(1)}m/s` : `${windSpeedMps.toFixed(1)}m/s`;
 
-      // 1. Certified Industrial 3D Wind Turbine Model with Active Rotor Spinning Animation
+      // 1. Certified Industrial 3D Wind Turbine Model with True 1:1 Metric Scale
       const turbineEntity = viewer.entities.add({
         turbineIndex: idx,
         name: `Turbine ${labelText}`,
@@ -398,8 +398,6 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
         orientation: orientation,
         model: {
           uri: '/assets/models/wind_turbine.glb',
-          minimumPixelSize: 48,
-          maximumScale: 300,
           scale: modelScale,
           runAnimations: true,
           clampAnimations: false,
@@ -445,14 +443,14 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
       entitiesRef.current.turbines.push(turbineEntity, groundRing, label);
 
       // 4. Downwind Horizontal Aerodynamic Wake Plume Footprint (Draped on Terrain)
-      // Eliminates vertical cylinder bug: renders true Jensen expanding wake corridor on ground
+      // Physically derived Jensen expanding wake corridor (8.5D length, k=0.05 decay)
       if (localShowWakes) {
-        const coneLengthM = Math.min(550.0, Math.max(260.0, rotorDiameter * 3.5));
+        const coneLengthM = Math.min(1200.0, Math.max(750.0, rotorDiameter * 8.5));
         const latMPerDeg = 110540.0;
         const lonMPerDeg = 111320.0 * Math.cos(t.lat * Math.PI / 180.0);
 
         const r0 = rotorDiameter * 0.5;
-        const r1 = r0 + 0.075 * coneLengthM;
+        const r1 = r0 + 0.05 * coneLengthM;
 
         const endLat = t.lat + (downwindDy * coneLengthM) / latMPerDeg;
         const endLon = t.lon + (downwindDx * coneLengthM) / lonMPerDeg;
@@ -468,7 +466,7 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
         const endLeftLon = endLon - (crossDx * r1) / lonMPerDeg;
 
         const deficit = t.wake_deficit_pct || (idx % 3 === 0 ? 9.5 : 3.8);
-        const isHighLoss = deficit > 7.0;
+        const isHighLoss = deficit > 6.0;
 
         const wakePolygon = viewer.entities.add({
           name: `Wake Footprint ${labelText}`,
@@ -480,7 +478,7 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
               endLeftLon, endLeftLat,
             ]),
             material: Cesium.Color.fromCssColorString(
-              isHighLoss ? 'rgba(239, 68, 68, 0.22)' : 'rgba(56, 189, 248, 0.18)'
+              isHighLoss ? 'rgba(239, 68, 68, 0.20)' : 'rgba(14, 165, 233, 0.16)'
             ),
             heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
           },
@@ -494,25 +492,25 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
             ]),
             width: 1.5,
             material: Cesium.Color.fromCssColorString(
-              isHighLoss ? 'rgba(239, 68, 68, 0.6)' : 'rgba(56, 189, 248, 0.5)'
+              isHighLoss ? 'rgba(239, 68, 68, 0.55)' : 'rgba(14, 165, 233, 0.45)'
             ),
             clampToGround: true,
           },
         });
 
-        // Hub-height wake centerline
+        // Hub-height wake centerline extending downwind along wind vector
         const centerLine = viewer.entities.add({
           name: `Wake Centerline ${labelText}`,
           polyline: {
             positions: [
               Cesium.Cartesian3.fromDegrees(t.lon, t.lat, baseElev + hubHeight),
-              Cesium.Cartesian3.fromDegrees(endLon, endLat, baseElev + hubHeight * 0.9),
+              Cesium.Cartesian3.fromDegrees(endLon, endLat, baseElev + hubHeight * 0.95),
             ],
             width: 2.0,
             material: new Cesium.PolylineGlowMaterialProperty({
-              glowPower: 0.2,
-              taperPower: 0.7,
-              color: isHighLoss ? Cesium.Color.fromCssColorString('#f87171') : Cesium.Color.fromCssColorString('#38bdf8'),
+              glowPower: 0.22,
+              taperPower: 0.65,
+              color: isHighLoss ? Cesium.Color.fromCssColorString('#f59e0b') : Cesium.Color.fromCssColorString('#0ea5e9'),
             }),
           },
         });
@@ -521,40 +519,45 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
       }
     });
 
-    // 5. Dynamic Wind Streamlines & Inter-Turbine Telemetry Data Flow
+    // 5. Finite Engineering Micro-Climate Flow Field (Strictly Bounded within Site Boundary)
     if (showFlowStreamlines) {
       const latMPerDeg = 110540.0;
       const lonMPerDeg = 111320.0 * Math.cos(centerLat * Math.PI / 180.0);
-      const streamSpanM = Math.max(1600.0, radiusKm * 2200.0);
+      const streamSpanM = Math.min(2200.0, Math.max(1200.0, radiusKm * 1400.0));
 
-      // A) Free-stream atmospheric wind flow corridors across the farm
-      const numStreamlines = 9;
+      // Color coding flow ribbons by physical wind speed (cool blue <5 m/s, cyan 5-10 m/s, amber >10 m/s)
+      const flowColor = windSpeedMps < 5.0
+        ? 'rgba(59, 130, 246, 0.60)'
+        : windSpeedMps <= 10.0
+        ? 'rgba(6, 182, 212, 0.65)'
+        : 'rgba(245, 158, 11, 0.70)';
+
+      const numStreamlines = Math.min(5, Math.max(3, Math.round(radiusKm * 1.5)));
       for (let s = 0; s < numStreamlines; s++) {
-        const offsetRatio = (s - Math.floor(numStreamlines / 2)) / (numStreamlines / 2);
-        const crossOffsetM = offsetRatio * (radiusKm * 1400.0);
+        const offsetRatio = numStreamlines > 1 ? (s / (numStreamlines - 1) - 0.5) * 2.0 : 0.0;
+        const crossOffsetM = offsetRatio * (radiusKm * 750.0);
 
-        // Calculate start (upwind) and end (downwind)
         const midLat = centerLat + (crossDy * crossOffsetM) / latMPerDeg;
         const midLon = centerLon + (crossDx * crossOffsetM) / lonMPerDeg;
 
-        const startLat = midLat - (downwindDy * (streamSpanM * 0.5)) / latMPerDeg;
-        const startLon = midLon - (downwindDx * (streamSpanM * 0.5)) / lonMPerDeg;
-        const endLat = midLat + (downwindDy * (streamSpanM * 0.5)) / latMPerDeg;
-        const endLon = midLon + (downwindDx * (streamSpanM * 0.5)) / lonMPerDeg;
+        const startLat = midLat - (downwindDy * (streamSpanM * 0.45)) / latMPerDeg;
+        const startLon = midLon - (downwindDx * (streamSpanM * 0.45)) / lonMPerDeg;
+        const endLat = midLat + (downwindDy * (streamSpanM * 0.45)) / latMPerDeg;
+        const endLon = midLon + (downwindDx * (streamSpanM * 0.45)) / lonMPerDeg;
 
         const streamLine = viewer.entities.add({
-          name: `Atmospheric Streamline ${s + 1}`,
+          name: `Concession Flow Corridor ${s + 1}`,
           polyline: {
             positions: [
-              Cesium.Cartesian3.fromDegrees(startLon, startLat, 60.0 + (s % 3) * 35.0),
-              Cesium.Cartesian3.fromDegrees(midLon, midLat, 75.0 + (s % 3) * 35.0),
-              Cesium.Cartesian3.fromDegrees(endLon, endLat, 60.0 + (s % 3) * 35.0),
+              Cesium.Cartesian3.fromDegrees(startLon, startLat, hubHeight * 0.9),
+              Cesium.Cartesian3.fromDegrees(midLon, midLat, hubHeight * 1.05),
+              Cesium.Cartesian3.fromDegrees(endLon, endLat, hubHeight * 0.95),
             ],
-            width: 2.2,
+            width: 2.0,
             material: new Cesium.PolylineGlowMaterialProperty({
-              glowPower: 0.28,
-              taperPower: 0.6,
-              color: Cesium.Color.fromCssColorString('rgba(56, 189, 248, 0.75)'),
+              glowPower: 0.25,
+              taperPower: 0.55,
+              color: Cesium.Color.fromCssColorString(flowColor),
             }),
           },
         });

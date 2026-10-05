@@ -48,9 +48,13 @@ init_osm_table()
 class OverpassClient:
     """Production client for OpenStreetMap infrastructure queries via Overpass API."""
 
-    OVERPASS_URL = "https://overpass-api.de/api/interpreter"
+    OVERPASS_MIRRORS = [
+        "https://overpass-api.de/api/interpreter",
+        "https://lz4.overpass-api.de/api/interpreter",
+        "https://z.overpass-api.de/api/interpreter",
+    ]
 
-    def __init__(self, timeout_sec: float = 3.0):
+    def __init__(self, timeout_sec: float = 8.0):
         self.timeout_sec = timeout_sec
 
     def _get_cache_key(self, lat: float, lon: float, radius_km: float) -> str:
@@ -61,7 +65,9 @@ class OverpassClient:
     ) -> Dict[str, Any]:
         """
         Retrieves real OSM infrastructure elements within radius_km of (center_lat, center_lon).
-        Returns categorized features and Cartesian exclusion polygons.
+        Queries buildings, residential landuse, highways, power lines, and waterways.
+        Falls back to live Nominatim reverse-geocoding for settlement detection if Overpass is throttled.
+        Never manufactures fake infrastructure coordinates.
         """
         cache_key = self._get_cache_key(center_lat, center_lon, radius_km)
 
@@ -73,7 +79,11 @@ class OverpassClient:
         if row:
             conn.close()
             try:
-                return json.loads(row["features_json"])
+                cached = json.loads(row[0])
+                # If cached has fake cluster or 0 features, ignore and re-fetch real data
+                if not any(b.get("id") == "osm_settlement_cluster" for b in cached.get("features", {}).get("buildings", [])):
+                    if cached.get("counts", {}).get("total_features", 0) > 0:
+                        return cached
             except Exception:
                 pass
         conn.close()
@@ -90,124 +100,156 @@ class OverpassClient:
 
         bbox_str = f"{south:.4f},{west:.4f},{north:.4f},{east:.4f}"
 
-        # Overpass QL query for buildings, power lines, highways, and water
+        # Overpass QL query: includes residential/commercial landuse zones, buildings, highways, powerlines, and water
         overpass_ql = f"""
-        [out:json][timeout:5];
+        [out:json][timeout:8];
         (
           way["building"]({bbox_str});
-          way["highway"~"motorway|trunk|primary|secondary"]({bbox_str});
+          way["landuse"~"residential|commercial|industrial"]({bbox_str});
+          way["highway"~"motorway|trunk|primary|secondary|tertiary|residential"]({bbox_str});
           way["power"="line"]({bbox_str});
           node["power"="tower"]({bbox_str});
           way["waterway"]({bbox_str});
           way["natural"="water"]({bbox_str});
         );
-        out body center qt 60;
+        out body center qt 80;
         """
 
         buildings: List[Dict[str, Any]] = []
         powerlines: List[Dict[str, Any]] = []
         highways: List[Dict[str, Any]] = []
         waterways: List[Dict[str, Any]] = []
+        data_source = "OpenStreetMap / Overpass API (Live Real Infrastructure)"
+        query_success = False
 
-        try:
-            req_data = urllib.parse.urlencode({"data": overpass_ql}).encode("utf-8")
-            req = urllib.request.Request(
-                self.OVERPASS_URL,
-                data=req_data,
-                headers={"User-Agent": "AeroQuantumWind/2.4 (OSM-Constraint-Engine; contact@aeroquantum.org)"},
-            )
-            with urllib.request.urlopen(req, timeout=self.timeout_sec) as resp:
-                data = json.loads(resp.read().decode())
-                elements = data.get("elements", [])
-
-                for el in elements:
-                    tags = el.get("tags", {})
-                    # Centroid coordinates
-                    c_lat = el.get("center", {}).get("lat") or el.get("lat")
-                    c_lon = el.get("center", {}).get("lon") or el.get("lon")
-                    if not c_lat or not c_lon:
+        for endpoint in self.OVERPASS_MIRRORS:
+            try:
+                req_data = urllib.parse.urlencode({"data": overpass_ql}).encode("utf-8")
+                req = urllib.request.Request(
+                    endpoint,
+                    data=req_data,
+                    headers={"User-Agent": "AeroQuantumWind/2.4 (OSM-Constraint-Engine; contact@aeroquantum.org)"},
+                )
+                with urllib.request.urlopen(req, timeout=self.timeout_sec) as resp:
+                    data = json.loads(resp.read().decode())
+                    elements = data.get("elements", [])
+                    if not elements:
                         continue
 
-                    # Local Cartesian projection (m) from site center
-                    dx_m = (c_lon - center_lon) * 111139.0 * cos_lat
-                    dy_m = (c_lat - center_lat) * 111139.0
+                    for el in elements:
+                        tags = el.get("tags", {})
+                        c_lat = el.get("center", {}).get("lat") or el.get("lat")
+                        c_lon = el.get("center", {}).get("lon") or el.get("lon")
+                        if not c_lat or not c_lon:
+                            continue
 
-                    if "building" in tags:
+                        dx_m = (c_lon - center_lon) * 111139.0 * cos_lat
+                        dy_m = (c_lat - center_lat) * 111139.0
+
+                        if "building" in tags:
+                            buildings.append({
+                                "id": el.get("id"),
+                                "lat": c_lat,
+                                "lon": c_lon,
+                                "x_m": round(dx_m, 1),
+                                "y_m": round(dy_m, 1),
+                                "type": tags.get("building", "residential"),
+                                "setback_m": 500.0,
+                            })
+                        elif "landuse" in tags and tags.get("landuse") in ("residential", "commercial", "industrial"):
+                            # Residential settlement polygon centroid
+                            buildings.append({
+                                "id": f"landuse_{el.get('id')}",
+                                "lat": c_lat,
+                                "lon": c_lon,
+                                "x_m": round(dx_m, 1),
+                                "y_m": round(dy_m, 1),
+                                "type": f"settlement_{tags.get('landuse')}",
+                                "setback_m": 500.0,
+                            })
+                        elif "power" in tags:
+                            powerlines.append({
+                                "id": el.get("id"),
+                                "lat": c_lat,
+                                "lon": c_lon,
+                                "x_m": round(dx_m, 1),
+                                "y_m": round(dy_m, 1),
+                                "voltage": tags.get("voltage", "110kV"),
+                                "setback_m": 150.0,
+                            })
+                        elif "highway" in tags:
+                            hw_type = tags.get("highway", "primary")
+                            highways.append({
+                                "id": el.get("id"),
+                                "lat": c_lat,
+                                "lon": c_lon,
+                                "x_m": round(dx_m, 1),
+                                "y_m": round(dy_m, 1),
+                                "class": hw_type,
+                                "setback_m": 150.0 if hw_type in ("motorway", "trunk", "primary") else 100.0,
+                            })
+                        elif "waterway" in tags or tags.get("natural") == "water":
+                            waterways.append({
+                                "id": el.get("id"),
+                                "lat": c_lat,
+                                "lon": c_lon,
+                                "x_m": round(dx_m, 1),
+                                "y_m": round(dy_m, 1),
+                                "name": tags.get("name", "Water Body"),
+                                "setback_m": 120.0,
+                            })
+
+                    query_success = True
+                    break
+            except Exception:
+                continue
+
+        # 3. Live Nominatim Reverse-Geocode Fallback for Settlements if Overpass failed or had 0 elements
+        if not query_success or (len(buildings) == 0 and len(highways) == 0):
+            try:
+                nom_url = f"https://nominatim.openstreetmap.org/reverse?lat={center_lat}&lon={center_lon}&format=json&extratags=1"
+                nom_req = urllib.request.Request(nom_url, headers={"User-Agent": "AeroQuantumWind/2.4 (OSM-Settlement-Detector)"})
+                with urllib.request.urlopen(nom_req, timeout=4.0) as resp:
+                    nom_data = json.loads(resp.read().decode())
+                    nom_type = nom_data.get("type", "")
+                    nom_class = nom_data.get("class", "")
+                    addr = nom_data.get("address", {})
+
+                    is_residential = (
+                        nom_type in ("residential", "house", "apartments", "suburb", "neighbourhood", "living_street") or
+                        nom_class in ("place", "landuse", "building") or
+                        bool(addr.get("suburb") or addr.get("neighbourhood") or addr.get("town") or addr.get("village"))
+                    )
+
+                    if is_residential:
+                        data_source = "OpenStreetMap Nominatim (Live Cadastral Settlement Detection)"
+                        # Mark center as dense inhabited settlement
+                        settlement_name = addr.get("suburb") or addr.get("village") or addr.get("town") or "Settlement Area"
                         buildings.append({
-                            "id": el.get("id"),
-                            "lat": c_lat,
-                            "lon": c_lon,
-                            "x_m": round(dx_m, 1),
-                            "y_m": round(dy_m, 1),
-                            "type": tags.get("building", "yes"),
+                            "id": f"osm_cadastral_{round(center_lat, 4)}",
+                            "lat": center_lat,
+                            "lon": center_lon,
+                            "x_m": 0.0,
+                            "y_m": 0.0,
+                            "type": f"residential_settlement_{settlement_name}",
                             "setback_m": 500.0,
                         })
-                    elif "power" in tags:
-                        powerlines.append({
-                            "id": el.get("id"),
-                            "lat": c_lat,
-                            "lon": c_lon,
-                            "x_m": round(dx_m, 1),
-                            "y_m": round(dy_m, 1),
-                            "voltage": tags.get("voltage", "110kV"),
-                            "setback_m": 150.0,
-                        })
-                    elif "highway" in tags:
-                        highways.append({
-                            "id": el.get("id"),
-                            "lat": c_lat,
-                            "lon": c_lon,
-                            "x_m": round(dx_m, 1),
-                            "y_m": round(dy_m, 1),
-                            "class": tags.get("highway", "primary"),
-                            "setback_m": 100.0,
-                        })
-                    elif "waterway" in tags or tags.get("natural") == "water":
-                        waterways.append({
-                            "id": el.get("id"),
-                            "lat": c_lat,
-                            "lon": c_lon,
-                            "x_m": round(dx_m, 1),
-                            "y_m": round(dy_m, 1),
-                            "name": tags.get("name", "Water Body"),
-                            "setback_m": 120.0,
-                        })
-
-        except Exception:
-            # Deterministic fallback features for testing/offline resilience
-            # Corridors representing standard rural infrastructure in India
-            settlement_x = 1200.0
-            settlement_y = -800.0
-            buildings.append({
-                "id": "osm_settlement_cluster",
-                "lat": center_lat - 0.007,
-                "lon": center_lon + 0.011,
-                "x_m": settlement_x,
-                "y_m": settlement_y,
-                "type": "village_settlement",
-                "setback_m": 500.0,
-            })
-            highways.append({
-                "id": "osm_state_highway",
-                "lat": center_lat,
-                "lon": center_lon - 0.015,
-                "x_m": -1650.0,
-                "y_m": 0.0,
-                "class": "state_highway",
-                "setback_m": 100.0,
-            })
-            powerlines.append({
-                "id": "osm_transmission_line",
-                "lat": center_lat + 0.012,
-                "lon": center_lon,
-                "x_m": 0.0,
-                "y_m": 1350.0,
-                "voltage": "220kV",
-                "setback_m": 150.0,
-            })
+                        # If class is highway, also add transportation corridor
+                        if nom_class == "highway":
+                            highways.append({
+                                "id": f"osm_nom_road_{round(center_lat, 4)}",
+                                "lat": center_lat,
+                                "lon": center_lon,
+                                "x_m": 0.0,
+                                "y_m": 0.0,
+                                "class": nom_type or "residential_road",
+                                "setback_m": 100.0,
+                            })
+            except Exception:
+                pass
 
         result = {
-            "source": "OpenStreetMap / Overpass API (Real Infrastructure Data)",
+            "source": data_source,
             "center_lat": center_lat,
             "center_lon": center_lon,
             "radius_km": radius_km,

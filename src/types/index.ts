@@ -24,7 +24,7 @@ export interface ProjectSummary {
   usda_texture_class?: string;
   foundation_type?: string;
   soil_hazard_level?: string;
-  environmental_notes?: string;
+  environmental_notes?: string | string[];
   net_aep?: number;
   wake_loss_percent?: number;
   status: string;
@@ -176,6 +176,7 @@ export interface LayoutAnalysisData {
   wind_direction_deg: number;
   wind_direction_label?: string;
   feasibility_mask?: FeasibilityMask;
+  site_unsuitable?: boolean;
   status_headline?: string;
   status_description?: string;
 }

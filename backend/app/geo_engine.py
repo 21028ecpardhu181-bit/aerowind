@@ -272,8 +272,9 @@ class CandidateGenerationEngine:
             self.boundary_latlon = norm_boundary
             self.area_km2 = calculate_polygon_area_km2(norm_boundary)
             self.radius_km = math.sqrt(max(0.5, self.area_km2) / math.pi)
-            self.center_lat = float(np.mean([v[0] for v in norm_boundary]))
-            self.center_lon = float(np.mean([v[1] for v in norm_boundary]))
+            if not (self.center_lat and self.center_lon):
+                self.center_lat = float(np.mean([v[0] for v in norm_boundary]))
+                self.center_lon = float(np.mean([v[1] for v in norm_boundary]))
         elif radius_km and radius_km > 0:
             self.radius_km = float(radius_km)
             self.boundary_latlon = generate_geographic_circle_polygon(center_lat, center_lon, radius_km)
@@ -388,7 +389,7 @@ class CandidateGenerationEngine:
 
         pa_check = protected_planet_client.check_protected_area_proximity(self.center_lat, self.center_lon)
         gwa_res = gwa_client.get_climatological_resource(self.center_lat, self.center_lon)
-        wc_res = worldcover_client.evaluate_concession_landcover(self.center_lat, self.center_lon)
+        wc_res = worldcover_client.evaluate_concession_landcover(self.center_lat, self.center_lon, osm_features=osm_query)
 
         # 2. Stage 1 & 2: Boundary + Geographic Constraints Filtering
         # Uses real Copernicus DEM elevation and actual spatial slopes
@@ -476,22 +477,31 @@ class CandidateGenerationEngine:
             if wind_resource < 4.0:
                 exclusion_reasons.append(f"Sub-cut-in wind resource ({wind_resource:.1f} m/s < 4.0 m/s)")
 
-            # Categorize Land Status
+            # Check settlement exclusion if urban / residential area detected
+            if wc_res.get("is_settlement_detected") and min_building_d < 800.0:
+                exclusion_reasons.append("Residential / settlement setback violation (IEC 61400 noise & safety buffer)")
+
+            # Categorize Land Status per 3-Tier Engineering Mask
             if exclusion_reasons:
-                land_status = "EXCLUDED"
-                feasibility = "EXCLUDED"
+                land_status = "HARD EXCLUSION"
+                feasibility = "HARD EXCLUSION"
             elif is_unknown:
-                land_status = "UNKNOWN"
-                feasibility = "UNKNOWN"
-                exclusion_reasons.append("Geotechnical soil integrity unconfirmed — requires field survey")
-            elif slope > 11.0 or min_highway_d > 2000.0:
-                land_status = "RESTRICTED"
-                feasibility = "RESTRICTED"
-            elif slope <= 7.0 and wind_resource >= 6.8 and min_highway_d <= 1500.0 and min_building_d >= 500.0:
-                land_status = "PREFERRED"
+                land_status = "CONDITIONAL"
+                feasibility = "CONDITIONAL"
+                exclusion_reasons.append("Geotechnical soil screening preliminary — detailed geotechnical survey required")
+            elif slope > 11.0:
+                land_status = "CONDITIONAL"
+                feasibility = "CONDITIONAL"
+                exclusion_reasons.append("Moderate slope (11°-16°): specialized crane pad civil works required")
+            elif min_highway_d > 2000.0:
+                # Heavy crane access: buildable, spur access road required
+                land_status = "FEASIBLE"
+                feasibility = "FEASIBLE"
+            elif slope <= 7.0 and wind_resource >= 6.5:
+                land_status = "FEASIBLE"
                 feasibility = "FEASIBLE"
             else:
-                land_status = "BUILDABLE"
+                land_status = "FEASIBLE"
                 feasibility = "FEASIBLE"
 
             lat, lon = meters_to_lat_lon(x, y, self.center_lat, self.center_lon)
@@ -519,11 +529,14 @@ class CandidateGenerationEngine:
             site_id += 1
 
         count_after_geo = len([c for c in geo_filtered_candidates if c["feasibility"] == "FEASIBLE"])
-        count_preferred = len([c for c in geo_filtered_candidates if c["land_status"] == "PREFERRED"])
-        count_buildable = len([c for c in geo_filtered_candidates if c["land_status"] == "BUILDABLE"])
-        count_restricted = len([c for c in geo_filtered_candidates if c["land_status"] == "RESTRICTED"])
-        count_excluded = len([c for c in geo_filtered_candidates if c["land_status"] == "EXCLUDED"])
-        count_unknown = len([c for c in geo_filtered_candidates if c["land_status"] == "UNKNOWN"])
+        count_hard_exclusion = len([c for c in geo_filtered_candidates if c["land_status"] == "HARD EXCLUSION"])
+        count_conditional = len([c for c in geo_filtered_candidates if c["land_status"] == "CONDITIONAL"])
+        count_feasible = count_after_geo
+        count_excluded = count_hard_exclusion
+        count_buildable = count_feasible
+        count_preferred = count_feasible
+        count_restricted = count_conditional
+        count_unknown = 0
 
         # 3. Stage 3: Spatial Spacing Thinning
         # Retain candidate diversity while enforcing sub-spacing threshold
@@ -593,11 +606,22 @@ class CandidateGenerationEngine:
             "boundary_area_km2": round(self.area_km2, 2),
             "setback_m": round(self.setback_m, 1),
             "min_spacing_m": round(self.min_dist_m, 1),
+            "count_hard_exclusion": count_hard_exclusion,
+            "count_conditional": count_conditional,
+            "count_feasible": count_feasible,
             "count_preferred": count_preferred,
             "count_buildable": count_buildable,
             "count_restricted": count_restricted,
             "count_excluded": count_excluded,
             "count_unknown": count_unknown,
+            "site_unsuitable": len(wind_filtered) == 0,
+            "status_headline": "Site unsuitable for wind-farm development" if len(wind_filtered) == 0 else f"{len(wind_filtered)} feasible candidate coordinates identified",
+            "dominant_constraints": [
+                "Settlements & Residential Homes: 500m mandatory buffer (IEC 61400 acoustic noise & shadow flicker mitigation)",
+                "Transportation Corridors: 100m-150m highway setback",
+                "High-Voltage Transmission Corridors: 150m electrical corridor buffer",
+                "River & Wetland Riparian Corridors: 120m buffer",
+            ],
             "engineering_compliance_notes": [
                 "Settlements & Residential Homes: 500m mandatory buffer (IEC 61400 acoustic noise & shadow flicker mitigation)",
                 "River & Wetland Riparian Corridors: 120m buffer (Hydrological stability & flood prevention)",
@@ -727,14 +751,15 @@ class HybridWindFarmOptimizer:
             if len(selected_indices) == K:
                 break
 
-        # Check if any remaining candidates can be added with progressively relaxed spacing
+        # Check if any remaining candidates can be added with slight aerodynamic relaxation (minimum 4.0D)
         if len(selected_indices) < K:
             remaining = [i for i in range(N) if i not in selected_indices]
             remaining.sort(
                 key=lambda i: min([math.hypot(coords[i, 0] - coords[s, 0], coords[i, 1] - coords[s, 1]) for s in selected_indices]) if selected_indices else 0,
                 reverse=True,
             )
-            for relax in [0.80, 0.60, 0.40, 0.20, 0.0]:
+            # Never relax below 0.80 (4.0D aerodynamic safety boundary). Never force turbines into unsuitable spacing.
+            for relax in [0.90, 0.80]:
                 for r in remaining:
                     if r in selected_indices:
                         continue
@@ -905,14 +930,15 @@ class HybridWindFarmOptimizer:
             if len(chosen_sub_indices) == K:
                 break
 
-        # Check if any remaining subspace candidates can be added with progressively relaxed spacing
+        # Check if any remaining subspace candidates can be added with slight aerodynamic relaxation (minimum 4.0D)
         if len(chosen_sub_indices) < K:
             remaining = [i for i in range(N_sub) if i not in chosen_sub_indices]
             remaining.sort(
                 key=lambda i: min([dists[i, s] for s in chosen_sub_indices]) if chosen_sub_indices else 0,
                 reverse=True,
             )
-            for relax in [0.80, 0.60, 0.40, 0.20, 0.0]:
+            # Never relax below 0.80 (4.0D aerodynamic limit). Never force turbines into invalid spacing.
+            for relax in [0.90, 0.80]:
                 for r in remaining:
                     if r in chosen_sub_indices:
                         continue
@@ -1036,12 +1062,15 @@ class HybridWindFarmOptimizer:
         actual_placed = len(optimized_turbines)
         is_capacity_constrained = actual_placed < self.requested_count
 
-        if not is_capacity_constrained:
+        if actual_placed == 0:
+            headline = "Site unsuitable for wind-farm development"
+            description = "Residential settlements, environmental exclusions, or excessive slope prevent turbine placement in this area."
+        elif not is_capacity_constrained:
             headline = "Best feasible layout identified"
             description = f"Optimal wake-minimized layout of {actual_placed} turbines placed strictly inside GIS boundary."
         else:
-            headline = f"{self.requested_count} requested · {actual_placed} feasible"
-            description = f"Only {actual_placed} locations currently satisfy the selected {self.spacing_multiplier_d}D spacing ({int(self.min_dist_m)}m) and environmental constraints."
+            headline = f"{actual_placed} feasible turbine positions identified"
+            description = f"Only {actual_placed} locations currently satisfy the physical {self.spacing_multiplier_d}D spacing ({int(self.min_dist_m)}m) and environmental setbacks (requested: {self.requested_count})."
 
         constraints = [
             {
