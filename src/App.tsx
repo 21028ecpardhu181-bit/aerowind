@@ -18,7 +18,8 @@ import {
   fetchTelemetry,
   generateInitialLayout,
   runOptimization,
-  geocodeLocation
+  geocodeLocation,
+  fetchVillageBoundary
 } from './services/api';
 import { AppHeader } from './components/layout/AppHeader';
 import { AppSidebar } from './components/layout/AppSidebar';
@@ -54,7 +55,7 @@ const DEFAULT_PROJECTS: ProjectSummary[] = [
     location_name: 'Bommuru, Andhra Pradesh, India',
     latitude: 17.0005,
     longitude: 81.7800,
-    area_km2: 314.16,
+    area_km2: 41.21,
     turbine_count: 20,
     turbine_model: 'GE 14.0 MW Offshore',
     suitability: 'Preferred',
@@ -243,10 +244,10 @@ export function App() {
   const [site, setSite] = useState<SiteInfo>({
     name: 'Bommuru, Andhra Pradesh, India',
     shortName: 'Bommuru',
-    lat: 17.0005,
-    lon: 81.7800,
-    areaKm2: 314.16,
-    radiusKm: 10,
+    lat: 16.9676,
+    lon: 81.8138,
+    areaKm2: 41.21,
+    radiusKm: 3.6,
     elevationM: 42,
     terrainType: 'Sparse Forest / Scrub',
     windSpeedMps: 7.82,
@@ -313,15 +314,25 @@ export function App() {
         if (merged.length > 0) {
           const first = merged[0];
           setActiveProject(first);
+          
+          // Auto-fetch official administrative cadastral boundary
+          const vData = await fetchVillageBoundary(first.location_name, first.latitude, first.longitude).catch(() => null);
+          const cLat = vData?.center ? vData.center[0] : (vData?.latitude ?? first.latitude);
+          const cLon = vData?.center ? vData.center[1] : (vData?.longitude ?? first.longitude);
+          const vArea = vData?.area_km2 || first.area_km2 || 41.21;
+          const autoRadius = Math.round(Math.sqrt(Math.max(0.5, vArea) / Math.PI) * 10) / 10;
+
           setSite(prev => ({
             ...prev,
-            name: first.location_name,
-            shortName: first.location_name.split(',')[0],
-            lat: first.latitude,
-            lon: first.longitude,
-            areaKm2: first.area_km2 || 314.16,
+            name: vData?.display_name || first.location_name,
+            shortName: vData?.village_name || first.location_name.split(',')[0],
+            lat: cLat,
+            lon: cLon,
+            areaKm2: vArea,
+            radiusKm: autoRadius,
+            boundary: vData?.boundary,
           }));
-          const telem = await fetchTelemetry(first.latitude, first.longitude).catch(() => null);
+          const telem = await fetchTelemetry(cLat, cLon).catch(() => null);
           if (telem) setTelemetry(telem);
         }
       } catch (err) {

@@ -112,15 +112,15 @@ export const CreateNewProjectHero: React.FC<CreateNewProjectHeroProps> = ({
       />
       <div className="block md:hidden absolute inset-0 bg-gradient-to-b from-white/10 via-transparent to-[#F8FAFC] pointer-events-none" />
 
-      {/* Desktop Background: High-Res Turbine Cutaway with Bright Sky */}
+      {/* Desktop Background: Wide Panoramic Wind Farm Landscape */}
       <div
-        className="hidden md:block absolute inset-0 bg-cover bg-[position:center_18%] pointer-events-none transition-transform duration-1000 ease-out"
+        className="hidden md:block absolute inset-0 bg-cover bg-[position:center_bottom] pointer-events-none transition-transform duration-1000 ease-out"
         style={{
-          backgroundImage: `url('/assets/desktop-turbine-cutaway.jpg')`,
+          backgroundImage: `url('/assets/desktop-hero-landscape.jpg')`,
           backgroundRepeat: 'no-repeat',
         }}
       />
-      <div className="hidden md:block absolute inset-0 bg-gradient-to-b from-sky-200/10 via-transparent to-slate-900/15 pointer-events-none" />
+      <div className="hidden md:block absolute inset-0 bg-gradient-to-b from-sky-200/10 via-transparent to-slate-900/10 pointer-events-none" />
 
 
       {/* ────────────────────────────────────────────────────────── */}
@@ -467,10 +467,10 @@ export const CreateNewProjectHero: React.FC<CreateNewProjectHeroProps> = ({
           </div>
         </div>
 
-        {/* Upper Section: Performance Trends on left, Center clear view of turbine, Wind Turbine #2 Callout on right */}
-        <div className="w-full grid grid-cols-12 gap-6 items-start my-auto">
+        {/* Upper Section: UI Safe Zone in Clean Sky with Centered Headline flanked by Trends and Turbine #2 */}
+        <div className="w-full grid grid-cols-12 gap-5 items-center my-auto">
           {/* Left: Performance Trends Card */}
-          <div className="col-span-12 lg:col-span-4 xl:col-span-3 bg-white/70 hover:bg-white/80 backdrop-blur-2xl border border-white/90 rounded-[28px] p-5 shadow-[0_12px_36px_rgba(0,0,0,0.06),inset_0_1px_1px_rgba(255,255,255,0.95)] transition-all">
+          <div className="col-span-12 lg:col-span-3 bg-white/70 hover:bg-white/80 backdrop-blur-2xl border border-white/90 rounded-[28px] p-4 lg:p-5 shadow-[0_12px_36px_rgba(0,0,0,0.06),inset_0_1px_1px_rgba(255,255,255,0.95)] transition-all">
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-xs font-black text-slate-950 tracking-tight">Performance Trends</h3>
               <span className="text-[10px] font-bold text-slate-400">QAOA vs Wake</span>
@@ -525,12 +525,40 @@ export const CreateNewProjectHero: React.FC<CreateNewProjectHeroProps> = ({
             </div>
           </div>
 
-          {/* Middle Spacer: Leaves photorealistic turbine nacelle & copper coils clearly visible */}
-          <div className="hidden lg:block lg:col-span-4 xl:col-span-5 pointer-events-none" />
+          {/* Center: Hero Typography & Subtitle in the Clean Sky UI Safe Zone */}
+          <div className="col-span-12 lg:col-span-6 flex flex-col items-center text-center justify-center px-4 select-none">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/80 backdrop-blur-xl border border-white/90 shadow-[0_2px_8px_rgba(0,0,0,0.04),inset_0_1px_1px_rgba(255,255,255,0.95)] w-fit mb-2.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_6px_#10b981]" />
+              <span className="text-[10px] font-black tracking-widest text-slate-800 uppercase">
+                CLEAN ENERGY FUTURE
+              </span>
+            </div>
+            <h1 className="text-3xl lg:text-4xl xl:text-5xl font-black text-slate-950 tracking-tight leading-[1.08] drop-shadow-xs">
+              Design <span className="text-[#F59E0B]">Smarter</span> Wind Farms
+            </h1>
+            <p className="text-xs lg:text-sm text-slate-700 font-semibold max-w-md mt-2 leading-relaxed">
+              Real terrain. Real data. Quantum-optimized micro-siting for a cleaner, greener planet.
+            </p>
+            {/* Real Project Highlights Chips */}
+            <div className="flex flex-wrap items-center justify-center gap-2 mt-3 text-[11px] font-bold text-slate-700">
+              <span className="px-3 py-1 rounded-full bg-white/75 backdrop-blur-md border border-white/85 shadow-xs">
+                {windSpeed} m/s Wind
+              </span>
+              <span className="px-3 py-1 rounded-full bg-white/75 backdrop-blur-md border border-white/85 shadow-xs">
+                {elevation} m Elevation
+              </span>
+              <span className="px-3 py-1 rounded-full bg-white/75 backdrop-blur-md border border-white/85 shadow-xs text-amber-800">
+                {netAep} GWh Net AEP
+              </span>
+              <span className="px-3 py-1 rounded-full bg-white/75 backdrop-blur-md border border-white/85 shadow-xs text-emerald-800">
+                {wakeLoss}% Wake Loss
+              </span>
+            </div>
+          </div>
 
-          {/* Right: Floating Wind Turbine #2 Callout Card (Pinned near generator cutaway) */}
-          <div className="col-span-12 lg:col-span-4 xl:col-span-4 flex justify-end">
-            <div className="w-full max-w-sm bg-white/75 hover:bg-white/85 backdrop-blur-2xl border border-white/90 rounded-[28px] p-5 shadow-[0_16px_40px_rgba(0,0,0,0.08),inset_0_1px_1px_rgba(255,255,255,0.95)] transition-all">
+          {/* Right: Floating Wind Turbine #2 Callout Card */}
+          <div className="col-span-12 lg:col-span-3 flex justify-end">
+            <div className="w-full bg-white/70 hover:bg-white/80 backdrop-blur-2xl border border-white/90 rounded-[28px] p-4 lg:p-5 shadow-[0_16px_40px_rgba(0,0,0,0.08),inset_0_1px_1px_rgba(255,255,255,0.95)] transition-all">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <div className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-[0_0_8px_#f59e0b]" />

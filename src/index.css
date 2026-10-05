@@ -61,6 +61,15 @@
 #map, .leaflet-container {
   isolation: isolate;
   z-index: 1 !important;
+  background-color: #1e293b !important;
+}
+
+.leaflet-tile-pane {
+  opacity: 1 !important;
+}
+
+.leaflet-tile {
+  filter: none !important;
 }
 
 /* Subtle custom scrollbar */

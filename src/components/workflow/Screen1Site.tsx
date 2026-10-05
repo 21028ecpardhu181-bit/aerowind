@@ -247,6 +247,10 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
     const L = window.L;
     if (!map || !L) return;
 
+    if (modeRef.current === 'draw') {
+      return;
+    }
+
     if (polygonLayerRef.current) {
       try { map.removeLayer(polygonLayerRef.current); } catch (_) {}
       polygonLayerRef.current = null;
@@ -261,7 +265,7 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
     const vertices: [number, number][] =
       customBoundary && customBoundary.length >= 3
         ? customBoundary
-        : generateCircleVertices(lat, lon, currentRadius);
+        : (site.boundary && site.boundary.length >= 3 ? (site.boundary as [number, number][]) : generateCircleVertices(lat, lon, currentRadius));
 
     const calcArea = calculatePolygonAreaKm2(vertices);
 
@@ -316,16 +320,22 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
 
     // Concession badge at center
     const siteTitle = site.shortName || site.name.split(',')[0] || 'Selected Concession';
+    const hasPolygonBoundary = (customBoundary && customBoundary.length >= 3) || (site.boundary && site.boundary.length >= 3);
+    const isVillage = modeRef.current === 'village' || hasPolygonBoundary;
+    const badgeSubtext = modeRef.current === 'radius'
+      ? `${calcArea.toFixed(1)} km² · ${(currentRadius).toFixed(1)} km radius`
+      : (isVillage ? `${calcArea.toFixed(1)} km² · Cadastral Boundary` : `${calcArea.toFixed(1)} km² Wind Farm Parcel`);
+
     const unifiedBadgeIcon = L.divIcon({
       className: 'site-unified-badge-wrapper',
       html: `
         <div class="px-2.5 py-1.5 rounded-xl bg-white/95 backdrop-blur-xl border border-white/80 shadow-lg flex flex-col items-center select-none pointer-events-none text-center">
           <div class="text-[11px] font-black text-slate-900 tracking-tight">${siteTitle}</div>
-          <div class="text-[9px] font-mono font-bold text-amber-600">${calcArea.toFixed(1)} km² · ${(currentRadius).toFixed(1)} km radius</div>
+          <div class="text-[9px] font-mono font-bold ${isVillage ? 'text-emerald-700' : 'text-amber-600'}">${badgeSubtext}</div>
         </div>
       `,
-      iconSize: [160, 48],
-      iconAnchor: [80, 24],
+      iconSize: [180, 48],
+      iconAnchor: [90, 24],
     });
     areaBadgeRef.current = L.marker([lat, lon], { icon: unifiedBadgeIcon }).addTo(map);
 
@@ -333,7 +343,7 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
     setTimeout(() => {
       try { map.invalidateSize(); } catch (_) {}
     }, 100);
-  }, [calculatePolygonAreaKm2, generateCircleVertices, selectedRadius, site.name, site.radiusKm, site.shortName]);
+  }, [calculatePolygonAreaKm2, generateCircleVertices, selectedRadius, site.boundary, site.name, site.radiusKm, site.shortName]);
 
   // Fly/re-center map and update boundary polygon whenever site coordinates update
   useEffect(() => {
@@ -366,35 +376,61 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
         zoom: 12,
         zoomControl: false,
         attributionControl: false,
+        tap: false, // Critical for mobile touch clicks in Android Chrome & iOS Safari
       });
 
-      // Direct Global Edge CDN Tile Layers (High-speed, Zero-Proxy, Edge-cached Google Maps Hybrid/Roadmap/Terrain)
+      // Production-grade resilient multi-CDN tile layers with automatic fallback
       const satellite = L.tileLayer(
-        'https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
         {
-          subdomains: ['0', '1', '2', '3'],
-          maxZoom: 20,
-          attribution: 'Imagery © Google Maps',
+          maxZoom: 19,
+          maxNativeZoom: 18,
+          attribution: 'Imagery © Esri, Maxar, Earthstar Geographics',
         }
       );
+      satellite.on('tileerror', (error: any) => {
+        const tile = error.tile;
+        const coords = error.coords;
+        if (tile && coords && !tile._hasFallback) {
+          tile._hasFallback = true;
+          const sub = (coords.x + coords.y) % 4;
+          tile.src = `https://mt${sub}.google.com/vt/lyrs=y&x=${coords.x}&y=${coords.y}&z=${coords.z}`;
+        }
+      });
 
       const street = L.tileLayer(
-        'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+        'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
         {
-          subdomains: ['0', '1', '2', '3'],
+          subdomains: ['a', 'b', 'c', 'd'],
           maxZoom: 20,
-          attribution: 'Map data © Google Maps',
+          attribution: '© OpenStreetMap contributors © CARTO',
         }
       );
+      street.on('tileerror', (error: any) => {
+        const tile = error.tile;
+        const coords = error.coords;
+        if (tile && coords && !tile._hasFallback) {
+          tile._hasFallback = true;
+          tile.src = `https://tile.openstreetmap.org/${coords.z}/${coords.x}/${coords.y}.png`;
+        }
+      });
 
       const terrain = L.tileLayer(
-        'https://mt{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}',
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
         {
-          subdomains: ['0', '1', '2', '3'],
-          maxZoom: 20,
-          attribution: 'Terrain © Google Maps',
+          maxZoom: 19,
+          attribution: 'Terrain © Esri World Topo Map',
         }
       );
+      terrain.on('tileerror', (error: any) => {
+        const tile = error.tile;
+        const coords = error.coords;
+        if (tile && coords && !tile._hasFallback) {
+          tile._hasFallback = true;
+          const sub = ['a', 'b', 'c'][(coords.x + coords.y) % 3];
+          tile.src = `https://${sub}.tile.opentopomap.org/${coords.z}/${coords.x}/${coords.y}.png`;
+        }
+      });
 
       baseLayersRef.current = { satellite, street, terrain };
 
@@ -409,7 +445,10 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
 
       setTimeout(() => {
         try { map.invalidateSize(); } catch (_) {}
-      }, 200);
+      }, 80);
+      setTimeout(() => {
+        try { map.invalidateSize(); } catch (_) {}
+      }, 300);
 
       // Add Scale Bar
       L.control.scale({
@@ -532,12 +571,24 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
   useEffect(() => {
     const map = mapRef.current;
     const L = window.L;
-    if (!map || !L || mode !== 'draw') {
-      if (rubberbandPolylineRef.current && map) {
+    if (!map || !L) return;
+
+    if (mode !== 'draw') {
+      if (rubberbandPolylineRef.current) {
         try { map.removeLayer(rubberbandPolylineRef.current); } catch (_) {}
         rubberbandPolylineRef.current = null;
       }
       return;
+    }
+
+    // Entering or active in draw mode: remove previous static circle/polygon and badge
+    if (polygonLayerRef.current) {
+      try { map.removeLayer(polygonLayerRef.current); } catch (_) {}
+      polygonLayerRef.current = null;
+    }
+    if (areaBadgeRef.current) {
+      try { map.removeLayer(areaBadgeRef.current); } catch (_) {}
+      areaBadgeRef.current = null;
     }
 
     // Clear old drawn markers
@@ -885,11 +936,14 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
     const centerLon = drawnPoints.reduce((sum, v) => sum + v[1], 0) / drawnPoints.length;
 
     onSiteChange({
+      ...site,
       lat: centerLat,
       lon: centerLon,
       areaKm2,
       perimeterKm: perimKm,
       boundary: drawnPoints,
+      name: `Custom Wind Farm Parcel (${areaKm2.toFixed(1)} km²)`,
+      shortName: `Custom Parcel`,
     });
 
     renderBoundary(centerLat, centerLon, areaKm2, drawnPoints);
@@ -1322,11 +1376,17 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
 
         {/* ── PHOTOSHOP LASSO IN-CANVAS FLOATING TOOLBAR ── */}
         {mode === 'draw' && (
-          <div className="absolute bottom-24 md:bottom-8 left-1/2 -translate-x-1/2 z-[1060] flex items-center gap-2 px-3.5 py-2 rounded-full bg-slate-950/90 text-white backdrop-blur-2xl border border-white/20 shadow-2xl pointer-events-auto max-w-[95vw] overflow-x-auto no-scrollbar">
+          <div className="absolute bottom-24 md:bottom-8 left-1/2 -translate-x-1/2 z-[1060] flex items-center gap-1.5 sm:gap-2 px-3.5 py-2 rounded-full bg-slate-950/90 text-white backdrop-blur-2xl border border-white/20 shadow-2xl pointer-events-auto max-w-[95vw] overflow-x-auto no-scrollbar">
             <span className="flex items-center gap-1.5 text-xs font-bold whitespace-nowrap">
               <span className="w-2 h-2 rounded-full bg-[#FFD21F] animate-ping" />
               <span>Lasso: {drawnPoints.length} vertices</span>
             </span>
+
+            {drawnPoints.length === 0 && (
+              <span className="text-[11px] text-amber-300/90 whitespace-nowrap hidden sm:inline">
+                (Tap map to add vertex #1)
+              </span>
+            )}
 
             {drawStats && (
               <span className="text-xs font-mono font-black text-[#FFD21F] px-2 py-0.5 rounded-full bg-white/10 whitespace-nowrap">
@@ -1347,6 +1407,17 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
 
             <button
               type="button"
+              id="btn-undo-polygon-draw"
+              disabled={drawnPoints.length === 0}
+              onClick={() => setDrawnPoints((pts) => pts.slice(0, -1))}
+              className="px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-semibold whitespace-nowrap cursor-pointer disabled:opacity-40"
+              title="Undo last placed vertex"
+            >
+              Undo
+            </button>
+
+            <button
+              type="button"
               id="btn-clear-polygon-draw"
               onClick={() => setDrawnPoints([])}
               className="px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-semibold whitespace-nowrap cursor-pointer"
@@ -1356,11 +1427,17 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
 
             <button
               type="button"
-              id="btn-fit-drawn-polygon"
-              onClick={handleFitSite}
-              className="hidden sm:inline-block px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-semibold whitespace-nowrap cursor-pointer"
+              id="btn-cancel-polygon-draw"
+              onClick={() => {
+                setDrawnPoints([]);
+                setMode('search');
+                onToggleDrawMode(false);
+                renderBoundary(site.lat, site.lon, site.areaKm2, site.boundary as [number, number][]);
+              }}
+              className="px-2.5 py-1 rounded-full bg-red-500/20 hover:bg-red-500/30 text-red-300 text-xs font-semibold whitespace-nowrap cursor-pointer"
+              title="Exit Lasso Mode"
             >
-              Fit
+              Cancel
             </button>
           </div>
         )}
