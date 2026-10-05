@@ -98,12 +98,11 @@ function generateFallbackTurbines(clat: number, clon: number, count: number = 8,
         maxZoom: 20,
       });
 
-      // High-Resolution Satellite Tiles via Local Cache Proxy
+      // High-Resolution Satellite Tiles via direct Esri CDN
       L.tileLayer(
-        '/api/geo/tiles/satellite/{z}/{x}/{y}',
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
         {
-          maxZoom: 20,
-          maxNativeZoom: 19,
+          maxZoom: 19,
           attribution: 'Esri World Imagery',
         }
       ).addTo(map);

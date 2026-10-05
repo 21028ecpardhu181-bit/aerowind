@@ -83,10 +83,10 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
     }
 
     try {
-      // 1. High-Resolution Satellite Base Layer via Local Cache Proxy
+      // 1. High-Resolution Satellite Base Layer via direct Esri World Imagery CDN
       const satelliteProvider = new Cesium.UrlTemplateImageryProvider({
-        url: '/api/geo/tiles/satellite/{z}/{x}/{y}',
-        maximumLevel: 20,
+        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        maximumLevel: 19,
         credit: 'Esri World Imagery',
       });
 
@@ -117,8 +117,8 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
 
       // 2. Superimpose High-Resolution Road Network & Place Labels for Real Geography
       const referenceLabelsProvider = new Cesium.UrlTemplateImageryProvider({
-        url: '/api/geo/tiles/labels/{z}/{x}/{y}',
-        maximumLevel: 20,
+        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+        maximumLevel: 19,
       });
       viewer.imageryLayers.addImageryProvider(referenceLabelsProvider);
 

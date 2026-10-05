@@ -130,20 +130,19 @@ function generateFallbackTurbines(clat: number, clon: number, count: number = 8,
         maxZoom: 20,
       });
 
-      // High-Resolution Satellite & Topo Layers via Local Cache Proxy
+      // High-Resolution Satellite & Topo Layers via direct Esri CDN
       const satellite = L.tileLayer(
-        '/api/geo/tiles/satellite/{z}/{x}/{y}',
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
         {
-          maxZoom: 20,
-          maxNativeZoom: 19,
+          maxZoom: 19,
           attribution: 'Esri World Imagery',
         }
       );
 
       const terrain = L.tileLayer(
-        '/api/geo/tiles/terrain/{z}/{x}/{y}',
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
         {
-          maxZoom: 20,
+          maxZoom: 19,
           attribution: 'Esri World Topo Map',
         }
       );

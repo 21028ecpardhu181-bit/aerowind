@@ -144,6 +144,30 @@ export async function fetchEnvironmentalStack(lat: number, lon: number, radiusKm
   return null;
 }
 
+export async function fetchSoilTelemetry(lat: number, lon: number): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE}/geo/soil-telemetry?lat=${lat}&lon=${lon}`);
+    if (res.ok) return await res.json();
+  } catch (e) {
+    console.warn('Failed to fetch soil telemetry:', e);
+  }
+  return null;
+}
+
+export async function fetchVillageBoundary(query: string, lat?: number, lon?: number): Promise<any> {
+  try {
+    let url = `${API_BASE}/geo/village-boundary?q=${encodeURIComponent(query)}`;
+    if (lat !== undefined && lon !== undefined) {
+      url += `&lat=${lat}&lon=${lon}`;
+    }
+    const res = await fetch(url);
+    if (res.ok) return await res.json();
+  } catch (e) {
+    console.warn('Failed to fetch village boundary:', e);
+  }
+  return null;
+}
+
 export async function generateInitialLayout(payload: any): Promise<any> {
   const res = await fetch(`${API_BASE}/geo/initial-layout`, {
     method: 'POST',

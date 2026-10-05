@@ -29,20 +29,20 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
       <div className="flex items-center gap-3">
         <button
           onClick={() => onTabChange('projects')}
-          className="flex items-center gap-2 text-left focus:outline-none group select-none"
+          className="flex items-center gap-2.5 text-left focus:outline-none group select-none"
         >
-          <AeroQuantumLogo size={36} />
-          <div className="flex flex-col leading-tight">
-            <div className="text-base sm:text-lg font-black tracking-tight text-slate-900 flex items-center">
-              AeroQuantum<span className="text-[#FFD21F] font-black">Wind</span>
+          <AeroQuantumLogo size={40} />
+          <div className="flex flex-col leading-none">
+            <div className="text-lg sm:text-2xl font-black tracking-tight text-slate-950 flex items-center">
+              AeroQuantum<span className="text-[#FFD21F] font-black drop-shadow-xs">Wind</span>
             </div>
-            <span className="text-[10px] text-slate-500 font-medium tracking-tight">
-              Engineering a Cleaner Tomorrow
+            <span className="text-[10px] text-slate-500 font-semibold tracking-wide uppercase mt-0.5">
+              Quantum GIS Wind Farm Micro-Siting
             </span>
           </div>
         </button>
-        <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono text-slate-500 bg-white/80 border border-slate-200/80 shadow-xs">
-          v2.4 - GIS
+        <span className="hidden sm:inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold text-amber-900 bg-[#FFD21F]/20 border border-[#FFD21F]/40 shadow-xs">
+          v2.5 - LIVE GIS
         </span>
       </div>
 

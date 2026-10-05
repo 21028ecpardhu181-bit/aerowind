@@ -28,8 +28,8 @@ export const CreateNewProjectHero: React.FC<CreateNewProjectHeroProps> = ({
         }}
       />
 
-      {/* Soft atmospheric gradient to ensure cards and text legibility */}
-      <div className="absolute inset-0 bg-gradient-to-b from-white/10 via-white/35 to-[#F8FAFC]/95 pointer-events-none" />
+      {/* Soft atmospheric gradient to ensure cards and text legibility while keeping photo visible */}
+      <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-white/20 to-[#F8FAFC]/90 pointer-events-none" />
 
       {/* Main Home Content Container */}
       <div className="relative z-10 w-full max-w-4xl mx-auto px-4 sm:px-6 pt-3 sm:pt-6 flex flex-col gap-4 sm:gap-6">
