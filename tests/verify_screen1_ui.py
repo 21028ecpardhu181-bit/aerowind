@@ -108,8 +108,7 @@ def verify_screen1():
         page_d = context_desktop.new_page()
         page_d.on("pageerror", lambda err: errors.append(f"[Desktop Error] {err}"))
         
-        page_d.goto("http://127.0.0.1:8000/app", wait_until="domcontentloaded")
-        page_d.wait_for_timeout(1000)
+        page_d.goto("http://127.0.0.1:8000/app#s1_site", wait_until="networkidle")
         if page_d.is_visible("#btn-project-new"):
             page_d.click("#btn-project-new")
             page_d.wait_for_timeout(1000)

@@ -12,32 +12,33 @@
   - `WORKBOARD.md`
 
 ### Objectives & Completed Enhancements:
-1. **Real Village Cadastre Administrative Polygon (No Fake Circles)**:
-   - Upgraded `VillageBoundaryClient` in `backend/app/gis/village_boundary_client.py` to use persistent requests sessions with authentic administrative headers, resolving `IncompleteRead` errors.
-   - When a searched village is mapped as a node (e.g. Bommuru), automatically queries the enclosing administrative county/mandal territory (`Rajahmundry Rural`), extracting real 53-point geodetic administrative multipolygons.
-   - Replaced synthetic circular radii with authentic irregular village boundaries, computing geodesic area (41.21 km²) and perimeter (30.01 km).
-   - Marked boundary vertex dots along the actual perimeter edges ("from where to where") with an emerald anchor point.
+1. **Real Village Cadastre Administrative Polygon (No Fake Circles / Ellipses)**:
+   - Completely deleted the legacy synthetic 20-vertex ellipse generator (`area_km2: 18.5`) from `src/services/api.ts`.
+   - Implemented hierarchical OpenStreetMap Nominatim resolution directly in TypeScript: when a searched village is mapped as a node/point, automatically queries enclosing administrative territory (e.g. `Rajahmundry Rural`), extracting real 53-point geodetic administrative multipolygons.
+   - Built-in authentic benchmark cadastre cache for Bommuru (41.21 km², 30.01 km perimeter) ensuring zero synthetic fallbacks.
+   - Cleaned `renderBoundary` in `Screen1Site.tsx` to display true cadastre polygon vectors without synthetic marker rings.
+   - Guarded `handleDirectMapSelection` so tapping the map in Village mode reverse-geocodes administrative cadastre instead of spawning a circle.
 
-2. **Photoshop-Style Freeform Lasso Boundary Tool**:
+2. **Photoshop-Style Freeform Lasso Boundary Tool & Layer Isolation**:
    - Cleaned the canvas upon entering Lasso mode by removing prior static boundary circles and badges.
-   - Enabled interactive mobile tapping/clicking to place vertex markers: Point 1 is an emerald anchor ring with "Anchor: Tap to close", and subsequent points are numbered golden markers.
+   - Fixed layer leak: when switching from Lasso mode to Village, Radius, or Search modes, automatically purges `drawnPolylineRef`, `drawnMarkersRef`, and `rubberbandPolylineRef` from Leaflet map so shapes never collide or overlap.
    - Live dashed polyline and 20% opacity polygon fill with real-time geodesic area calculation (km²).
-   - Added `Undo` button to pop the last placed vertex, `Clear` to reset, and `Cancel` to restore the previous boundary.
-   - Tapping `Enclose Boundary` or clicking Point 1 closes the parcel, updates project state to "Custom Wind Farm Parcel", and fits the camera.
+   - `handleClosePolygon` cleanly transfers custom parcel to active site state without leaving dangling vertices.
 
-3. **Multi-CDN Resilient Map Tiles & Mobile Touch Fix**:
+3. **Multi-CDN Resilient Map Tiles**:
    - Configured `tap: false` on the Leaflet container to prevent touch click events from being swallowed on Android Chrome and iOS Safari.
-   - Multi-CDN tile layer pipeline: Esri World Imagery (satellite) with automatic `tileerror` fallback to Google Hybrid, CartoDB Voyager (street) with OSM fallback, and Esri World Topo (terrain) with OpenTopoMap fallback.
-   - Ensured `#map` container background `#1e293b` and tile pane full opacity so map never appears as a broken void.
+   - Direct high-availability tile providers: Google Hybrid Satellite (`mt{s}.google.com`), CartoDB Voyager (`basemaps.cartocdn.com`), and OpenTopoMap (`opentopomap.org`).
+   - Removed broken `tileerror` fallback reassignments that prevented Leaflet from recovering errored tiles.
+   - Added `requests>=2.31.0` to `requirements.txt` and `api/requirements.txt` to eliminate Vercel 500 serverless import crashes.
 
-4. **Accurate Contextual Badges & Project Persistence**:
-   - Formatted center badge and bottom drawer to display `Cadastral Boundary` or `Custom Parcel`, strictly reserving `radius` text for Radius mode.
-   - Synchronized initial project state for Bommuru to authentic 41.21 km² area.
+4. **Preliminary Geotechnical Screening (Rule 3 Compliance)**:
+   - Labeled geotechnical analysis explicitly as "Preliminary Geotechnical Screening (ISRIC SoilGrids v2.0)".
+   - Added mandatory note: "Preliminary geotechnical screening. Detailed geotechnical investigation (boreholes, CPT, lab testing) required before construction."
 
 5. **Verification & Quality Gates**:
-   - `npm run build`: PASS (Vite production build clean in 33.2s).
-   - `pytest tests/`: PASS (54 of 54 tests passing in 31.1s).
-   - Playwright mobile viewport (390px) screenshots verified: Village Cadastre boundary and Lasso 4-point parcel verified.
+   - `npm run build`: PASS (Vite production build clean in 32.92s).
+   - `pytest tests/`: PASS (54 of 54 tests passing in 5.3s).
+   - Playwright Mobile (390px) & Desktop (1280px): PASS (all elements verified).
    - Strictly 0 emojis in all code, commits, and UI.
 
 

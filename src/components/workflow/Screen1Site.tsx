@@ -268,48 +268,24 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
         : (site.boundary && site.boundary.length >= 3 ? (site.boundary as [number, number][]) : generateCircleVertices(lat, lon, currentRadius));
 
     const calcArea = calculatePolygonAreaKm2(vertices);
+    const hasPolygonBoundary = (customBoundary && customBoundary.length >= 3) || (site.boundary && site.boundary.length >= 3);
+    const isCadastre = modeRef.current === 'village' || hasPolygonBoundary;
 
-    // High-contrast, bold concession boundary polygon with drop shadow & fill
+    // High-contrast, clean concession boundary polygon
     polygonLayerRef.current = L.polygon(vertices, {
-      color: '#FFD21F',
-      weight: 3.5,
-      opacity: 1.0,
-      fillColor: '#FFD21F',
-      fillOpacity: 0.18,
+      color: isCadastre ? '#10B981' : '#FFD21F',
+      weight: 3.0,
+      opacity: 0.95,
+      fillColor: isCadastre ? '#10B981' : '#FFD21F',
+      fillOpacity: 0.16,
       smoothFactor: 1,
     }).addTo(map);
 
-    // Add crisp vertex circle markers at boundary corners
+    // Clear any previous drawn markers from map
     drawnMarkersRef.current.forEach((m) => {
       try { map.removeLayer(m); } catch (_) {}
     });
     drawnMarkersRef.current = [];
-
-    // Add prominent, glowing vertex dots outlining boundary ("dots from where to where in the same village borders")
-    const totalPts = vertices.length;
-    const stride = totalPts <= 32 ? 1 : Math.max(1, Math.floor(totalPts / 24));
-    vertices.forEach((pt: [number, number], i: number) => {
-      if (i % stride === 0 || i === 0 || i === totalPts - 1) {
-        const isAnchor = i === 0;
-        const dot = L.circleMarker(pt, {
-          radius: isAnchor ? 6.5 : 5.0,
-          color: isAnchor ? '#10B981' : '#ffffff',
-          weight: isAnchor ? 2.5 : 2.0,
-          fillColor: isAnchor ? '#10B981' : '#FFD21F',
-          fillOpacity: 1.0,
-          className: isAnchor ? 'gis-first-vertex-dot' : 'gis-boundary-vertex-dot',
-        }).addTo(map);
-
-        dot.bindTooltip(
-          isAnchor
-            ? `Start / Anchor Vertex (Pt #1)<br/>${pt[0].toFixed(4)}°N, ${pt[1].toFixed(4)}°E`
-            : `Border Point #${i + 1}<br/>${pt[0].toFixed(4)}°N, ${pt[1].toFixed(4)}°E`,
-          { direction: 'top', className: 'gis-vertex-tooltip' }
-        );
-
-        drawnMarkersRef.current.push(dot);
-      }
-    });
 
     try {
       map.fitBounds(polygonLayerRef.current.getBounds(), {
@@ -320,7 +296,6 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
 
     // Concession badge at center
     const siteTitle = site.shortName || site.name.split(',')[0] || 'Selected Concession';
-    const hasPolygonBoundary = (customBoundary && customBoundary.length >= 3) || (site.boundary && site.boundary.length >= 3);
     const isVillage = modeRef.current === 'village' || hasPolygonBoundary;
     const badgeSubtext = modeRef.current === 'radius'
       ? `${calcArea.toFixed(1)} km² · ${(currentRadius).toFixed(1)} km radius`
@@ -379,24 +354,16 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
         tap: false, // Critical for mobile touch clicks in Android Chrome & iOS Safari
       });
 
-      // Production-grade resilient multi-CDN tile layers with automatic fallback
+      // Resilient Multi-CDN Tile Layers (Google Hybrid, CartoDB Voyager, OpenTopoMap)
       const satellite = L.tileLayer(
-        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        'https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
         {
-          maxZoom: 19,
-          maxNativeZoom: 18,
-          attribution: 'Imagery © Esri, Maxar, Earthstar Geographics',
+          subdomains: ['0', '1', '2', '3'],
+          maxZoom: 20,
+          maxNativeZoom: 19,
+          attribution: 'Imagery © Google Hybrid Satellite',
         }
       );
-      satellite.on('tileerror', (error: any) => {
-        const tile = error.tile;
-        const coords = error.coords;
-        if (tile && coords && !tile._hasFallback) {
-          tile._hasFallback = true;
-          const sub = (coords.x + coords.y) % 4;
-          tile.src = `https://mt${sub}.google.com/vt/lyrs=y&x=${coords.x}&y=${coords.y}&z=${coords.z}`;
-        }
-      });
 
       const street = L.tileLayer(
         'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
@@ -406,31 +373,15 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
           attribution: '© OpenStreetMap contributors © CARTO',
         }
       );
-      street.on('tileerror', (error: any) => {
-        const tile = error.tile;
-        const coords = error.coords;
-        if (tile && coords && !tile._hasFallback) {
-          tile._hasFallback = true;
-          tile.src = `https://tile.openstreetmap.org/${coords.z}/${coords.x}/${coords.y}.png`;
-        }
-      });
 
       const terrain = L.tileLayer(
-        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+        'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
         {
-          maxZoom: 19,
-          attribution: 'Terrain © Esri World Topo Map',
+          subdomains: ['a', 'b', 'c'],
+          maxZoom: 17,
+          attribution: 'Terrain © OpenTopoMap',
         }
       );
-      terrain.on('tileerror', (error: any) => {
-        const tile = error.tile;
-        const coords = error.coords;
-        if (tile && coords && !tile._hasFallback) {
-          tile._hasFallback = true;
-          const sub = ['a', 'b', 'c'][(coords.x + coords.y) % 3];
-          tile.src = `https://${sub}.tile.opentopomap.org/${coords.z}/${coords.x}/${coords.y}.png`;
-        }
-      });
 
       baseLayersRef.current = { satellite, street, terrain };
 
@@ -578,6 +529,14 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
         try { map.removeLayer(rubberbandPolylineRef.current); } catch (_) {}
         rubberbandPolylineRef.current = null;
       }
+      if (drawnPolylineRef.current) {
+        try { map.removeLayer(drawnPolylineRef.current); } catch (_) {}
+        drawnPolylineRef.current = null;
+      }
+      drawnMarkersRef.current.forEach((m) => {
+        try { map.removeLayer(m); } catch (_) {}
+      });
+      drawnMarkersRef.current = [];
       return;
     }
 
@@ -673,6 +632,49 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
   const handleDirectMapSelection = (lat: number, lon: number) => {
     const shortName = `${lat.toFixed(3)}°N, ${lon.toFixed(3)}°E`;
     const r = selectedRadius || site.radiusKm || 3.0;
+
+    // In village mode: NEVER render synthetic circles! Resolve authentic administrative border directly.
+    if (mode === 'village') {
+      setIsVillageLoading(true);
+      fetchVillageBoundary('', lat, lon)
+        .then((vRes) => {
+          if (vRes && vRes.boundary && vRes.boundary.length >= 3) {
+            setVillageData(vRes);
+            const cLat = vRes.center ? vRes.center[0] : (vRes.latitude ?? lat);
+            const cLon = vRes.center ? vRes.center[1] : (vRes.longitude ?? lon);
+            const vArea = vRes.area_km2 || calculatePolygonAreaKm2(vRes.boundary);
+            const autoRadius = Math.round(Math.sqrt(Math.max(0.5, vArea) / Math.PI) * 10) / 10;
+
+            setSelectedRadius(autoRadius);
+            onSelectRadius(autoRadius);
+            setActiveDrawerTab('village');
+
+            onSiteChange({
+              name: vRes.display_name || vRes.village_name || shortName,
+              shortName: vRes.village_name || shortName,
+              lat: cLat,
+              lon: cLon,
+              radiusKm: autoRadius,
+              areaKm2: vArea,
+              boundary: vRes.boundary,
+            });
+            renderBoundary(cLat, cLon, vArea, vRes.boundary);
+
+            // Fetch soil at village center
+            setIsSoilLoading(true);
+            fetchSoilTelemetry(cLat, cLon)
+              .then((sRes) => { if (sRes) setSoilData(sRes); })
+              .catch(() => {})
+              .finally(() => setIsSoilLoading(false));
+          } else {
+            setSearchError(`No administrative boundary found at ${shortName}. Use Lasso Boundary to draw.`);
+          }
+        })
+        .catch(() => {})
+        .finally(() => setIsVillageLoading(false));
+      return;
+    }
+
     const fallbackBoundary = generateCircleVertices(lat, lon, r);
     const fallbackAreaKm2 = Math.round(Math.PI * r * r * 10) / 10;
     
@@ -946,15 +948,23 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
       shortName: `Custom Parcel`,
     });
 
-    renderBoundary(centerLat, centerLon, areaKm2, drawnPoints);
-    setDrawnPoints([]);
-    setMode('search');
-    onToggleDrawMode(false);
-
+    if (drawnPolylineRef.current && mapRef.current) {
+      try { mapRef.current.removeLayer(drawnPolylineRef.current); } catch (_) {}
+      drawnPolylineRef.current = null;
+    }
+    drawnMarkersRef.current.forEach((m) => {
+      try { mapRef.current?.removeLayer(m); } catch (_) {}
+    });
+    drawnMarkersRef.current = [];
     if (rubberbandPolylineRef.current && mapRef.current) {
       try { mapRef.current.removeLayer(rubberbandPolylineRef.current); } catch (_) {}
       rubberbandPolylineRef.current = null;
     }
+
+    renderBoundary(centerLat, centerLon, areaKm2, drawnPoints);
+    setDrawnPoints([]);
+    setMode('search');
+    onToggleDrawMode(false);
   };
 
   // Manual Coordinates Submit
@@ -1127,7 +1137,13 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
             <button
               id="btn-radius-mode"
               type="button"
-              onClick={() => { setMode('radius'); onToggleDrawMode(false); }}
+              onClick={() => {
+                setDrawnPoints([]);
+                setDrawStats(null);
+                setMode('radius');
+                onToggleDrawMode(false);
+                handleApplyRadius(selectedRadius || site.radiusKm || 5);
+              }}
               className={`px-3 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
                 mode === 'radius'
                   ? 'bg-[#FFD21F] text-slate-950 font-black shadow-xs'
@@ -1160,6 +1176,8 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
               type="button"
               id="btn-village-mode"
               onClick={() => {
+                setDrawnPoints([]);
+                setDrawStats(null);
                 setMode('village');
                 onToggleDrawMode(false);
                 handleSnapToVillage();
@@ -1703,13 +1721,16 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
               <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex flex-col gap-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-black text-amber-900 dark:text-amber-300 uppercase tracking-wider">
-                    Geotechnical Foundation Analysis
+                    Preliminary Geotechnical Screening
                   </span>
                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                     isCriticalSoil ? 'bg-rose-100 text-rose-800' : (hazardLevel === 'WARNING' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800')
                   }`}>
                     {hazardLevel === 'CRITICAL_BLOCKED' ? 'Critical Risk' : (hazardLevel === 'WARNING' ? 'Advisory' : 'ISRIC SoilGrids v2.0')}
                   </span>
+                </div>
+                <div className="text-[10px] text-slate-500 dark:text-slate-400 italic">
+                  Preliminary geotechnical screening. Detailed geotechnical investigation (boreholes, CPT, lab testing) required before construction.
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 text-xs mt-1">
