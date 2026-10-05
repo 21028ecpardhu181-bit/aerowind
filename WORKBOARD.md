@@ -2,47 +2,37 @@
 
 ## Assigned Agent: Antigravity
 
-### Active Task: Geotechnical Soil Risk Gating, Micro-Siting Setbacks, Village Boundary & Kilometres Auto-Fetch, and Multi-Dashboard Persistence
-- **Branch**: `feature/engineering-setbacks-soil-autofetch`
+### Active Task: Apple Liquid Glass UI Translucency, Ultra-High Visibility Hero Background Photography, and Interactive Logos
+- **Branch**: `feature/liquid-glass-hero-interactive-logos`
 - **Files Owned**:
-  - `backend/app/gis/soil_client.py`
-  - `backend/app/geo_engine.py`
-  - `backend/app/db.py`
-  - `backend/app/api/projects.py`
-  - `src/components/workflow/Screen1Site.tsx`
-  - `src/components/workflow/Screen2Config.tsx`
-  - `src/components/dashboard/ProjectCard.tsx`
-  - `src/components/dashboard/ProjectDashboard.tsx`
-  - `src/components/dashboard/ProjectHero.tsx`
-  - `src/services/api.ts`
-  - `src/types/index.ts`
-  - `src/App.tsx`
-  - `tests/verify_geotechnical_setbacks_autofetch.py`
+  - `src/components/dashboard/CreateNewProjectHero.tsx`
+  - `src/components/dashboard/ProjectHome.tsx`
+  - `src/components/layout/AppHeader.tsx`
+  - `src/components/layout/MobileBottomNav.tsx`
+  - `src/components/ui/AeroQuantumLogo.tsx`
+  - `public/assets/hero-windfarm-generated.jpg`
+  - `frontend/assets/hero-windfarm-generated.jpg`
+  - `WORKBOARD.md`
 
-### Objectives & Completed Fixes:
-1. **Soil Geotechnical Risk Gating & Critical Warning Banner**:
-   - Upgraded `backend/app/gis/soil_client.py` to evaluate DNV-GL / IEC 61400-6 bearing capacity and multi-parameter hazard states (`SAFE`, `WARNING`, `CRITICAL_BLOCKED`).
-   - In `Screen1Site.tsx`, if bearing capacity < 155 kPa or hazard is `CRITICAL_BLOCKED`, standard gravity base placement is prohibited with an explicit high-visibility warning banner.
-   - The "Confirm Site & Proceed" button is disabled until the user selects Deep Bored Piled Foundation (30m rock sockets), guaranteeing geotechnical engineering safety before construction.
-2. **Engineering Micro-Siting Setbacks & Environmental Exclusions**:
-   - In `backend/app/geo_engine.py`, candidate micro-siting strictly enforces:
-     - 500m Residential settlement buffer (IEC 61400 acoustic & shadow flicker setback).
-     - 120m Riparian river/waterway buffer (ecological & flooding protection).
-     - 200m Marine high-tide & saltwater spray erosion buffer.
-     - 150m High-voltage transmission corridor setback (66kV-400kV anti-induction clearance).
-     - 100m Logistics & heavy transport road corridor (80m blade transport and 800t crawler cranes).
-   - Rendered dedicated "Micro-Siting Setbacks & Exclusions" cards in `Screen1Site.tsx` (Tab 4) and `Screen2Config.tsx`.
-3. **Auto-Fetch Kilometres and Village Boundaries (Zero Manual Guessing)**:
-   - Clicking on the map, searching a location, or snapping automatically queries OpenStreetMap Nominatim/Overpass, extracts the cadastral boundary polygon, computes the geodesic area in km² and equivalent radius $r = \sqrt{A/\pi}$, auto-updates the radius in kilometres, switches mode to `'village'`, and fetches live ISRIC soil and Open-Meteo wind telemetry.
-4. **End-to-End Database & Multi-Dashboard Persistence**:
-   - Added migrations in `backend/app/db.py` to persist `soil_bearing_capacity_kpa`, `usda_texture_class`, `foundation_type`, `soil_hazard_level`, and `environmental_notes` in `projects` SQLite table.
-   - Extended `ProjectSummary`, `ProjectDetail`, `SiteInfo`, and `FarmConfig` in `src/types/index.ts`.
-   - Updated `ProjectCard.tsx`, `ProjectDashboard.tsx`, and `ProjectHero.tsx` to display geotechnical soil bearing capacity, foundation engineering type, and micro-siting compliance notes.
+### Objectives & Completed Enhancements:
+1. **Ultra-High Visibility Vertical Hero Background Photograph**:
+   - Generated and integrated a photorealistic 9:16 vertical sunrise photograph featuring majestic modern white wind turbines with rotating blades, morning mist, and rolling emerald ridges.
+   - Removed the milky white gradient overlays (`bg-gradient-to-b from-white/20 via-white/35 to-slate-100/85`), replacing them with subtle cinematic glass grading (`from-black/15 via-transparent to-slate-950/25`) to preserve 100% photo visibility.
+2. **True Apple Liquid Glass (visionOS / iOS 18 Glassmorphism)**:
+   - Replaced chalky opaque solid white blocks with authentic translucent acrylic glass: `bg-white/20` to `bg-white/30`, `backdrop-blur-2xl` / `backdrop-blur-3xl`, fine 1px translucent borders (`border-white/40`), and top specular light rim highlights (`shadow-[inset_0_1px_1px_rgba(255,255,255,0.7)]`).
+   - The wind turbines, mountain ridges, and sunrise light remain visibly refracted through all cards and panels.
+   - Guaranteed razor-sharp typography legibility with deep `text-slate-950 font-black` and specular text-shadows (`drop-shadow-[0_1px_2px_rgba(255,255,255,0.8)]`).
+3. **Interactive AeroQuantum Wind Turbine Logos**:
+   - Upgraded `AeroQuantumLogo.tsx` with kinetic 360-degree rotational physics, quantum amber glow (`drop-shadow-[0_0_12px_rgba(255,210,31,0.6)]`), scale bounce on click/tap, and continuous multi-click blade spinning.
+   - Wired interactive logo behavior in `AppHeader.tsx`, `CreateNewProjectHero.tsx`, and `ProjectHome.tsx`.
+4. **Mobile Navigation Liquid Glass Dock & Touch Targets**:
+   - Upgraded `MobileBottomNav.tsx` to translucent frosted glass dock with specular rim reflection and high-contrast navigation icons.
+   - Adjusted mobile bottom container padding (`pb-48`) to ensure all action cards scroll well clear of the dock.
 5. **Verification & Quality Gates**:
-   - `npm run build`: PASS (0 errors, built in 48s).
-   - `tests/verify_geotechnical_setbacks_autofetch.py`: PASS (all desktop & mobile assertions green).
-   - `tests/verify_project_dashboards_accuracy.py`: PASS (distinct counts, dynamic capacities).
-   - `tests/verify_liquid_soil_village.py`: PASS (Apple Liquid Design, real soil/wind, free-form lasso, village cadastre).
+   - `npm run build`: PASS (0 errors, Vite production build clean in 45.8s).
+   - `tests/verify_liquid_soil_village.py`: PASS.
+   - `tests/verify_geotechnical_setbacks_autofetch.py`: PASS.
+   - Playwright 390x844 mobile viewport preview captured and verified: turbines and landscape visibly shine through translucent glass cards.
    - Strictly 0 emojis in all code and UI.
 
 

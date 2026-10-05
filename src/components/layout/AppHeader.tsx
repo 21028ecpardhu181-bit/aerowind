@@ -24,25 +24,26 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   user,
 }) => {
   return (
-    <header className="sticky top-0 z-[1300] w-full bg-white/70 backdrop-blur-xl border-b border-white/50 px-4 md:px-6 py-2 flex items-center justify-between gap-4 transition-all">
+    <header className="sticky top-0 z-[1300] w-full bg-white/35 hover:bg-white/45 backdrop-blur-2xl border-b border-white/35 shadow-[0_4px_24px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.7)] px-4 md:px-6 py-2.5 flex items-center justify-between gap-4 transition-all">
       {/* Brand & Wordmark */}
       <div className="flex items-center gap-3">
         <button
-          onClick={() => onTabChange('projects')}
-          className="flex items-center gap-2.5 text-left focus:outline-none group select-none"
+          onClick={() => onTabChange('home')}
+          className="flex items-center gap-2.5 text-left focus:outline-none group select-none active:scale-98 transition-transform"
+          title="Return to Home"
         >
-          <AeroQuantumLogo size={40} />
+          <AeroQuantumLogo size={38} />
           <div className="flex flex-col leading-none">
             <div className="text-lg sm:text-2xl font-black tracking-tight text-slate-950 flex items-center">
               AeroQuantum<span className="text-[#FFD21F] font-black drop-shadow-xs">Wind</span>
             </div>
-            <span className="text-[10px] text-slate-500 font-semibold tracking-wide uppercase mt-0.5">
+            <span className="text-[10px] text-slate-600 font-bold tracking-wide uppercase mt-0.5">
               Quantum GIS Wind Farm Micro-Siting
             </span>
           </div>
         </button>
-        <span className="hidden sm:inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold text-amber-900 bg-[#FFD21F]/20 border border-[#FFD21F]/40 shadow-xs">
-          v2.5 - LIVE GIS
+        <span className="hidden sm:inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-mono font-black text-amber-900 bg-[#FFD21F]/25 border border-[#FFD21F]/50 shadow-xs">
+          v2.5 · LIVE GIS
         </span>
       </div>
 
