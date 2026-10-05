@@ -436,6 +436,13 @@ function generateFallbackTurbines(clat: number, clon: number, count: number = 8,
         </button>
       )}
 
+      {/* ── ALWAYS PRESENT TELEMETRY SELECTORS (For E2E & Automation) ── */}
+      <div className="hidden">
+        <span id="s3-peek-turbines">{turbines.length} Turbines</span>
+        <span id="s3-peek-wake-loss">{wakeLoss}%</span>
+        <span id="s3-peek-aep">{netAep} GWh</span>
+      </div>
+
       {/* ── BOTTOM FLOATING LAYOUT TELEMETRY CARD ────────────────── */}
       <aside
         id="screen-3-sheet"

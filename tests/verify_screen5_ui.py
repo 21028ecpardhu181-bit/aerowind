@@ -31,13 +31,15 @@ def verify_screen5():
         page_m.on("pageerror", lambda err: errors.append(f"[Mobile Error] {err}"))
         page_m.on("console", lambda msg: print(f"[Browser Console {msg.type}] {msg.text}") if msg.type in ["error", "warning"] else None)
 
-        page_m.goto("http://127.0.0.1:8000/app", wait_until="networkidle")
-        page_m.wait_for_selector("#btn-confirm-site", timeout=10000)
-        time.sleep(1.0)
+        page_m.goto("http://127.0.0.1:8000/app", wait_until="domcontentloaded")
+        page_m.wait_for_timeout(1000)
+        if page_m.is_visible("#btn-project-new"):
+            page_m.click("#btn-project-new")
+            page_m.wait_for_timeout(1000)
 
         # Screen 1 -> Screen 2
         print("Screen 1 -> Screen 2: Confirming site...")
-        page_m.locator("#btn-confirm-site").click()
+        page_m.locator("#btn-confirm-site-peek:visible, #btn-confirm-site:visible").first.click()
         page_m.wait_for_selector("#screen-2-container", state="visible", timeout=10000)
         time.sleep(1.0)
 
@@ -162,12 +164,11 @@ def verify_screen5():
         page_m.wait_for_selector("#screen-6-container", state="visible", timeout=10000)
         time.sleep(0.5)
 
-        s6_header = page_m.locator("#screen-6-container").text_content()
-        assert "Screen 6" in s6_header, "Should successfully advance to Screen 6 placeholder"
+        assert page_m.is_visible("#s6-site-title"), "Should successfully advance to Screen 6 Blueprint"
         print("Screen 6 reached successfully!")
 
         # Back to Screen 5
-        page_m.locator("#screen-6-container button.btn-sub-back").click()
+        page_m.locator("#btn-s6-back").click()
         page_m.wait_for_selector("#screen-5-container", state="visible", timeout=10000)
         time.sleep(0.5)
 
@@ -184,11 +185,14 @@ def verify_screen5():
         page_d = context_desktop.new_page()
         page_d.on("pageerror", lambda err: errors.append(f"[Desktop Error] {err}"))
 
-        page_d.goto("http://127.0.0.1:8000/app", wait_until="networkidle")
-        time.sleep(0.5)
+        page_d.goto("http://127.0.0.1:8000/app", wait_until="domcontentloaded")
+        page_d.wait_for_timeout(1000)
+        if page_d.is_visible("#btn-project-new"):
+            page_d.click("#btn-project-new")
+            page_d.wait_for_timeout(1000)
 
-        # Fast forward to Screen 5 via app methods or buttons
-        page_d.locator("#btn-confirm-site").click()
+        # Fast forward to Screen 2
+        page_d.locator("#btn-confirm-site-peek:visible, #btn-confirm-site:visible").first.click()
         page_d.wait_for_selector("#screen-2-container", state="visible")
         page_d.locator("#btn-generate-layout").click()
         page_d.wait_for_selector("#screen-3-container", state="visible")

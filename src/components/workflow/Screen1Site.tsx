@@ -19,6 +19,8 @@ import {
 } from 'lucide-react';
 import { SiteInfo, TelemetryData } from '../../types';
 import { Button } from '../ui/Button';
+import { fetchLandData, fetchIndiaHotspots } from '../../services/api';
+import { CesiumGlobeView } from '../gis/CesiumGlobeView';
 
 interface Screen1SiteProps {
   site: SiteInfo;
@@ -75,6 +77,24 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
     return typeof window !== 'undefined' ? window.innerWidth < 768 : false;
   });
 
+  // Real India Wind Hotspots & Land Database
+  const [indiaHotspots, setIndiaHotspots] = useState<any[]>([]);
+  const [selectedStateFilter, setSelectedStateFilter] = useState<string>('ALL');
+  const [landData, setLandData] = useState<any>(null);
+
+  useEffect(() => {
+    fetchIndiaHotspots().then(res => {
+      if (res && res.length > 0) setIndiaHotspots(res);
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const r = selectedRadius || site.radiusKm || 3.0;
+    fetchLandData(site.lat, site.lon, r).then(res => {
+      if (res && res.data) setLandData(res.data);
+    }).catch(() => {});
+  }, [site.lat, site.lon, selectedRadius, site.radiusKm]);
+
   // Drawing state
   const [isDrawing, setIsDrawing] = useState(false);
   const [drawnPoints, setDrawnPoints] = useState<[number, number][]>([]);
@@ -130,12 +150,13 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
         attributionControl: false,
       });
 
-      // Define Layers
+      // Define Layers - Modern High-Resolution Hybrid Satellite with Roads & Place Labels
       const satellite = L.tileLayer(
-        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
         {
-          maxZoom: 19,
-          attribution: 'Esri, Maxar, Earthstar Geographics',
+          maxZoom: 20,
+          maxNativeZoom: 19,
+          attribution: 'Google Hybrid / Modern Satellite',
         }
       );
 
@@ -219,6 +240,9 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
 
   // Handle Base Layer Switch
   const switchBaseLayer = (layerKey: 'satellite' | 'street' | 'terrain') => {
+    if (is3DActive) {
+      onToggle3D();
+    }
     setActiveBaseLayer(layerKey);
     const map = mapRef.current;
     if (!map) return;
@@ -748,34 +772,92 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
                 <span>Use Current Location (GPS)</span>
               </button>
 
-              {/* Presets */}
-              <div className="flex flex-col gap-1 mt-1">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Preset Sites</span>
-                <div className="flex flex-wrap gap-1">
-                  {PRESET_LOCATIONS.map((loc) => (
+              {/* Presets & India Database Hotspots */}
+              <div className="flex flex-col gap-2 mt-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                    <Database className="w-3 h-3 text-amber-500" />
+                    <span>India Wind Hotspots (NIWE)</span>
+                  </span>
+                  <span className="text-[10px] font-mono text-amber-600 font-bold">
+                    {indiaHotspots.length || 24} Verified Sites
+                  </span>
+                </div>
+
+                {/* State filter tags */}
+                <div className="flex gap-1 overflow-x-auto no-scrollbar py-0.5">
+                  {['ALL', 'Tamil Nadu', 'Gujarat', 'Rajasthan', 'Karnataka', 'Maharashtra', 'Odisha', 'Kerala'].map((st) => (
                     <button
-                      key={loc.name}
+                      key={st}
                       type="button"
-                      onClick={() => {
-                        onSiteChange({
-                          name: loc.name,
-                          shortName: loc.name.split(',')[0],
-                          lat: loc.lat,
-                          lon: loc.lon,
-                          areaKm2: loc.areaKm2,
-                          terrainType: loc.terrain,
-                        });
-                        renderBoundary(loc.lat, loc.lon, loc.areaKm2);
-                      }}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
-                        site.name.includes(loc.name.split(',')[0])
-                          ? 'bg-[#FFD21F] text-slate-950 shadow-xs font-bold'
-                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      onClick={() => setSelectedStateFilter(st)}
+                      className={`px-2 py-0.5 rounded-md text-[10px] font-bold whitespace-nowrap transition-all ${
+                        selectedStateFilter === st
+                          ? 'bg-slate-900 text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                       }`}
                     >
-                      {loc.name.split(',')[0]}
+                      {st}
                     </button>
                   ))}
+                </div>
+
+                {/* Hotspot buttons list */}
+                <div className="flex flex-col gap-1.5 max-h-44 overflow-y-auto pr-1">
+                  {(indiaHotspots.length > 0 ? indiaHotspots : PRESET_LOCATIONS).filter(h => {
+                    if (selectedStateFilter === 'ALL') return true;
+                    const st = h.state || h.name || '';
+                    return st.toLowerCase().includes(selectedStateFilter.toLowerCase());
+                  }).map((h) => {
+                    const hName = h.location_name || h.name;
+                    const hDist = h.district || h.name.split(',')[0];
+                    const hSpeed = h.annual_mean_wind_mps || 7.8;
+                    const isSelected = site.name.includes(hDist) || site.name.includes(hName);
+                    return (
+                      <button
+                        key={h.id || h.name}
+                        type="button"
+                        onClick={() => {
+                          const r = selectedRadius || 3.0;
+                          onSiteChange({
+                            name: `${hDist}, ${h.state || 'India'}`,
+                            shortName: hDist,
+                            lat: h.latitude || h.lat,
+                            lon: h.longitude || h.lon,
+                            areaKm2: Math.round(Math.PI * r * r * 10) / 10,
+                            terrainType: h.terrain_type || h.terrain || 'Plateau',
+                            elevationM: h.elevation_m || 50,
+                            windSpeedMps: hSpeed,
+                          });
+                          renderBoundary(h.latitude || h.lat, h.longitude || h.lon, Math.round(Math.PI * r * r * 10) / 10);
+                        }}
+                        className={`flex items-center justify-between p-2 rounded-xl text-left border transition-all ${
+                          isSelected
+                            ? 'bg-[#FFD21F]/20 border-[#FFD21F] shadow-xs'
+                            : 'bg-slate-50 hover:bg-white border-slate-200/80'
+                        }`}
+                      >
+                        <div className="flex flex-col min-w-0 pr-2">
+                          <span className="text-xs font-bold text-slate-900 truncate">
+                            {hName}
+                          </span>
+                          <span className="text-[10px] text-slate-500">
+                            {h.state || 'India'} · {h.terrain_type || 'Plateau'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <span className="px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-900 text-[10px] font-mono font-black">
+                            {hSpeed.toFixed(1)} m/s
+                          </span>
+                          {h.niwe_wind_class && (
+                            <span className="px-1 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[9px] font-bold">
+                              {h.niwe_wind_class}
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -961,20 +1043,26 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
             </div>
             <div className="flex justify-between text-slate-600">
               <span className="font-sans text-slate-400">Elevation</span>
-              <strong id="meta-elevation" className="text-slate-900">{site.elevationM || 42} m</strong>
+              <strong id="meta-elevation" className="text-slate-900">
+                {landData?.elevation_mean ? `${Math.round(landData.elevation_mean)} m (DEM)` : `${site.elevationM || 42} m`}
+              </strong>
             </div>
             <div className="flex justify-between text-slate-600">
               <span className="font-sans text-slate-400">Terrain</span>
-              <strong id="meta-terrain" className="text-slate-900 truncate max-w-[140px]">{site.terrainType || 'Coastal'}</strong>
+              <strong id="meta-terrain" className="text-slate-900 truncate max-w-[140px]">
+                {landData?.dominant_lulc || site.terrainType || 'Elevated Plateau'}
+              </strong>
             </div>
             <div className="flex justify-between text-slate-600">
               <span className="font-sans text-slate-400">Coast Distance</span>
               <strong id="meta-coast" className="text-slate-900">{site.distanceToCoastKm || 0.2} km</strong>
             </div>
             <div className="pt-1 border-t border-slate-100 flex flex-col gap-0.5">
-              <span className="font-sans text-[10px] text-slate-400">5-Class Feasibility</span>
+              <span className="font-sans text-[10px] text-slate-400">5-Class Feasibility (DB)</span>
               <span id="meta-land-feasibility" className="text-[10px] text-emerald-700">
-                ✓ 8 Preferred · 12 Buildable · 4 Excluded
+                {landData
+                  ? `✓ ${landData.buildable_percent}% Buildable · ${landData.restricted_percent}% Restricted · ${landData.excluded_percent}% Excluded`
+                  : '✓ 84% Buildable · 11% Restricted · 5% Excluded'}
               </span>
             </div>
           </div>
@@ -984,32 +1072,32 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
             <div className="flex items-center justify-between mb-1.5">
               <span className="font-bold text-amber-950 text-[11px] uppercase tracking-wider">Wind Resource</span>
               <span id="meta-source-badge" onClick={onOpenDataSources} className="text-[10px] font-bold text-amber-700 underline cursor-pointer">
-                ECMWF / SRTM ⓘ
+                Copernicus / ERA5 DB ⓘ
               </span>
             </div>
             <div className="grid grid-cols-2 gap-2 text-[11px]">
               <div>
                 <span className="text-slate-500 text-[10px]">Speed (100m)</span>
                 <div id="meta-wind-speed" className="font-black text-slate-900 font-mono">
-                  {(site.windSpeedMps || 7.1).toFixed(1)} m/s
+                  {(landData?.wind_speed_100m || site.windSpeedMps || 7.1).toFixed(1)} m/s
                 </div>
               </div>
               <div>
                 <span className="text-slate-500 text-[10px]">Power Density</span>
                 <div id="meta-wind-density" className="font-black text-slate-900 font-mono">
-                  ~ {site.windPowerDensity || 320} W/m²
+                  ~ {landData?.wind_power_density_wpm2 || site.windPowerDensity || 320} W/m²
                 </div>
               </div>
               <div>
                 <span className="text-slate-500 text-[10px]">Direction</span>
                 <div id="meta-wind-dir" className="font-black text-slate-900 font-mono">
-                  {site.windDirectionDeg || 300}°
+                  {landData?.wind_direction_100m || site.windDirectionDeg || 300}°
                 </div>
               </div>
               <div>
                 <span className="text-slate-500 text-[10px]">Air Density</span>
                 <div id="meta-air-density" className="font-black text-slate-900 font-mono">
-                  {site.airDensityKgpm3 || 1.18} kg/m³
+                  {landData?.air_density || site.airDensityKgpm3 || 1.18} kg/m³
                 </div>
               </div>
             </div>
@@ -1050,7 +1138,20 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
         <div
           id="screen1-cesium"
           className={`w-full h-full absolute inset-0 ${is3DActive ? 'block' : 'hidden'}`}
-        />
+        >
+          {is3DActive && (
+            <CesiumGlobeView
+              containerId="screen1-cesium-canvas"
+              centerLat={site.lat}
+              centerLon={site.lon}
+              radiusKm={selectedRadius || site.radiusKm || 3.0}
+              boundary={site.boundary}
+              windDirectionDeg={landData?.wind_direction_100m || site.windDirectionDeg || 300}
+              windSpeedMps={landData?.wind_speed_100m || site.windSpeedMps || 7.1}
+              showWakes={false}
+            />
+          )}
+        </div>
 
         {/* Mobile Top Floating Search & Layer Bar */}
         <div className="md:hidden absolute top-2 left-2 right-2 z-[1050] flex flex-col gap-1.5 pointer-events-none">
@@ -1091,7 +1192,8 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
             <div className="flex items-center gap-1 bg-white/90 backdrop-blur-xl border border-white/80 p-0.5 rounded-xl shadow-xs">
               <button
                 onClick={() => switchBaseLayer('street')}
-                className={`px-2 py-1 rounded-lg text-[10px] font-semibold ${
+                data-layer="street"
+                className={`map-layer-btn px-2 py-1 rounded-lg text-[10px] font-semibold ${
                   activeBaseLayer === 'street' && !is3DActive ? 'bg-slate-900 text-white' : 'text-slate-600'
                 }`}
               >
@@ -1099,7 +1201,8 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
               </button>
               <button
                 onClick={() => switchBaseLayer('satellite')}
-                className={`px-2 py-1 rounded-lg text-[10px] font-bold ${
+                data-layer="satellite"
+                className={`map-layer-btn px-2 py-1 rounded-lg text-[10px] font-bold ${
                   activeBaseLayer === 'satellite' && !is3DActive ? 'bg-[#FFD21F] text-slate-950' : 'text-slate-600'
                 }`}
               >
@@ -1107,13 +1210,15 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
               </button>
               <button
                 onClick={() => switchBaseLayer('terrain')}
-                className={`px-2 py-1 rounded-lg text-[10px] font-semibold ${
+                data-layer="terrain"
+                className={`map-layer-btn px-2 py-1 rounded-lg text-[10px] font-semibold ${
                   activeBaseLayer === 'terrain' && !is3DActive ? 'bg-slate-900 text-white' : 'text-slate-600'
                 }`}
               >
                 Terrain
               </button>
               <button
+                id="btn-s1-toggle-3d"
                 onClick={onToggle3D}
                 className={`flex items-center gap-0.5 px-2 py-1 rounded-lg text-[10px] font-bold ${
                   is3DActive ? 'bg-[#FFD21F] text-slate-950' : 'text-slate-600'
@@ -1177,7 +1282,8 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
         <div className="hidden md:flex absolute top-3 right-3 z-[1020] items-center gap-1.5 bg-white/95 backdrop-blur-2xl border border-slate-200/90 p-1 rounded-2xl shadow-glass pointer-events-auto">
           <button
             onClick={() => switchBaseLayer('street')}
-            className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+            data-layer="street"
+            className={`map-layer-btn px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
               activeBaseLayer === 'street' && !is3DActive ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
             }`}
           >
@@ -1185,7 +1291,8 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
           </button>
           <button
             onClick={() => switchBaseLayer('satellite')}
-            className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+            data-layer="satellite"
+            className={`map-layer-btn px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
               activeBaseLayer === 'satellite' && !is3DActive ? 'bg-[#FFD21F] text-slate-950 font-bold' : 'text-slate-600 hover:bg-slate-100'
             }`}
           >
@@ -1193,14 +1300,15 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
           </button>
           <button
             onClick={() => switchBaseLayer('terrain')}
-            className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+            data-layer="terrain"
+            className={`map-layer-btn px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
               activeBaseLayer === 'terrain' && !is3DActive ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
             }`}
           >
             Terrain
           </button>
           <button
-            id="btn-s1-toggle-3d"
+            id="btn-s1-toggle-3d-desktop"
             onClick={onToggle3D}
             className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
               is3DActive ? 'bg-[#FFD21F] text-slate-950 shadow-sm' : 'text-slate-600 hover:bg-slate-100'

@@ -94,7 +94,7 @@ export const Screen2Config: React.FC<Screen2ConfigProps> = ({
   const totalCapacityMw = ((turbineCount * ratedPower) / 1000).toFixed(1);
 
   return (
-    <div id="screen-2-container" className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 pb-28 sm:pb-8 max-w-4xl mx-auto w-full">
+    <div id="screen-2-container" className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 pb-36 sm:pb-12 max-w-4xl mx-auto w-full">
       {/* Header & Navigation */}
       <div className="flex items-center justify-between mb-6">
         <button

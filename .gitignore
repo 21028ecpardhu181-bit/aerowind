@@ -9,5 +9,9 @@ node_modules/
 .env.*
 .env.local
 *.png
+*.db
+backend/data/
 verification_shots/
 verification_shots_fix/
+.agents/
+briefs/.artifacts/

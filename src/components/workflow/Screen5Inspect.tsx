@@ -21,6 +21,7 @@ import {
 import { OptimizationData, SiteInfo, Turbine } from '../../types';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
+import { CesiumGlobeView } from '../gis/CesiumGlobeView';
 
 interface Screen5InspectProps {
   site: SiteInfo;
@@ -417,7 +418,7 @@ function generateFallbackTurbines(clat: number, clon: number, count: number = 8,
 
           {/* Toggle Telemetry Box Visibility */}
           <button
-            id="btn-s5-toggle-panel"
+            id="s5-panel-toggle"
             type="button"
             onClick={() => setIsPanelCollapsed(!isPanelCollapsed)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border shadow-glass backdrop-blur-xl transition-all active:scale-95 ${
@@ -460,7 +461,26 @@ function generateFallbackTurbines(clat: number, clon: number, count: number = 8,
       {/* ── MAP & 3D CANVAS ─────────────────────────────────────── */}
       <div className="relative flex-1 w-full h-full">
         <div ref={mapContainerRef} id="screen5-map" className={`w-full h-full ${is3DActive ? 'hidden' : 'block'}`} />
-        <div id="screen5-cesium" className={`w-full h-full absolute inset-0 ${is3DActive ? 'block' : 'hidden'}`} />
+        <div id="screen5-cesium" className={`w-full h-full absolute inset-0 ${is3DActive ? 'block' : 'hidden'}`}>
+          {is3DActive && (
+            <CesiumGlobeView
+              containerId="screen5-cesium-canvas"
+              centerLat={site.lat}
+              centerLon={site.lon}
+              radiusKm={site.radiusKm || 3.0}
+              boundary={site.boundary}
+              turbines={activeTurbines}
+              selectedTurbineIdx={selectedTurbineIdx}
+              onSelectTurbine={(idx) => setSelectedTurbineIdx(idx)}
+              windDirectionDeg={windDir}
+              windSpeedMps={site.windSpeedMps || 7.8}
+              rotorDiameter={120}
+              hubHeight={110}
+              turbineModelName={(optimizationData as any)?.turbine_model || "GE 2.5-120"}
+              showWakes={showWakes}
+            />
+          )}
+        </div>
 
         {/* Floating On-Screen Map Zoom & Fit Controls */}
         {!is3DActive && (
@@ -546,7 +566,7 @@ function generateFallbackTurbines(clat: number, clon: number, count: number = 8,
       {/* ── BOTTOM FLOATING INSPECTOR PANEL (Hideable Box) ───────── */}
       <aside
         id="screen-5-sheet"
-        className={`absolute bottom-20 left-4 right-4 md:bottom-4 md:left-6 md:right-auto md:max-w-md z-20 pointer-events-auto transition-all duration-300 ${
+        className={`absolute bottom-24 left-4 right-4 md:bottom-4 md:left-6 md:right-auto md:max-w-md z-[1250] pointer-events-auto transition-all duration-300 ${
           isPanelCollapsed ? 'translate-y-[150%] opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'
         }`}
       >
@@ -567,7 +587,7 @@ function generateFallbackTurbines(clat: number, clon: number, count: number = 8,
                   type="button"
                   onClick={() => setLayoutMode('before')}
                   className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
-                    layoutMode === 'before' ? 'bg-white text-slate-950 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                    layoutMode === 'before' ? 'bg-white text-slate-950 shadow-xs active' : 'text-slate-500 hover:text-slate-800'
                   }`}
                 >
                   Before
@@ -577,7 +597,7 @@ function generateFallbackTurbines(clat: number, clon: number, count: number = 8,
                   type="button"
                   onClick={() => setLayoutMode('optimized')}
                   className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
-                    layoutMode === 'optimized' ? 'bg-[#FFD21F] text-slate-950 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                    layoutMode === 'optimized' ? 'bg-[#FFD21F] text-slate-950 shadow-xs active' : 'text-slate-500 hover:text-slate-800'
                   }`}
                 >
                   Optimized

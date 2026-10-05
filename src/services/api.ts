@@ -86,6 +86,32 @@ export async function fetchTelemetry(lat: number, lon: number): Promise<Telemetr
   };
 }
 
+export async function fetchLandData(lat: number, lon: number, radiusKm: number = 3.0): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE}/geo/land-data?lat=${lat}&lon=${lon}&radius_km=${radiusKm}`);
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (e) {
+    console.warn('Land data fetch error:', e);
+  }
+  return null;
+}
+
+export async function fetchIndiaHotspots(state?: string): Promise<any[]> {
+  try {
+    const url = state ? `${API_BASE}/geo/hotspots?state=${encodeURIComponent(state)}` : `${API_BASE}/geo/hotspots`;
+    const res = await fetch(url);
+    if (res.ok) {
+      const data = await res.json();
+      return data.hotspots || [];
+    }
+  } catch (e) {
+    console.warn('Hotspots fetch error:', e);
+  }
+  return [];
+}
+
 export async function fetchFeasibility(payload: {
   center_lat: number;
   center_lon: number;
@@ -106,6 +132,16 @@ export async function fetchProvenance(): Promise<any> {
   const res = await fetch(`${API_BASE}/geo/provenance`);
   if (!res.ok) throw new Error('Failed to fetch data provenance');
   return res.json();
+}
+
+export async function fetchEnvironmentalStack(lat: number, lon: number, radiusKm: number = 3.0): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE}/geo/environmental-stack?lat=${lat}&lon=${lon}&radius_km=${radiusKm}`);
+    if (res.ok) return await res.json();
+  } catch (e) {
+    console.warn('Failed to fetch environmental stack:', e);
+  }
+  return null;
 }
 
 export async function generateInitialLayout(payload: any): Promise<any> {

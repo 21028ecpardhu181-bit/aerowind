@@ -255,7 +255,8 @@ export function App() {
       screen3Data: layoutData,
       screen4Data: optimizationData,
       screen5Data: optimizationData,
-      screen5CesiumActive: is3DActive,
+      screen1CesiumActive: currentScreen === 's1_site' && is3DActive,
+      screen5CesiumActive: currentScreen === 's5_inspect' && is3DActive,
       activeProject: activeProject,
       projectsList: projects,
     };
