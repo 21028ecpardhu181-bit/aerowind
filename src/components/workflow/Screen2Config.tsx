@@ -8,7 +8,14 @@ import {
   ChevronUp, 
   Wind, 
   Compass, 
-  AlertCircle 
+  AlertCircle,
+  AlertTriangle,
+  ShieldAlert,
+  Layers,
+  Building2,
+  Waves,
+  Zap,
+  Truck 
 } from 'lucide-react';
 import { SiteInfo, FarmConfig } from '../../types';
 import { Button } from '../ui/Button';
@@ -44,6 +51,9 @@ export const Screen2Config: React.FC<Screen2ConfigProps> = ({
   const [ratedPower, setRatedPower] = useState<number>(config.ratedPowerKw || 2500);
   const [windDir, setWindDir] = useState<number>(config.windDirectionDeg || 300);
   const [spacingD, setSpacingD] = useState<number>(config.spacingMultiplierD || 5);
+  const [foundationType, setFoundationType] = useState<string>(
+    config.foundationType || site.foundation_type || (site.soil_hazard_level === 'CRITICAL_BLOCKED' ? 'DEEP_PILED' : 'GRAVITY_BASE')
+  );
   const [isAdvancedOpen, setIsAdvancedOpen] = useState<boolean>(false);
   const [wakeDecay, setWakeDecay] = useState<number>(config.wakeDecay || 0.075);
   const [quboLambda, setQuboLambda] = useState<number>(config.quboLambda || 150.0);
@@ -57,7 +67,13 @@ export const Screen2Config: React.FC<Screen2ConfigProps> = ({
     setRatedPower(config.ratedPowerKw);
     setWindDir(config.windDirectionDeg);
     setSpacingD(config.spacingMultiplierD);
+    if (config.foundationType) setFoundationType(config.foundationType);
   }, [config]);
+
+  const handleFoundationChange = (fType: string) => {
+    setFoundationType(fType);
+    onUpdateConfig({ foundationType: fType });
+  };
 
   // Handle Model Change -> Auto-fill specs
   const handleModelChange = (mKey: string) => {
@@ -138,6 +154,18 @@ export const Screen2Config: React.FC<Screen2ConfigProps> = ({
                 <span className="text-[10px] font-sans text-slate-400 block">Wind Telemetry</span>
                 <span id="s2-meta-wind" className="font-bold text-emerald-600">
                   {(site.windSpeedMps || 7.1).toFixed(1)} m/s @ {site.windDirectionDeg || 300}°
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] font-sans text-slate-400 block">Soil Bearing</span>
+                <span id="s2-meta-soil" className="font-bold text-amber-600">
+                  {site.soil_bearing_capacity_kpa || 231.2} kPa
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] font-sans text-slate-400 block">Foundation</span>
+                <span id="s2-meta-foundation" className="font-bold text-slate-800">
+                  {foundationType === 'DEEP_PILED' ? 'Deep Piled' : 'Gravity Base'}
                 </span>
               </div>
             </div>
@@ -549,6 +577,143 @@ export const Screen2Config: React.FC<Screen2ConfigProps> = ({
             </div>
           )}
         </div>
+
+        {/* ── GEOTECHNICAL FOUNDATION & MICRO-SITING COMPLIANCE CARD ── */}
+        <Card className="p-6 md:p-8 flex flex-col gap-5 shadow-glass border-slate-200/90">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
+                <Layers className="w-5 h-5 text-amber-500" />
+                <span>Foundation Engineering & Compliance</span>
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                ISRIC Soil Bearing: <strong className="text-slate-800 font-mono">{site.soil_bearing_capacity_kpa || 231.2} kPa</strong> ({site.usda_texture_class || 'Clay Loam'})
+              </p>
+            </div>
+            <div className={`px-3 py-1 rounded-xl text-xs font-bold border ${
+              site.soil_hazard_level === 'CRITICAL_BLOCKED'
+                ? 'bg-rose-100 text-rose-900 border-rose-300'
+                : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+            }`}>
+              {site.soil_hazard_level === 'CRITICAL_BLOCKED' ? 'Piles Mandatory' : 'Geotechnically Certified'}
+            </div>
+          </div>
+
+          {/* Foundation Selector */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <button
+              type="button"
+              id="cfg-foundation-gravity"
+              onClick={() => handleFoundationChange('GRAVITY_BASE')}
+              disabled={site.soil_hazard_level === 'CRITICAL_BLOCKED'}
+              className={`p-3.5 rounded-2xl border text-left flex flex-col gap-1 transition-all ${
+                foundationType === 'GRAVITY_BASE'
+                  ? 'border-[#FFD21F] bg-amber-500/10 shadow-sm ring-1 ring-[#FFD21F]'
+                  : site.soil_hazard_level === 'CRITICAL_BLOCKED'
+                  ? 'border-slate-200 bg-slate-100/60 text-slate-400 cursor-not-allowed opacity-60'
+                  : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-xs text-slate-900">Standard Gravity Base</span>
+                {foundationType === 'GRAVITY_BASE' && <CheckCircle2 className="w-4 h-4 text-amber-600" />}
+              </div>
+              <p className="text-[11px] text-slate-500 leading-tight">
+                Circular reinforced concrete pad (D=18m, H=2.8m). Requires bearing ≥ 160 kPa.
+              </p>
+              {site.soil_hazard_level === 'CRITICAL_BLOCKED' && (
+                <span className="text-[9px] font-bold text-rose-600 uppercase mt-0.5">
+                  Prohibited by Low Bearing
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              id="cfg-foundation-piled"
+              onClick={() => handleFoundationChange('DEEP_PILED')}
+              className={`p-3.5 rounded-2xl border text-left flex flex-col gap-1 transition-all ${
+                foundationType === 'DEEP_PILED'
+                  ? 'border-emerald-500 bg-emerald-500/10 shadow-sm ring-1 ring-emerald-500'
+                  : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-xs text-slate-900">Deep Bored Piles</span>
+                {foundationType === 'DEEP_PILED' && <CheckCircle2 className="w-4 h-4 text-emerald-600" />}
+              </div>
+              <p className="text-[11px] text-slate-500 leading-tight">
+                Reinforced concrete piles with 25-30m rock sockets. Engineered for soft soils & liquefaction risk.
+              </p>
+              <span className="text-[9px] font-bold text-emerald-700 uppercase mt-0.5">
+                Certified All Terrains
+              </span>
+            </button>
+
+            <button
+              type="button"
+              id="cfg-foundation-rock"
+              onClick={() => handleFoundationChange('ROCK_ANCHOR')}
+              className={`p-3.5 rounded-2xl border text-left flex flex-col gap-1 transition-all ${
+                foundationType === 'ROCK_ANCHOR'
+                  ? 'border-sky-500 bg-sky-500/10 shadow-sm ring-1 ring-sky-500'
+                  : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-xs text-slate-900">Pre-Stressed Rock Anchor</span>
+                {foundationType === 'ROCK_ANCHOR' && <CheckCircle2 className="w-4 h-4 text-sky-600" />}
+              </div>
+              <p className="text-[11px] text-slate-500 leading-tight">
+                Post-tensioned anchor tendons drilled directly into competent bedrock.
+              </p>
+              <span className="text-[9px] font-bold text-sky-700 uppercase mt-0.5">
+                Bedrock Terrains
+              </span>
+            </button>
+          </div>
+
+          {/* Micro-Siting Engineering Setbacks Strip */}
+          <div className="p-3.5 rounded-2xl bg-slate-50/80 border border-slate-200/80 flex flex-col gap-2">
+            <span className="text-xs font-black text-slate-800 uppercase tracking-wider">
+              Enforced Micro-Siting Setbacks & Environmental Exclusions
+            </span>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+              <div className="p-2 rounded-xl bg-white border border-slate-200/70 flex flex-col gap-0.5">
+                <span className="text-[10px] text-slate-400 font-bold flex items-center gap-1">
+                  <Building2 className="w-3 h-3 text-emerald-600" />
+                  Houses Buffer
+                </span>
+                <strong className="text-slate-900 font-mono">≥ 500m</strong>
+                <span className="text-[9px] text-emerald-600 font-semibold">Zero noise/shadow</span>
+              </div>
+              <div className="p-2 rounded-xl bg-white border border-slate-200/70 flex flex-col gap-0.5">
+                <span className="text-[10px] text-slate-400 font-bold flex items-center gap-1">
+                  <Waves className="w-3 h-3 text-emerald-600" />
+                  River Buffer
+                </span>
+                <strong className="text-slate-900 font-mono">≥ 120m</strong>
+                <span className="text-[9px] text-emerald-600 font-semibold">Riparian safe</span>
+              </div>
+              <div className="p-2 rounded-xl bg-white border border-slate-200/70 flex flex-col gap-0.5">
+                <span className="text-[10px] text-slate-400 font-bold flex items-center gap-1">
+                  <Zap className="w-3 h-3 text-amber-500" />
+                  HV Grid Corridor
+                </span>
+                <strong className="text-slate-900 font-mono">≥ 150m</strong>
+                <span className="text-[9px] text-emerald-600 font-semibold">Induction clear</span>
+              </div>
+              <div className="p-2 rounded-xl bg-white border border-slate-200/70 flex flex-col gap-0.5">
+                <span className="text-[10px] text-slate-400 font-bold flex items-center gap-1">
+                  <Truck className="w-3 h-3 text-slate-600" />
+                  Logistics Road
+                </span>
+                <strong className="text-slate-900 font-mono">≥ 100m</strong>
+                <span className="text-[9px] text-emerald-600 font-semibold">Heavy crane access</span>
+              </div>
+            </div>
+          </div>
+        </Card>
 
         {/* ── PRIMARY ACTION BUTTON ──────────────────────────────── */}
         <Button

@@ -2,37 +2,47 @@
 
 ## Assigned Agent: Antigravity
 
-### Active Task: Real vs Mockup Data Audit, 3D Globe Yellow Lights Fix, Atmospheric Wind & Telemetry Streamlines, Non-Overlapping 3D Controls, and Arbitrary Turbine Capacity (up to 50)
-- **Branch**: `feature/real-data-3d-globe-turbine-fix`
+### Active Task: Geotechnical Soil Risk Gating, Micro-Siting Setbacks, Village Boundary & Kilometres Auto-Fetch, and Multi-Dashboard Persistence
+- **Branch**: `feature/engineering-setbacks-soil-autofetch`
 - **Files Owned**:
-  - `src/components/gis/CesiumGlobeView.tsx`
-  - `src/utils/geometry.ts`
-  - `src/services/api.ts`
-  - `src/App.tsx`
-  - `backend/app/schemas.py`
-  - `core/wsqaoa.py`
+  - `backend/app/gis/soil_client.py`
   - `backend/app/geo_engine.py`
-  - `backend/app/api/geo.py`
+  - `backend/app/db.py`
+  - `backend/app/api/projects.py`
+  - `src/components/workflow/Screen1Site.tsx`
+  - `src/components/workflow/Screen2Config.tsx`
+  - `src/components/dashboard/ProjectCard.tsx`
+  - `src/components/dashboard/ProjectDashboard.tsx`
+  - `src/components/dashboard/ProjectHero.tsx`
+  - `src/services/api.ts`
+  - `src/types/index.ts`
+  - `src/App.tsx`
+  - `tests/verify_geotechnical_setbacks_autofetch.py`
 
 ### Objectives & Completed Fixes:
-1. **Real vs Mockup Data Audit Conducted**:
-   - Live external APIs confirmed active: Copernicus DEM GLO-30 / SRTM (via Open-Meteo elevation), Open-Meteo 100m/80m/10m atmospheric weather, ISRIC SoilGrids v2.0 (bulk density, pH, clay/sand/silt), OpenStreetMap Overpass (physical buildings, powerlines, roads, waterways setbacks), OpenStreetMap Nominatim (cadastral village polygons), and NREL FLORIS 4.x / Jensen kinematic wake engine.
-   - Replaced mathematical sine formula in `/api/geo/wind-resource` with real downscaled 100m hub-height wind telemetry.
-2. **3D Globe "Yellow Lights Going Up" Bug Fixed**:
-   - Root cause: Cesium `cylinder` entities instantiated without orientation quaternion defaulted along the normal/Z-axis (straight up into the sky).
-   - Solution: Replaced cylinders with horizontal aerodynamic wake footprints draped onto the terrain surface (`HeightReference.CLAMP_TO_GROUND`) expanding downwind at $(windDirectionDeg + 180)^\circ$ with realistic deficit gradients.
-3. **Wind & SCADA Telemetry Data Flow Streamlines**:
-   - Implemented dynamic atmospheric wind flow streamlines traversing across the wind farm aligned with the wind direction vector using `PolylineGlowMaterialProperty`.
-   - Implemented inter-turbine electrical and SCADA telemetry collection grid lines pulsing with golden energy toward collector nodes.
-   - Added interactive toggle buttons for both streamlines and wake footprints in the 3D dock.
-4. **3D Globe Controls Alignment & Click Conflicts Fixed**:
-   - Relocated 3D controls to `top-3 right-3 md:top-4 md:right-4 z-30` in an Apple Liquid Glass dock with `e.stopPropagation()` on all click handlers, completely eliminating collision with Screen 1 search bar and Screen 5 headers.
-5. **Turbine Clamping Fixed (Up to 50 Turbines)**:
-   - Root cause: Pydantic schemas hard-clamped `K <= 8`, and geometry generators had restrictive spacing that dropped turbines.
-   - Fix: Expanded `K` up to 50 in `backend/app/schemas.py`, `src/services/api.ts`, and `src/App.tsx`. Added continuous QP relaxation in `core/wsqaoa.py` for $K > 8$. Upgraded `src/utils/geometry.ts` and `backend/app/geo_engine.py` with multi-scale interior sampling and progressive spacing relaxation so 100% of requested turbines are always placed strictly within boundary.
-6. **Verification**:
-   - `npm run build`: PASS (clean build, 0 TypeScript errors).
-   - `tests/verify_project_dashboards_accuracy.py`: PASS (exit code 0).
-   - `tests/verify_liquid_soil_village.py`: PASS (exit code 0).
-   - Zero emojis verified across all modified files.
+1. **Soil Geotechnical Risk Gating & Critical Warning Banner**:
+   - Upgraded `backend/app/gis/soil_client.py` to evaluate DNV-GL / IEC 61400-6 bearing capacity and multi-parameter hazard states (`SAFE`, `WARNING`, `CRITICAL_BLOCKED`).
+   - In `Screen1Site.tsx`, if bearing capacity < 155 kPa or hazard is `CRITICAL_BLOCKED`, standard gravity base placement is prohibited with an explicit high-visibility warning banner.
+   - The "Confirm Site & Proceed" button is disabled until the user selects Deep Bored Piled Foundation (30m rock sockets), guaranteeing geotechnical engineering safety before construction.
+2. **Engineering Micro-Siting Setbacks & Environmental Exclusions**:
+   - In `backend/app/geo_engine.py`, candidate micro-siting strictly enforces:
+     - 500m Residential settlement buffer (IEC 61400 acoustic & shadow flicker setback).
+     - 120m Riparian river/waterway buffer (ecological & flooding protection).
+     - 200m Marine high-tide & saltwater spray erosion buffer.
+     - 150m High-voltage transmission corridor setback (66kV-400kV anti-induction clearance).
+     - 100m Logistics & heavy transport road corridor (80m blade transport and 800t crawler cranes).
+   - Rendered dedicated "Micro-Siting Setbacks & Exclusions" cards in `Screen1Site.tsx` (Tab 4) and `Screen2Config.tsx`.
+3. **Auto-Fetch Kilometres and Village Boundaries (Zero Manual Guessing)**:
+   - Clicking on the map, searching a location, or snapping automatically queries OpenStreetMap Nominatim/Overpass, extracts the cadastral boundary polygon, computes the geodesic area in km² and equivalent radius $r = \sqrt{A/\pi}$, auto-updates the radius in kilometres, switches mode to `'village'`, and fetches live ISRIC soil and Open-Meteo wind telemetry.
+4. **End-to-End Database & Multi-Dashboard Persistence**:
+   - Added migrations in `backend/app/db.py` to persist `soil_bearing_capacity_kpa`, `usda_texture_class`, `foundation_type`, `soil_hazard_level`, and `environmental_notes` in `projects` SQLite table.
+   - Extended `ProjectSummary`, `ProjectDetail`, `SiteInfo`, and `FarmConfig` in `src/types/index.ts`.
+   - Updated `ProjectCard.tsx`, `ProjectDashboard.tsx`, and `ProjectHero.tsx` to display geotechnical soil bearing capacity, foundation engineering type, and micro-siting compliance notes.
+5. **Verification & Quality Gates**:
+   - `npm run build`: PASS (0 errors, built in 48s).
+   - `tests/verify_geotechnical_setbacks_autofetch.py`: PASS (all desktop & mobile assertions green).
+   - `tests/verify_project_dashboards_accuracy.py`: PASS (distinct counts, dynamic capacities).
+   - `tests/verify_liquid_soil_village.py`: PASS (Apple Liquid Design, real soil/wind, free-form lasso, village cadastre).
+   - Strictly 0 emojis in all code and UI.
+
 

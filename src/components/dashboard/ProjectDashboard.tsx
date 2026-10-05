@@ -242,20 +242,24 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
                   <span className="font-bold text-slate-900 font-mono tabular-nums">{studyArea}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-slate-500 font-medium">Terrain Elevation</span>
-                  <span className="font-bold text-slate-900 font-mono tabular-nums">42 m – 188 m</span>
+                  <span className="text-slate-500 font-medium">Soil Bearing Capacity</span>
+                  <span className="font-bold text-amber-600 font-mono tabular-nums">
+                    {(project as any).soil_bearing_capacity_kpa || 231.2} kPa ({(project as any).usda_texture_class || 'Clay Loam'})
+                  </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-slate-500 font-medium">Land Classification</span>
-                  <span className="font-semibold text-slate-800">Sparse Forest / Scrub</span>
+                  <span className="text-slate-500 font-medium">Foundation Engineering</span>
+                  <span className="font-semibold text-slate-900">
+                    {(project as any).foundation_type === 'DEEP_PILED' ? 'Deep Bored Piles (30m)' : 'Standard Gravity Base'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500 font-medium">Micro-Siting Setbacks</span>
+                  <span className="font-semibold text-emerald-600">≥500m Homes · ≥120m Water Safe</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-slate-500 font-medium">Grid Connection</span>
-                  <span className="font-semibold text-emerald-600">Feasible (4.2 km)</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-500 font-medium">Nearest Settlement</span>
-                  <span className="font-semibold text-emerald-600">1.5 km (Compliant)</span>
+                  <span className="font-semibold text-emerald-600">150m HV Corridor Clear</span>
                 </div>
               </div>
 

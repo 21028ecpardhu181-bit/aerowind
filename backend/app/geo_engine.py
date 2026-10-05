@@ -417,26 +417,50 @@ class CandidateGenerationEngine:
             # Real terrain elevation, slope, and aspect from Copernicus DEM
             elev, slope, aspect = compute_terrain_elevation_and_slope(x, y, base_elevation_m=45.0, dem_cache=dem_cache)
 
+            # Geographic coordinates
+            cand_lat, cand_lon = meters_to_lat_lon(x, y, self.center_lat, self.center_lon)
+
             # Real OSM Infrastructure Distances:
             min_building_d = min([math.hypot(x - b["x_m"], y - b["y_m"]) for b in osm_buildings], default=9999.0)
             min_powerline_d = min([math.hypot(x - p["x_m"], y - p["y_m"]) for p in osm_powerlines], default=9999.0)
             min_highway_d = min([math.hypot(x - h["x_m"], y - h["y_m"]) for h in osm_highways], default=9999.0)
             min_water_d = min([math.hypot(x - w["x_m"], y - w["y_m"]) for w in osm_waterways], default=9999.0)
 
+            # Coastal marine interface calculation
+            try:
+                from backend.app.api.telemetry import calculate_distance_to_coast
+            except ImportError:
+                from app.api.telemetry import calculate_distance_to_coast
+            dist_to_coast_km = calculate_distance_to_coast(cand_lat, cand_lon)
+
             # Comprehensive 5-Class Multi-Criteria Geographic Feasibility Mask:
             exclusion_reasons: List[str] = []
 
-            # Hard Exclusions from authoritative sources
+            # 1. Slope Limit (Cranes cannot construct on > 16.0° slopes)
             if slope > 16.0:
                 exclusion_reasons.append(f"Excessive terrain slope ({slope:.1f}° > 16.0° Copernicus DEM)")
+
+            # 2. Settlement / Residential Homes Buffer (500m IEC 61400 noise/shadow buffer)
             if min_building_d < 500.0:
-                exclusion_reasons.append(f"Settlement / building setback violation ({min_building_d:.0f}m < 500m OpenStreetMap)")
+                exclusion_reasons.append(f"Settlement / residential buffer violation ({min_building_d:.0f}m < 500m OpenStreetMap)")
+
+            # 3. High-Voltage Powerline Buffer (150m electrical corridor)
             if min_powerline_d < 150.0:
-                exclusion_reasons.append(f"High-voltage corridor violation ({min_powerline_d:.0f}m < 150m OpenStreetMap)")
+                exclusion_reasons.append(f"High-voltage electrical grid corridor setback ({min_powerline_d:.0f}m < 150m OpenStreetMap)")
+
+            # 4. Highway Transportation Corridor Setback (100m safety buffer)
             if min_highway_d < 100.0:
                 exclusion_reasons.append(f"Transportation corridor setback ({min_highway_d:.0f}m < 100m OpenStreetMap)")
+
+            # 5. River / Waterway Riparian Buffer (120m ecological setback)
             if min_water_d < 120.0:
-                exclusion_reasons.append(f"Water drainage corridor violation ({min_water_d:.0f}m < 120m OpenStreetMap)")
+                exclusion_reasons.append(f"River / waterway riparian ecological buffer violation ({min_water_d:.0f}m < 120m OpenStreetMap)")
+
+            # 6. Ocean / Marine Coastal Setback (200m high-tide coastal interface buffer)
+            if dist_to_coast_km < 0.20:
+                exclusion_reasons.append(f"Marine coastal intertidal buffer violation ({dist_to_coast_km*1000.0:.0f}m < 200m)")
+
+            # 7. Statutory Protected Areas
             if pa_check["is_inside_protected_area"]:
                 exclusion_reasons.append(f"Statutory conservation violation ({pa_check['nearest_protected_area']} Protected Planet)")
 
@@ -574,6 +598,14 @@ class CandidateGenerationEngine:
             "count_restricted": count_restricted,
             "count_excluded": count_excluded,
             "count_unknown": count_unknown,
+            "engineering_compliance_notes": [
+                "Settlements & Residential Homes: 500m mandatory buffer (IEC 61400 acoustic noise & shadow flicker mitigation)",
+                "River & Wetland Riparian Corridors: 120m buffer (Hydrological stability & flood prevention)",
+                "Ocean & Marine Coastline: 200m buffer (Coastal erosion & high-tide spray mitigation)",
+                "High-Voltage Transmission Corridors: 150m corridor (Arc-flash clearance & safety setback)",
+                "Highway Transportation Corridors: 100m corridor (Traffic clearance & safety setback)",
+                "Heavy Crane & Logistics Access: Assessed via road network connectivity",
+            ],
         }
 
         return {

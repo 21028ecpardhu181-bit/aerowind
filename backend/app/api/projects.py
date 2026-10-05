@@ -40,6 +40,11 @@ class ProjectCreateRequest(BaseModel):
     wind_speed: float = 7.1
     wind_direction: float = 300.0
     suitability: Optional[str] = "Good"
+    soil_bearing_capacity_kpa: Optional[float] = None
+    usda_texture_class: Optional[str] = None
+    foundation_type: Optional[str] = "GRAVITY_BASE"
+    soil_hazard_level: Optional[str] = "SAFE"
+    environmental_notes: Optional[List[str]] = None
     gross_aep: Optional[float] = None
     net_aep: Optional[float] = None
     wake_loss_percent: Optional[float] = None
@@ -58,6 +63,10 @@ class ProjectSummaryResponse(BaseModel):
     turbine_count: int
     turbine_model: str
     suitability: Optional[str]
+    soil_bearing_capacity_kpa: Optional[float] = None
+    usda_texture_class: Optional[str] = None
+    foundation_type: Optional[str] = "GRAVITY_BASE"
+    soil_hazard_level: Optional[str] = "SAFE"
     net_aep: Optional[float]
     wake_loss_percent: Optional[float]
     status: str
@@ -73,6 +82,7 @@ class ProjectDetailResponse(ProjectSummaryResponse):
     gross_aep: Optional[float]
     turbines: List[Dict[str, Any]]
     boundary: List[List[float]]
+    environmental_notes: Optional[List[str]] = None
     created_at: str
 
 
@@ -87,6 +97,10 @@ def row_to_summary(row) -> ProjectSummaryResponse:
         turbine_count=row["turbine_count"],
         turbine_model=row["turbine_model"],
         suitability=row["suitability"],
+        soil_bearing_capacity_kpa=row["soil_bearing_capacity_kpa"] if "soil_bearing_capacity_kpa" in row.keys() else None,
+        usda_texture_class=row["usda_texture_class"] if "usda_texture_class" in row.keys() else None,
+        foundation_type=row["foundation_type"] if "foundation_type" in row.keys() else "GRAVITY_BASE",
+        soil_hazard_level=row["soil_hazard_level"] if "soil_hazard_level" in row.keys() else "SAFE",
         net_aep=row["net_aep"],
         wake_loss_percent=row["wake_loss_percent"],
         status=row["status"],
@@ -109,6 +123,13 @@ def row_to_detail(row) -> ProjectDetailResponse:
         except Exception:
             boundary = []
 
+    env_notes = []
+    if "environmental_notes" in row.keys() and row["environmental_notes"]:
+        try:
+            env_notes = json.loads(row["environmental_notes"])
+        except Exception:
+            env_notes = []
+
     return ProjectDetailResponse(
         id=row["id"],
         name=row["name"],
@@ -118,20 +139,25 @@ def row_to_detail(row) -> ProjectDetailResponse:
         area_km2=row["area_km2"],
         turbine_count=row["turbine_count"],
         turbine_model=row["turbine_model"],
+        suitability=row["suitability"],
+        soil_bearing_capacity_kpa=row["soil_bearing_capacity_kpa"] if "soil_bearing_capacity_kpa" in row.keys() else None,
+        usda_texture_class=row["usda_texture_class"] if "usda_texture_class" in row.keys() else None,
+        foundation_type=row["foundation_type"] if "foundation_type" in row.keys() else "GRAVITY_BASE",
+        soil_hazard_level=row["soil_hazard_level"] if "soil_hazard_level" in row.keys() else "SAFE",
+        net_aep=row["net_aep"],
+        wake_loss_percent=row["wake_loss_percent"],
+        status=row["status"],
+        updated_at=row["updated_at"],
         rotor_diameter=row["rotor_diameter"],
         hub_height=row["hub_height"],
         spacing_d=row["spacing_d"],
         wind_speed=row["wind_speed"],
         wind_direction=row["wind_direction"],
-        suitability=row["suitability"],
         gross_aep=row["gross_aep"],
-        net_aep=row["net_aep"],
-        wake_loss_percent=row["wake_loss_percent"],
         turbines=turbines,
         boundary=boundary,
-        status=row["status"],
+        environmental_notes=env_notes,
         created_at=row["created_at"],
-        updated_at=row["updated_at"],
     )
 
 
@@ -169,6 +195,7 @@ def create_project(req: ProjectCreateRequest, authorization: Optional[str] = Hea
 
     turbines_json = json.dumps(req.turbines or [])
     boundary_json = json.dumps(req.boundary or [])
+    env_notes_json = json.dumps(req.environmental_notes or [])
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -176,9 +203,11 @@ def create_project(req: ProjectCreateRequest, authorization: Optional[str] = Hea
             INSERT INTO projects (
                 id, user_id, name, location_name, latitude, longitude, area_km2,
                 turbine_count, turbine_model, rotor_diameter, hub_height, spacing_d,
-                wind_speed, wind_direction, suitability, gross_aep, net_aep,
-                wake_loss_percent, turbines_json, boundary_json, status, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                wind_speed, wind_direction, suitability,
+                soil_bearing_capacity_kpa, usda_texture_class, foundation_type, soil_hazard_level,
+                environmental_notes, gross_aep, net_aep, wake_loss_percent,
+                turbines_json, boundary_json, status, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 name=excluded.name,
                 location_name=excluded.location_name,
@@ -193,6 +222,11 @@ def create_project(req: ProjectCreateRequest, authorization: Optional[str] = Hea
                 wind_speed=excluded.wind_speed,
                 wind_direction=excluded.wind_direction,
                 suitability=excluded.suitability,
+                soil_bearing_capacity_kpa=excluded.soil_bearing_capacity_kpa,
+                usda_texture_class=excluded.usda_texture_class,
+                foundation_type=excluded.foundation_type,
+                soil_hazard_level=excluded.soil_hazard_level,
+                environmental_notes=excluded.environmental_notes,
                 gross_aep=excluded.gross_aep,
                 net_aep=excluded.net_aep,
                 wake_loss_percent=excluded.wake_loss_percent,
@@ -204,7 +238,9 @@ def create_project(req: ProjectCreateRequest, authorization: Optional[str] = Hea
             proj_id, user_id, req.name, req.location_name, req.latitude, req.longitude,
             req.area_km2, req.turbine_count, req.turbine_model, req.rotor_diameter,
             req.hub_height, req.spacing_d, req.wind_speed, req.wind_direction,
-            req.suitability, req.gross_aep, req.net_aep, req.wake_loss_percent,
+            req.suitability, req.soil_bearing_capacity_kpa, req.usda_texture_class,
+            req.foundation_type or "GRAVITY_BASE", req.soil_hazard_level or "SAFE",
+            env_notes_json, req.gross_aep, req.net_aep, req.wake_loss_percent,
             turbines_json, boundary_json, req.status, now, now
         ))
         conn.commit()

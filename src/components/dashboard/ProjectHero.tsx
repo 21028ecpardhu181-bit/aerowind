@@ -104,6 +104,9 @@ export const ProjectHero: React.FC<ProjectHeroProps> = ({
           <strong className="text-white font-semibold tabular-nums">{turbineCount} turbines</strong> ·{' '}
           <strong className="text-white font-semibold tabular-nums">{installedCapacityMw} MW</strong> ·{' '}
           <strong className="text-white font-semibold tabular-nums">{netAep} GWh/yr</strong> net production.
+          {(project as any).soil_bearing_capacity_kpa ? (
+            <span> Foundation: <strong className="text-[#FFD21F]">{(project as any).foundation_type === 'DEEP_PILED' ? 'Deep Bored Piles (30m)' : 'Standard Gravity Base'}</strong> ({(project as any).soil_bearing_capacity_kpa} kPa). </span>
+          ) : null}
           Physical boundary verified with WS-QAOA quantum optimization and Jensen wake model physics.
         </p>
 

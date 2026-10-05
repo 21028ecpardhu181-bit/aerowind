@@ -20,6 +20,11 @@ export interface ProjectSummary {
   turbine_count: number;
   turbine_model: string;
   suitability?: string;
+  soil_bearing_capacity_kpa?: number;
+  usda_texture_class?: string;
+  foundation_type?: string;
+  soil_hazard_level?: string;
+  environmental_notes?: string;
   net_aep?: number;
   wake_loss_percent?: number;
   status: string;
@@ -55,6 +60,47 @@ export interface Turbine {
   conflict_desc?: string | null;
 }
 
+export interface SoilTelemetry {
+  usda_texture_class?: string;
+  clay_percentage?: number;
+  sand_percentage?: number;
+  silt_percentage?: number;
+  bulk_density_kg_dm3?: number;
+  estimated_bearing_capacity_kpa?: number;
+  bearing_status?: string;
+  foundation_recommendation?: string;
+  foundation_type_required?: string;
+  is_suitable_standard_foundation?: boolean;
+  is_suitable_piled_foundation?: boolean;
+  is_suitable_for_turbines?: boolean;
+  hazard_level?: 'SAFE' | 'WARNING' | 'CRITICAL_BLOCKED';
+  hazard_title?: string;
+  hazard_details?: string[];
+  live_soil_moisture_m3_m3?: number;
+  live_soil_temperature_c?: number;
+  drainage_status?: string;
+  geotechnical_metrics?: {
+    bearing_capacity_kpa?: number;
+    hazard_level?: string;
+    hazard_title?: string;
+    hazard_details?: string[];
+    foundation_recommendation?: string;
+    foundation_suitability?: string;
+    pile_depth_recommended_m?: number;
+  };
+  soil_classification?: {
+    usda_texture_class?: string;
+    clay_pct?: number;
+    sand_pct?: number;
+    silt_pct?: number;
+    bulk_density_g_cm3?: number;
+  };
+  live_telemetry?: {
+    soil_moisture_0_to_1cm_m3pm3?: number;
+    soil_temperature_0cm_c?: number;
+  };
+}
+
 export interface SiteInfo {
   name: string;
   shortName: string;
@@ -74,6 +120,14 @@ export interface SiteInfo {
   pressureHpa?: number;
   temperatureC?: number;
   boundary?: number[][];
+  soilData?: SoilTelemetry;
+  foundationType?: string;
+  foundation_type?: string;
+  soil_bearing_capacity_kpa?: number;
+  usda_texture_class?: string;
+  soil_hazard_level?: string;
+  environmental_notes?: string;
+  environmentalNotes?: string[];
   feasibilityStats?: {
     count_preferred?: number;
     count_buildable?: number;
@@ -94,6 +148,7 @@ export interface FarmConfig {
   wakeDecay: number;
   quboLambda: number;
   gridResolution: number;
+  foundationType?: string;
 }
 
 export interface FeasibilityMask {

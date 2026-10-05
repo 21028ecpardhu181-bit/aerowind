@@ -68,10 +68,15 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
           <p className="text-[11px] text-slate-500 truncate">
             {project.location_name}
           </p>
-          <div className="flex items-center gap-2 mt-1">
+          <div className="flex items-center gap-2 mt-1 flex-wrap">
             <span className="text-[10px] font-mono text-slate-600 tabular-nums">
               {project.turbine_count}T · {totalMw} MW
             </span>
+            {(project as any).soil_bearing_capacity_kpa ? (
+              <span className="text-[9px] font-mono font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                {(project as any).soil_bearing_capacity_kpa} kPa · {(project as any).foundation_type === 'DEEP_PILED' ? 'Piled' : 'Pad'}
+              </span>
+            ) : null}
             <Badge status={project.status || 'Optimized'} className="text-[9px] px-1.5 py-0" />
           </div>
         </div>

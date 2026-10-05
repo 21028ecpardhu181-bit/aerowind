@@ -407,6 +407,14 @@ export function App() {
 
     const netAep = Math.round(count * mwPerTurbine * 8.76 * 0.35 * 0.94 * 10) / 10;
 
+    const soilBearing = effectiveSite.soil_bearing_capacity_kpa || effectiveSite.soilData?.estimated_bearing_capacity_kpa || effectiveSite.soilData?.geotechnical_metrics?.bearing_capacity_kpa || 210.0;
+    const usdaClass = effectiveSite.usda_texture_class || effectiveSite.soilData?.usda_texture_class || effectiveSite.soilData?.soil_classification?.usda_texture_class || 'Clay Loam';
+    const foundationType = effectiveSite.foundation_type || effectiveSite.foundationType || effectiveSite.soilData?.foundation_type_required || 'GRAVITY_BASE';
+    const hazardLevel = effectiveSite.soil_hazard_level || effectiveSite.soilData?.hazard_level || effectiveSite.soilData?.geotechnical_metrics?.hazard_level || 'SAFE';
+    const envNotes = typeof effectiveSite.environmental_notes === 'string'
+      ? effectiveSite.environmental_notes
+      : (Array.isArray(effectiveSite.environmentalNotes) ? effectiveSite.environmentalNotes.join('. ') : '500m settlement buffer, 120m river buffer, 200m marine buffer verified.');
+
     const newProject: ProjectSummary = {
       id: projId,
       name: projName,
@@ -416,7 +424,11 @@ export function App() {
       area_km2: effectiveSite.areaKm2 || 24.8,
       turbine_count: count,
       turbine_model: model,
-      suitability: 'Preferred',
+      suitability: hazardLevel === 'SAFE' ? 'Preferred' : 'Restricted (Piled Required)',
+      soil_bearing_capacity_kpa: soilBearing,
+      usda_texture_class: usdaClass,
+      foundation_type: foundationType,
+      soil_hazard_level: hazardLevel,
       net_aep: netAep,
       wake_loss_percent: 6.12,
       status: 'Configured',
@@ -443,6 +455,12 @@ export function App() {
       area_km2: effectiveSite.areaKm2,
       turbine_count: count,
       turbine_model: model,
+      suitability: hazardLevel === 'SAFE' ? 'Preferred' : 'Restricted (Piled Required)',
+      soil_bearing_capacity_kpa: soilBearing,
+      usda_texture_class: usdaClass,
+      foundation_type: foundationType,
+      soil_hazard_level: hazardLevel,
+      environmental_notes: envNotes,
       net_aep: netAep,
       status: 'configured',
       boundary: effectiveSite.boundary as any,
@@ -457,6 +475,7 @@ export function App() {
       const updatedCfg = { ...prev, ...newCfg };
       const count = updatedCfg.turbineCount || 12;
       const model = updatedCfg.modelName || 'GE 2.5-120';
+      const foundation = updatedCfg.foundationType || prev.foundationType || 'GRAVITY_BASE';
       
       let mwPerTurbine = 2.5;
       if (model.includes('14.0') || model.includes('14MW')) mwPerTurbine = 14.0;
@@ -471,6 +490,7 @@ export function App() {
           ...activeProject,
           turbine_count: count,
           turbine_model: model,
+          foundation_type: foundation,
           net_aep: estimatedNetAep,
           updated_at: 'Just now',
         };

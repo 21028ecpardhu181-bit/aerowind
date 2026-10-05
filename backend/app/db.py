@@ -111,6 +111,19 @@ def init_db() -> None:
             )
         """)
 
+        # Defensive migrations for projects table
+        for col_def in [
+            "soil_bearing_capacity_kpa REAL",
+            "usda_texture_class TEXT",
+            "foundation_type TEXT DEFAULT 'GRAVITY_BASE'",
+            "soil_hazard_level TEXT DEFAULT 'SAFE'",
+            "environmental_notes TEXT",
+        ]:
+            try:
+                cursor.execute(f"ALTER TABLE projects ADD COLUMN {col_def}")
+            except sqlite3.OperationalError:
+                pass
+
         # Sessions table for tokenless/bearer auth
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS sessions (

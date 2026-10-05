@@ -147,7 +147,10 @@ export async function fetchEnvironmentalStack(lat: number, lon: number, radiusKm
 export async function fetchSoilTelemetry(lat: number, lon: number): Promise<any> {
   try {
     const res = await fetch(`${API_BASE}/geo/soil-telemetry?lat=${lat}&lon=${lon}`);
-    if (res.ok) return await res.json();
+    if (res.ok) {
+      const data = await res.json();
+      return data.soil || data;
+    }
   } catch (e) {
     console.warn('Failed to fetch soil telemetry:', e);
   }
