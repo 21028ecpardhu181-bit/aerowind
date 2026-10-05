@@ -4,10 +4,12 @@ import {
   RotateCcw, 
   Eye, 
   Layers, 
-  Maximize2, 
   Wind,
   Navigation,
-  Crosshair
+  Crosshair,
+  Activity,
+  Zap,
+  Radio
 } from 'lucide-react';
 import { Turbine } from '../../types';
 
@@ -51,17 +53,26 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
   const entitiesRef = useRef<{
     turbines: any[];
     wakes: any[];
+    streamlines: any[];
+    telemetryLines: any[];
     boundary: any | null;
   }>({
     turbines: [],
     wakes: [],
+    streamlines: [],
+    telemetryLines: [],
     boundary: null,
   });
 
   const [activeCameraPreset, setActiveCameraPreset] = useState<string>('OBLIQUE');
   const [isTerrainReady, setIsTerrainReady] = useState<boolean>(false);
   const [isGoogleTilesActive, setIsGoogleTilesActive] = useState<boolean>(false);
-  const [activeBasemap, setActiveBasemap] = useState<'satellite' | 'terrain'>('satellite');
+  const [showFlowStreamlines, setShowFlowStreamlines] = useState<boolean>(true);
+  const [localShowWakes, setLocalShowWakes] = useState<boolean>(showWakes);
+
+  useEffect(() => {
+    setLocalShowWakes(showWakes);
+  }, [showWakes]);
 
   // 1. Initialize Cesium 3D Viewer
   useEffect(() => {
@@ -83,7 +94,7 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
     }
 
     try {
-      // 1. High-Resolution Satellite Base Layer via direct Esri World Imagery CDN
+      // High-Resolution Satellite Base Layer via direct Esri World Imagery CDN
       const satelliteProvider = new Cesium.UrlTemplateImageryProvider({
         url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
         maximumLevel: 19,
@@ -115,7 +126,7 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
         },
       });
 
-      // 2. Superimpose High-Resolution Road Network & Place Labels for Real Geography
+      // Superimpose High-Resolution Road Network & Place Labels
       const referenceLabelsProvider = new Cesium.UrlTemplateImageryProvider({
         url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
         maximumLevel: 19,
@@ -135,7 +146,7 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
         scene.fog.density = 0.00012;
       }
 
-      // 3. Load Real 3D World Terrain
+      // Load Real 3D World Terrain
       if (typeof Cesium.createWorldTerrainAsync === 'function') {
         Cesium.createWorldTerrainAsync({
           requestVertexNormals: true,
@@ -152,7 +163,7 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
           });
       }
 
-      // 4. Load Google Photorealistic 3D Tiles if API key is provided
+      // Load Google Photorealistic 3D Tiles if API key is provided
       const googleMapsKey =
         (window as any).GOOGLE_MAPS_API_KEY ||
         (import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY ||
@@ -179,7 +190,7 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
       controller.enableZoom = true;
       controller.enableTilt = true;
       controller.enableLook = false;
-      controller.minimumZoomDistance = 80.0;
+      controller.minimumZoomDistance = 60.0;
       controller.maximumZoomDistance = 5000000.0;
 
       // Click / Touch Interaction for Turbines
@@ -279,14 +290,14 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
     });
   }, [windDirectionDeg]);
 
-  // 2. Synchronize Camera When Coordinates Change
+  // Synchronize Camera When Coordinates Change
   useEffect(() => {
     if (viewerRef.current && !viewerRef.current.isDestroyed()) {
       flyToProjectSite(viewerRef.current, centerLat, centerLon, radiusKm, activeCameraPreset, 1.2);
     }
   }, [centerLat, centerLon, radiusKm, activeCameraPreset, flyToProjectSite]);
 
-  // 3. Render Site Boundary Polygon
+  // Render Site Boundary Polygon
   useEffect(() => {
     const viewer = viewerRef.current;
     const Cesium = (window as any).Cesium;
@@ -338,23 +349,36 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
     }
   }, [centerLat, centerLon, radiusKm, boundary]);
 
-  // 4. Render 3D Industrial Wind Turbines & Downstream Jensen Wakes
+  // Render 3D Industrial Wind Turbines, Ground Wake Plumes, & Data Flow Network
   useEffect(() => {
     const viewer = viewerRef.current;
     const Cesium = (window as any).Cesium;
     if (!viewer || viewer.isDestroyed() || !Cesium) return;
 
-    // Clear previous turbine and wake entities
+    // Clear previous entities
     entitiesRef.current.turbines.forEach((e) => viewer.entities.remove(e));
     entitiesRef.current.turbines = [];
     entitiesRef.current.wakes.forEach((e) => viewer.entities.remove(e));
     entitiesRef.current.wakes = [];
+    entitiesRef.current.streamlines.forEach((e) => viewer.entities.remove(e));
+    entitiesRef.current.streamlines = [];
+    entitiesRef.current.telemetryLines.forEach((e) => viewer.entities.remove(e));
+    entitiesRef.current.telemetryLines = [];
 
     if (!turbines || turbines.length === 0) return;
 
-    // Real-world upwind alignment: rotor spinner points into the oncoming wind vector
+    // Real-world upwind alignment: rotor spinner points into oncoming wind
     const windHeadingRad = Cesium.Math.toRadians(windDirectionDeg);
     const modelScale = Math.max(0.6, Math.min(2.0, rotorDiameter / 120.0));
+
+    // Downwind vector
+    const downwindDeg = (windDirectionDeg + 180) % 360;
+    const downwindRad = Cesium.Math.toRadians(downwindDeg);
+    const downwindDx = Math.sin(downwindRad);
+    const downwindDy = Math.cos(downwindRad);
+    // Perpendicular cross-wind vector
+    const crossDx = -downwindDy;
+    const crossDy = downwindDx;
 
     turbines.forEach((t, idx) => {
       const isSelected = idx === selectedTurbineIdx;
@@ -387,14 +411,14 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
         },
       });
 
-      // 2. Heavy Structural Concrete Foundation Pad (R=12m) & Ground Ring
+      // 2. Heavy Structural Concrete Foundation Pad (R=16m)
       const groundRing = viewer.entities.add({
         turbineIndex: idx,
         position: Cesium.Cartesian3.fromDegrees(t.lon, t.lat, baseElev + 0.5),
         ellipse: {
-          semiMajorAxis: isSelected ? 24.0 : 16.0,
-          semiMinorAxis: isSelected ? 24.0 : 16.0,
-          material: Cesium.Color.fromCssColorString(isSelected ? 'rgba(255, 210, 31, 0.7)' : 'rgba(30, 41, 59, 0.5)'),
+          semiMajorAxis: isSelected ? 22.0 : 16.0,
+          semiMinorAxis: isSelected ? 22.0 : 16.0,
+          material: Cesium.Color.fromCssColorString(isSelected ? 'rgba(255, 210, 31, 0.7)' : 'rgba(30, 41, 59, 0.6)'),
           outline: true,
           outlineColor: Cesium.Color.fromCssColorString(isSelected ? '#FFD21F' : 'rgba(100, 116, 139, 0.7)'),
           outlineWidth: isSelected ? 3 : 1.5,
@@ -405,7 +429,7 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
       // 3. Floating Engineering Telemetry Tag (Anchored atop the hub)
       const label = viewer.entities.add({
         turbineIndex: idx,
-        position: Cesium.Cartesian3.fromDegrees(t.lon, t.lat, baseElev + hubHeight + rotorDiameter / 2.0 + 18.0),
+        position: Cesium.Cartesian3.fromDegrees(t.lon, t.lat, baseElev + hubHeight + rotorDiameter / 2.0 + 16.0),
         label: {
           text: `${labelText} · ${speedText}`,
           font: 'bold 11px JetBrains Mono, monospace',
@@ -420,44 +444,170 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
 
       entitiesRef.current.turbines.push(turbineEntity, groundRing, label);
 
-      // 4. Downstream Volumetric Jensen Wake Cone
-      if (showWakes) {
-        const coneLengthM = Math.min(500.0, Math.max(250.0, rotorDiameter * 3.5));
-        const downwindDeg = (windDirectionDeg + 180) % 360;
-        const windRad = Cesium.Math.toRadians(downwindDeg);
-        const dx = Math.sin(windRad);
-        const dy = Math.cos(windRad);
+      // 4. Downwind Horizontal Aerodynamic Wake Plume Footprint (Draped on Terrain)
+      // Eliminates vertical cylinder bug: renders true Jensen expanding wake corridor on ground
+      if (localShowWakes) {
+        const coneLengthM = Math.min(550.0, Math.max(260.0, rotorDiameter * 3.5));
+        const latMPerDeg = 110540.0;
+        const lonMPerDeg = 111320.0 * Math.cos(t.lat * Math.PI / 180.0);
 
-        const latMPerDeg = 111000.0;
-        const lonMPerDeg = 111000.0 * Math.cos(t.lat * Math.PI / 180.0);
+        const r0 = rotorDiameter * 0.5;
+        const r1 = r0 + 0.075 * coneLengthM;
 
-        const endLat = t.lat + (dy * coneLengthM) / latMPerDeg;
-        const endLon = t.lon + (dx * coneLengthM) / lonMPerDeg;
-        const midLat = (t.lat + endLat) / 2.0;
-        const midLon = (t.lon + endLon) / 2.0;
+        const endLat = t.lat + (downwindDy * coneLengthM) / latMPerDeg;
+        const endLon = t.lon + (downwindDx * coneLengthM) / lonMPerDeg;
 
-        const deficit = t.wake_deficit_pct || (idx % 3 === 0 ? 12.0 : 4.5);
-        const isHighLoss = deficit > 8.0;
+        // 4 vertices of expanding wake trapezoid
+        const rootLeftLat = t.lat - (crossDy * r0) / latMPerDeg;
+        const rootLeftLon = t.lon - (crossDx * r0) / lonMPerDeg;
+        const rootRightLat = t.lat + (crossDy * r0) / latMPerDeg;
+        const rootRightLon = t.lon + (crossDx * r0) / lonMPerDeg;
+        const endRightLat = endLat + (crossDy * r1) / latMPerDeg;
+        const endRightLon = endLon + (crossDx * r1) / lonMPerDeg;
+        const endLeftLat = endLat - (crossDy * r1) / latMPerDeg;
+        const endLeftLon = endLon - (crossDx * r1) / lonMPerDeg;
 
-        const wakeCone = viewer.entities.add({
-          name: `Wake Cone ${labelText}`,
-          position: Cesium.Cartesian3.fromDegrees(midLon, midLat, baseElev + hubHeight * 0.75),
-          cylinder: {
-            length: coneLengthM,
-            topRadius: rotorDiameter * 0.65,
-            bottomRadius: rotorDiameter * 0.35,
+        const deficit = t.wake_deficit_pct || (idx % 3 === 0 ? 9.5 : 3.8);
+        const isHighLoss = deficit > 7.0;
+
+        const wakePolygon = viewer.entities.add({
+          name: `Wake Footprint ${labelText}`,
+          polygon: {
+            hierarchy: Cesium.Cartesian3.fromDegreesArray([
+              rootLeftLon, rootLeftLat,
+              rootRightLon, rootRightLat,
+              endRightLon, endRightLat,
+              endLeftLon, endLeftLat,
+            ]),
             material: Cesium.Color.fromCssColorString(
-              isHighLoss ? 'rgba(239, 68, 68, 0.18)' : 'rgba(255, 210, 31, 0.14)'
+              isHighLoss ? 'rgba(239, 68, 68, 0.22)' : 'rgba(56, 189, 248, 0.18)'
             ),
+            heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          },
+          polyline: {
+            positions: Cesium.Cartesian3.fromDegreesArray([
+              rootLeftLon, rootLeftLat,
+              rootRightLon, rootRightLat,
+              endRightLon, endRightLat,
+              endLeftLon, endLeftLat,
+              rootLeftLon, rootLeftLat,
+            ]),
+            width: 1.5,
+            material: Cesium.Color.fromCssColorString(
+              isHighLoss ? 'rgba(239, 68, 68, 0.6)' : 'rgba(56, 189, 248, 0.5)'
+            ),
+            clampToGround: true,
           },
         });
-        entitiesRef.current.wakes.push(wakeCone);
+
+        // Hub-height wake centerline
+        const centerLine = viewer.entities.add({
+          name: `Wake Centerline ${labelText}`,
+          polyline: {
+            positions: [
+              Cesium.Cartesian3.fromDegrees(t.lon, t.lat, baseElev + hubHeight),
+              Cesium.Cartesian3.fromDegrees(endLon, endLat, baseElev + hubHeight * 0.9),
+            ],
+            width: 2.0,
+            material: new Cesium.PolylineGlowMaterialProperty({
+              glowPower: 0.2,
+              taperPower: 0.7,
+              color: isHighLoss ? Cesium.Color.fromCssColorString('#f87171') : Cesium.Color.fromCssColorString('#38bdf8'),
+            }),
+          },
+        });
+
+        entitiesRef.current.wakes.push(wakePolygon, centerLine);
       }
     });
-  }, [turbines, selectedTurbineIdx, windDirectionDeg, windSpeedMps, rotorDiameter, hubHeight, showWakes]);
+
+    // 5. Dynamic Wind Streamlines & Inter-Turbine Telemetry Data Flow
+    if (showFlowStreamlines) {
+      const latMPerDeg = 110540.0;
+      const lonMPerDeg = 111320.0 * Math.cos(centerLat * Math.PI / 180.0);
+      const streamSpanM = Math.max(1600.0, radiusKm * 2200.0);
+
+      // A) Free-stream atmospheric wind flow corridors across the farm
+      const numStreamlines = 9;
+      for (let s = 0; s < numStreamlines; s++) {
+        const offsetRatio = (s - Math.floor(numStreamlines / 2)) / (numStreamlines / 2);
+        const crossOffsetM = offsetRatio * (radiusKm * 1400.0);
+
+        // Calculate start (upwind) and end (downwind)
+        const midLat = centerLat + (crossDy * crossOffsetM) / latMPerDeg;
+        const midLon = centerLon + (crossDx * crossOffsetM) / lonMPerDeg;
+
+        const startLat = midLat - (downwindDy * (streamSpanM * 0.5)) / latMPerDeg;
+        const startLon = midLon - (downwindDx * (streamSpanM * 0.5)) / lonMPerDeg;
+        const endLat = midLat + (downwindDy * (streamSpanM * 0.5)) / latMPerDeg;
+        const endLon = midLon + (downwindDx * (streamSpanM * 0.5)) / lonMPerDeg;
+
+        const streamLine = viewer.entities.add({
+          name: `Atmospheric Streamline ${s + 1}`,
+          polyline: {
+            positions: [
+              Cesium.Cartesian3.fromDegrees(startLon, startLat, 60.0 + (s % 3) * 35.0),
+              Cesium.Cartesian3.fromDegrees(midLon, midLat, 75.0 + (s % 3) * 35.0),
+              Cesium.Cartesian3.fromDegrees(endLon, endLat, 60.0 + (s % 3) * 35.0),
+            ],
+            width: 2.2,
+            material: new Cesium.PolylineGlowMaterialProperty({
+              glowPower: 0.28,
+              taperPower: 0.6,
+              color: Cesium.Color.fromCssColorString('rgba(56, 189, 248, 0.75)'),
+            }),
+          },
+        });
+        entitiesRef.current.streamlines.push(streamLine);
+      }
+
+      // B) SCADA Telemetry & Electrical Energy Collection Flow Network
+      // Connect each turbine to nearest turbine or central collector substation
+      turbines.forEach((t, i) => {
+        // Find nearest neighboring turbine
+        let nearestIdx = -1;
+        let minDist = Infinity;
+        turbines.forEach((other, j) => {
+          if (i !== j) {
+            const d = Math.hypot(t.lat - other.lat, t.lon - other.lon);
+            if (d < minDist) {
+              minDist = d;
+              nearestIdx = j;
+            }
+          }
+        });
+
+        if (nearestIdx >= 0) {
+          const neighbor = turbines[nearestIdx];
+          const elevA = (t.elevation_m || 40.0) + 1.0;
+          const elevB = (neighbor.elevation_m || 40.0) + 1.0;
+
+          const cableLine = viewer.entities.add({
+            name: `SCADA Grid ${t.label}->${neighbor.label}`,
+            polyline: {
+              positions: [
+                Cesium.Cartesian3.fromDegrees(t.lon, t.lat, elevA),
+                Cesium.Cartesian3.fromDegrees(neighbor.lon, neighbor.lat, elevB),
+              ],
+              width: 2.0,
+              clampToGround: true,
+              material: new Cesium.PolylineGlowMaterialProperty({
+                glowPower: 0.35,
+                taperPower: 0.5,
+                color: Cesium.Color.fromCssColorString('#FFD21F'),
+              }),
+            },
+          });
+          entitiesRef.current.telemetryLines.push(cableLine);
+        }
+      });
+    }
+  }, [turbines, selectedTurbineIdx, windDirectionDeg, windSpeedMps, rotorDiameter, hubHeight, localShowWakes, showFlowStreamlines, centerLat, centerLon, radiusKm]);
 
   // Camera preset handler
-  const handlePresetClick = (preset: string) => {
+  const handlePresetClick = (preset: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
     setActiveCameraPreset(preset);
     if (viewerRef.current && !viewerRef.current.isDestroyed()) {
       flyToProjectSite(viewerRef.current, centerLat, centerLon, radiusKm, preset, 1.2);
@@ -465,14 +615,15 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
   };
 
   // Cinematic close inspection of selected industrial turbine
-  const handleFlyToTurbine = (t: Turbine) => {
+  const handleFlyToTurbine = (t: Turbine, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
     const viewer = viewerRef.current;
     const Cesium = (window as any).Cesium;
     if (!viewer || viewer.isDestroyed() || !Cesium) return;
 
     const baseElev = (t.elevation_m !== undefined && t.elevation_m !== null) ? Number(t.elevation_m) : 40.0;
     const distanceM = Math.max(150.0, rotorDiameter * 1.4);
-    // Position camera upwind & oblique from hub
     const camHeading = (windDirectionDeg + 30) % 360;
     const camRad = Cesium.Math.toRadians(camHeading);
     const targetElev = baseElev + hubHeight;
@@ -496,55 +647,96 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
       {/* Cesium 3D WebGL Canvas Container */}
       <div id={containerId} className="w-full h-full absolute inset-0 bg-slate-950" />
 
-      {/* Floating 3D Engineering Camera Bar */}
-      <div className="absolute top-3 left-3 z-20 flex flex-wrap items-center gap-1.5 p-1.5 rounded-2xl bg-white/95 backdrop-blur-xl border border-slate-200/90 shadow-glass pointer-events-auto">
-        <div className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-black text-slate-500 uppercase tracking-wider">
-          <Compass className="w-3 h-3 text-amber-500" />
-          <span>3D Camera</span>
+      {/* Floating 3D Engineering & Flow Controls Dock (Top-Right, Non-Overlapping) */}
+      <div 
+        className="absolute top-3 right-3 md:top-4 md:right-4 z-30 max-w-[calc(100vw-24px)] flex flex-wrap items-center gap-1.5 p-2 rounded-2xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-2xl border border-white/50 dark:border-white/10 shadow-[0_8px_32px_rgba(15,23,42,0.18)] pointer-events-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-black text-slate-500 uppercase tracking-wider">
+          <Compass className="w-3.5 h-3.5 text-amber-500" />
+          <span className="hidden sm:inline">3D View</span>
         </div>
 
         {[
           { key: 'OBLIQUE', label: '3D Oblique' },
           { key: 'WIND_ALIGN', label: 'Wind Align' },
-          { key: 'TOP', label: 'Nadir (Top)' },
-          { key: 'NORTH', label: 'North' },
-          { key: 'SOUTH', label: 'South' },
+          { key: 'TOP', label: 'Top' },
+          { key: 'NORTH', label: 'N' },
+          { key: 'SOUTH', label: 'S' },
         ].map((p) => (
           <button
             key={p.key}
             type="button"
-            onClick={() => handlePresetClick(p.key)}
-            className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all ${
+            onClick={(e) => handlePresetClick(p.key, e)}
+            className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all active:scale-95 ${
               activeCameraPreset === p.key
-                ? 'bg-[#FFD21F] text-slate-950 shadow-xs'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                ? 'bg-[#FFD21F] text-slate-950 shadow-xs ring-1 ring-amber-400'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700'
             }`}
           >
             {p.label}
           </button>
         ))}
 
+        {/* Streamlines / Data Flow Toggle Button */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowFlowStreamlines(!showFlowStreamlines);
+          }}
+          className={`flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold transition-all active:scale-95 ${
+            showFlowStreamlines
+              ? 'bg-sky-500 text-white shadow-xs'
+              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+          }`}
+          title="Toggle Atmospheric Wind & Energy Data Flow Streamlines"
+        >
+          <Activity className="w-3 h-3 text-sky-200" />
+          <span className="hidden sm:inline">Flow</span>
+        </button>
+
+        {/* Wake Plumes Toggle */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setLocalShowWakes(!localShowWakes);
+          }}
+          className={`flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold transition-all active:scale-95 ${
+            localShowWakes
+              ? 'bg-amber-500 text-white shadow-xs'
+              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+          }`}
+          title="Toggle Aerodynamic Jensen Wake Plumes"
+        >
+          <Wind className="w-3 h-3 text-amber-200" />
+          <span className="hidden sm:inline">Wakes</span>
+        </button>
+
         {turbines[selectedTurbineIdx] && (
           <button
             type="button"
-            onClick={() => handleFlyToTurbine(turbines[selectedTurbineIdx])}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-slate-900 text-white hover:bg-slate-800 text-xs font-bold shadow-xs active:scale-95 transition-all"
-            title="Inspect Selected Turbine in 3D"
+            onClick={(e) => handleFlyToTurbine(turbines[selectedTurbineIdx], e)}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-slate-950 text-white hover:bg-slate-800 text-xs font-bold shadow-xs active:scale-95 transition-all"
+            title="Inspect Selected Turbine Close-up"
           >
             <Eye className="w-3 h-3 text-amber-400" />
-            <span>Focus {turbines[selectedTurbineIdx].label || `T-${selectedTurbineIdx + 1}`}</span>
+            <span>{turbines[selectedTurbineIdx].label || `T-${selectedTurbineIdx + 1}`}</span>
           </button>
         )}
       </div>
 
-      {/* Floating 3D Geodetic Telemetry Badge */}
-      <div className="absolute bottom-3 left-3 z-20 hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/95 backdrop-blur-xl border border-slate-200/90 shadow-glass text-slate-700 font-mono text-[11px] pointer-events-auto">
+      {/* Floating 3D Geodetic Telemetry Badge (Bottom-Left) */}
+      <div className="absolute bottom-3 left-3 z-20 hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-2xl border border-white/50 dark:border-white/10 shadow-lg text-slate-700 dark:text-slate-200 font-mono text-[11px] pointer-events-auto">
         <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-        <span className="font-bold text-slate-900">{isGoogleTilesActive ? 'Google Photorealistic 3D Tiles' : 'Copernicus DEM + Hybrid'}</span>
+        <span className="font-bold text-slate-900 dark:text-white">
+          {isGoogleTilesActive ? 'Google Photorealistic 3D Tiles' : 'Copernicus DEM GLO-30'}
+        </span>
         <span className="text-slate-400">•</span>
-        <span>Model: {turbineModelName} ({rotorDiameter}m / {hubHeight}m)</span>
+        <span>{turbineModelName}</span>
         <span className="text-slate-400">•</span>
-        <span className="text-amber-600 font-bold">{turbines.length} Anchored Units</span>
+        <span className="text-amber-600 dark:text-amber-400 font-bold">{turbines.length} Turbines</span>
       </div>
     </div>
   );
