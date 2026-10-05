@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   WorkflowScreen,
   ProjectSummary,
@@ -126,8 +126,103 @@ const DEFAULT_PROJECTS: ProjectSummary[] = [
 ];
 
 export function App() {
-  const [currentScreen, setCurrentScreen] = useState<WorkflowScreen>('home');
-  const [currentTab, setCurrentTab] = useState<string>('home');
+  const isNavigatingFromHistory = useRef(false);
+  const [currentScreen, setCurrentScreen] = useState<WorkflowScreen>(() => {
+    try {
+      const hash = window.location.hash.replace('#', '') as WorkflowScreen;
+      const validScreens: WorkflowScreen[] = ['home', 'dashboard', 's1_site', 's2_config', 's3_analysis', 's4_optimize', 's5_inspect', 's6_blueprint'];
+      if (hash && validScreens.includes(hash)) {
+        return hash;
+      }
+    } catch (_) {}
+    return 'home';
+  });
+  const [currentTab, setCurrentTab] = useState<string>(() => {
+    try {
+      const hash = window.location.hash.replace('#', '');
+      if (hash === 'dashboard') return 'dashboard';
+      if (hash === 's1_site') return 'new';
+      if (hash === 's6_blueprint') return 'blueprints';
+    } catch (_) {}
+    return 'home';
+  });
+
+  const navigateToScreen = useCallback((screen: WorkflowScreen, replace = false) => {
+    setCurrentScreen(screen);
+    if (screen === 'home') setCurrentTab('home');
+    else if (screen === 'dashboard') setCurrentTab('dashboard');
+    else if (screen === 's6_blueprint') setCurrentTab('blueprints');
+    else if (screen === 's1_site') setCurrentTab('new');
+
+    if (!isNavigatingFromHistory.current) {
+      const hash = screen === 'home' ? '' : `#${screen}`;
+      const url = hash ? `${window.location.pathname}${hash}` : window.location.pathname;
+      try {
+        if (replace) {
+          window.history.replaceState({ screen }, '', url);
+        } else {
+          window.history.pushState({ screen }, '', url);
+        }
+      } catch (_) {}
+    }
+  }, []);
+
+  const handleGoBack = useCallback(() => {
+    const fallbackPrev: Record<WorkflowScreen, WorkflowScreen> = {
+      s6_blueprint: 's5_inspect',
+      s5_inspect: 's3_analysis',
+      s4_optimize: 's3_analysis',
+      s3_analysis: 's2_config',
+      s2_config: 's1_site',
+      s1_site: 'home',
+      dashboard: 'home',
+      home: 'home',
+    };
+
+    // If browser history has an entry, trigger history.back() so popstate runs
+    if (window.history.state && window.history.length > 1) {
+      window.history.back();
+    } else {
+      const prevScreen = fallbackPrev[currentScreen] || 'home';
+      navigateToScreen(prevScreen);
+    }
+  }, [currentScreen, navigateToScreen]);
+
+  // Synchronize browser history and listen for mobile hardware/browser back events
+  useEffect(() => {
+    try {
+      const initialHash = window.location.hash.replace('#', '') as WorkflowScreen;
+      const validScreens: WorkflowScreen[] = ['home', 'dashboard', 's1_site', 's2_config', 's3_analysis', 's4_optimize', 's5_inspect', 's6_blueprint'];
+      const screen = (initialHash && validScreens.includes(initialHash)) ? initialHash : 'home';
+      window.history.replaceState({ screen }, '', screen === 'home' ? window.location.pathname : `#${screen}`);
+    } catch (_) {}
+
+    const handlePopState = (event: PopStateEvent) => {
+      const targetScreen = (event.state?.screen as WorkflowScreen) || 
+        (window.location.hash.replace('#', '') as WorkflowScreen) || 
+        'home';
+      
+      const validScreens: WorkflowScreen[] = ['home', 'dashboard', 's1_site', 's2_config', 's3_analysis', 's4_optimize', 's5_inspect', 's6_blueprint'];
+      const resolvedScreen = validScreens.includes(targetScreen) ? targetScreen : 'home';
+
+      isNavigatingFromHistory.current = true;
+      setCurrentScreen(resolvedScreen);
+      if (resolvedScreen === 'home') setCurrentTab('home');
+      else if (resolvedScreen === 'dashboard') setCurrentTab('dashboard');
+      else if (resolvedScreen === 's6_blueprint') setCurrentTab('blueprints');
+      else if (resolvedScreen === 's1_site') setCurrentTab('new');
+      
+      setTimeout(() => {
+        isNavigatingFromHistory.current = false;
+      }, 50);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, []);
+
   const [projects, setProjects] = useState<ProjectSummary[]>(DEFAULT_PROJECTS);
   const [activeProject, setActiveProject] = useState<ProjectDetail | ProjectSummary | null>(DEFAULT_PROJECTS[0]);
   const [telemetry, setTelemetry] = useState<TelemetryData | null>(null);
@@ -280,8 +375,7 @@ export function App() {
       modelName: p.turbine_model || prev.modelName,
     }));
     fetchTelemetry(p.latitude, p.longitude).then(setTelemetry).catch(() => {});
-    setCurrentScreen('dashboard');
-    setCurrentTab('dashboard');
+    navigateToScreen('dashboard');
   };
 
   // Open existing project from Dashboard into workflow
@@ -334,24 +428,23 @@ export function App() {
       } catch (e) {
         console.warn('Using baseline projection for project view', e);
       }
-      setCurrentScreen('s5_inspect');
+      navigateToScreen('s5_inspect');
     } else if (statusNorm.includes('simul') || statusNorm.includes('analysis')) {
-      setCurrentScreen('s3_analysis');
+      navigateToScreen('s3_analysis');
     } else if (statusNorm.includes('config')) {
-      setCurrentScreen('s2_config');
+      navigateToScreen('s2_config');
     } else {
-      setCurrentScreen('s1_site');
+      navigateToScreen('s1_site');
     }
   };
 
   const handleViewBlueprint = async (p: ProjectSummary | ProjectDetail) => {
     await handleOpenProject(p);
-    setCurrentScreen('s6_blueprint');
+    navigateToScreen('s6_blueprint');
   };
 
   const handleNewProject = () => {
-    setCurrentScreen('s1_site');
-    setCurrentTab('new');
+    navigateToScreen('s1_site');
   };
 
   // Search geocoding handler
@@ -466,7 +559,7 @@ export function App() {
       boundary: effectiveSite.boundary as any,
     }).catch(() => {});
 
-    setCurrentScreen('s2_config');
+    navigateToScreen('s2_config');
   };
 
   // Synchronized Config Update Handler: immediately updates active project and all project lists
@@ -627,11 +720,11 @@ export function App() {
         } catch (_) {}
       }
     }
-    setCurrentScreen('s3_analysis');
+    navigateToScreen('s3_analysis');
   };
 
   const handleLaunchOptimize = async () => {
-    setCurrentScreen('s4_optimize');
+    navigateToScreen('s4_optimize');
     try {
       const candidatePool = (layoutData.candidate_positions && layoutData.candidate_positions.length > 0)
         ? layoutData.candidate_positions
@@ -758,11 +851,11 @@ export function App() {
   };
 
   const handleViewOptimized = () => {
-    setCurrentScreen('s5_inspect');
+    navigateToScreen('s5_inspect');
   };
 
   const handleExportBlueprint = () => {
-    setCurrentScreen('s6_blueprint');
+    navigateToScreen('s6_blueprint');
   };
 
   // Export File Generators
@@ -816,16 +909,18 @@ export function App() {
       <AppHeader
         currentTab={currentTab}
         onTabChange={(tab) => {
-          setCurrentTab(tab);
-          if (tab === 'home') setCurrentScreen('home');
-          if (tab === 'dashboard' || tab === 'projects') setCurrentScreen('dashboard');
-          if (tab === 'new') handleNewProject();
-          if (tab === 'blueprints') setCurrentScreen('s6_blueprint');
+          if (tab === 'home') navigateToScreen('home');
+          else if (tab === 'dashboard' || tab === 'projects') navigateToScreen('dashboard');
+          else if (tab === 'new') handleNewProject();
+          else if (tab === 'blueprints') navigateToScreen('s6_blueprint');
+          else setCurrentTab(tab);
         }}
         telemetry={telemetry}
         onNewProject={handleNewProject}
         onOpenAuth={() => setIsAuthOpen(true)}
         user={currentUser}
+        canGoBack={currentScreen !== 'home'}
+        onBack={handleGoBack}
       />
 
       {/* Main Workspace with Sidebar on Desktop */}
@@ -836,9 +931,9 @@ export function App() {
             <AppSidebar
               currentTab={currentTab}
               onTabChange={(tab) => {
-                setCurrentTab(tab);
-                if (tab === 'home') setCurrentScreen('home');
-                if (tab === 'dashboard' || tab === 'projects') setCurrentScreen('dashboard');
+                if (tab === 'home') navigateToScreen('home');
+                else if (tab === 'dashboard' || tab === 'projects') navigateToScreen('dashboard');
+                else setCurrentTab(tab);
               }}
               projects={projects}
               selectedProjectId={activeProject?.id || null}
@@ -868,6 +963,7 @@ export function App() {
               onSelectProject={handleSelectProject}
               onToggle3D={() => setIs3DActive(!is3DActive)}
               is3D={is3DActive}
+              onBack={handleGoBack}
             />
           )}
 
@@ -889,6 +985,7 @@ export function App() {
                   fetchTelemetry(newSite.lat, newSite.lon).then(setTelemetry).catch(() => {});
                 }
               }}
+              onBack={handleGoBack}
             />
           )}
 
@@ -899,7 +996,7 @@ export function App() {
               config={config}
               onUpdateConfig={handleUpdateConfig}
               onGenerateLayout={handleGenerateLayout}
-              onBack={() => setCurrentScreen('s1_site')}
+              onBack={handleGoBack}
             />
           )}
 
@@ -909,7 +1006,7 @@ export function App() {
               site={site}
               layoutData={layoutData}
               onLaunchOptimize={handleLaunchOptimize}
-              onBack={() => setCurrentScreen('s2_config')}
+              onBack={handleGoBack}
             />
           )}
 
@@ -928,7 +1025,7 @@ export function App() {
               optimizationData={optimizationData}
               baselineTurbines={layoutData.turbines}
               onExportBlueprint={handleExportBlueprint}
-              onBack={() => setCurrentScreen('s4_optimize')}
+              onBack={handleGoBack}
               onToggle3D={() => setIs3DActive(!is3DActive)}
               is3DActive={is3DActive}
               onSelectCameraPreset={() => {}}
@@ -940,8 +1037,8 @@ export function App() {
             <Screen6Blueprint
               site={site}
               optimizationData={optimizationData}
-              onBack={() => setCurrentScreen('s5_inspect')}
-              onRestart={() => setCurrentScreen('s1_site')}
+              onBack={handleGoBack}
+              onRestart={() => navigateToScreen('s1_site')}
               onExportCSV={handleExportCSV}
               onExportGeoJSON={handleExportGeoJSON}
               onExportJSON={handleExportJSON}
@@ -954,18 +1051,18 @@ export function App() {
       <MobileBottomNav
         currentTab={currentTab}
         onTabChange={(tab) => {
-          setCurrentTab(tab);
-          if (tab === 'home') setCurrentScreen('home');
-          if (tab === 'projects') {
+          if (tab === 'home') navigateToScreen('home');
+          else if (tab === 'projects') {
             // First tap opens Project Dashboard, or open switcher if already on it
             if (currentScreen === 'dashboard') {
               setIsMobileProjectSheetOpen(true);
             } else {
-              setCurrentScreen('dashboard');
+              navigateToScreen('dashboard');
             }
           }
-          if (tab === 'map') setCurrentScreen('s1_site');
-          if (tab === 'reports') setCurrentScreen('s6_blueprint');
+          else if (tab === 'map') navigateToScreen('s1_site');
+          else if (tab === 'reports') navigateToScreen('s6_blueprint');
+          else setCurrentTab(tab);
         }}
         onNewProject={handleNewProject}
       />

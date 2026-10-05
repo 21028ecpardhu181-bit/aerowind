@@ -22,7 +22,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
       {/* Home Tab */}
       <button
         id="btn-mobile-nav-home"
-        onClick={() => onTabChange('dashboard')}
+        onClick={() => onTabChange('home')}
         className={`flex flex-col items-center gap-0.5 text-[11px] transition-colors relative min-w-[48px] ${
           isHome ? 'text-amber-600 font-black' : 'text-slate-600 hover:text-slate-900 font-bold'
         }`}

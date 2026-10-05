@@ -8,6 +8,7 @@ import {
   Activity,
   Sun,
   ChevronRight,
+  ChevronLeft,
   ExternalLink
 } from 'lucide-react';
 import { ProjectSummary, ProjectDetail, TelemetryData } from '../../types';
@@ -27,6 +28,7 @@ interface ProjectDashboardProps {
   onSelectProject: (proj: ProjectSummary) => void;
   onToggle3D?: () => void;
   is3D?: boolean;
+  onBack?: () => void;
 }
 
 export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
@@ -38,6 +40,7 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
   onSelectProject,
   onToggle3D,
   is3D = false,
+  onBack,
 }) => {
   // Authentic engineering values calculated from project state
   const turbineCount = project.turbine_count || 12;
@@ -76,6 +79,20 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
 
         {/* Dual ambient gradient overlay for crystal clear contrast & text legibility */}
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950/92 via-slate-950/45 to-slate-900/25 backdrop-blur-[0.5px]" />
+
+        {/* Top Left Back Button */}
+        {onBack && (
+          <button
+            id="btn-dashboard-back"
+            type="button"
+            onClick={onBack}
+            className="absolute top-4 left-4 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/80 hover:bg-white text-slate-950 font-black text-xs shadow-md backdrop-blur-md transition-all active:scale-95 cursor-pointer select-none"
+            title="Back to Home"
+          >
+            <ChevronLeft className="w-4 h-4 stroke-[3]" />
+            <span>Home</span>
+          </button>
+        )}
 
         {/* Top Right Floating Controls & Live Weather Pill */}
         <div className="absolute top-4 right-4 z-10 flex flex-col items-end gap-2.5">

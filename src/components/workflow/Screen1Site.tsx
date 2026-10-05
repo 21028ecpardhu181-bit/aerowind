@@ -34,7 +34,8 @@ import {
   Maximize2,
   Landmark,
   Flame,
-  PenTool
+  PenTool,
+  ChevronLeft
 } from 'lucide-react';
 import { SiteInfo, TelemetryData } from '../../types';
 import { Button } from '../ui/Button';
@@ -57,6 +58,7 @@ interface Screen1SiteProps {
   onToggle3D: () => void;
   is3DActive: boolean;
   onSiteChange: (newSite: Partial<SiteInfo>) => void;
+  onBack?: () => void;
 }
 
 declare global {
@@ -85,6 +87,7 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
   onToggle3D,
   is3DActive,
   onSiteChange,
+  onBack,
 }) => {
   // Interaction Modes: 'search' | 'radius' | 'draw' | 'village' | 'hotspots'
   const [mode, setMode] = useState<'search' | 'radius' | 'draw' | 'village' | 'hotspots'>('search');
@@ -961,7 +964,18 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
         <div className="absolute top-3 left-3 right-3 md:left-4 md:right-auto md:w-[480px] z-[1050] flex flex-col gap-2 pointer-events-none">
           
           {/* Main Search Pill */}
-          <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-white/80 dark:bg-slate-900/80 backdrop-blur-2xl border border-white/60 dark:border-white/10 shadow-[0_8px_32px_rgba(15,23,42,0.15)] pointer-events-auto transition-all">
+          <div className="flex items-center gap-1.5 sm:gap-2 p-1.5 rounded-2xl bg-white/80 dark:bg-slate-900/80 backdrop-blur-2xl border border-white/60 dark:border-white/10 shadow-[0_8px_32px_rgba(15,23,42,0.15)] pointer-events-auto transition-all">
+            {onBack && (
+              <button
+                type="button"
+                id="btn-screen1-back"
+                onClick={onBack}
+                className="p-1.5 sm:p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-800 dark:text-white active:scale-95 transition-all shrink-0 cursor-pointer"
+                title="Back to Home / Dashboard"
+              >
+                <ChevronLeft className="w-4 h-4 stroke-[3]" />
+              </button>
+            )}
             <form onSubmit={handleSearchSubmit} className="relative flex-1 flex items-center">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 pointer-events-none" />
               <input

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Bell, Sun, Wind } from 'lucide-react';
+import { Search, Bell, Sun, Wind, ChevronLeft } from 'lucide-react';
 import { TelemetryData } from '../../types';
 import { DesktopNavigation } from './DesktopNavigation';
 import { AeroQuantumLogo } from '../ui/AeroQuantumLogo';
@@ -12,6 +12,8 @@ interface AppHeaderProps {
   onNewProject?: () => void;
   onOpenAuth?: () => void;
   user?: { username: string; email: string } | null;
+  canGoBack?: boolean;
+  onBack?: () => void;
 }
 
 export const AppHeader: React.FC<AppHeaderProps> = ({
@@ -22,14 +24,28 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   onNewProject,
   onOpenAuth,
   user,
+  canGoBack = false,
+  onBack,
 }) => {
   return (
-    <header className="sticky top-0 z-[1300] w-full bg-white/35 hover:bg-white/45 backdrop-blur-2xl border-b border-white/35 shadow-[0_4px_24px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.7)] px-4 md:px-6 py-2.5 flex items-center justify-between gap-4 transition-all">
-      {/* Brand & Wordmark */}
-      <div className="flex items-center gap-3">
+    <header className="sticky top-0 z-[1300] w-full bg-white/35 hover:bg-white/45 backdrop-blur-2xl border-b border-white/35 shadow-[0_4px_24px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.7)] px-3 sm:px-4 md:px-6 py-2.5 flex items-center justify-between gap-3 sm:gap-4 transition-all">
+      {/* Brand & Wordmark with Back Button */}
+      <div className="flex items-center gap-2 sm:gap-3">
+        {canGoBack && onBack && (
+          <button
+            id="btn-header-back"
+            type="button"
+            onClick={onBack}
+            className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-full bg-white/70 hover:bg-white active:scale-95 border border-white/80 text-slate-950 font-black text-xs shadow-xs backdrop-blur-md transition-all cursor-pointer select-none shrink-0"
+            title="Go back to previous screen"
+          >
+            <ChevronLeft className="w-4 h-4 stroke-[3]" />
+            <span className="text-[11px] font-black uppercase tracking-wider">Back</span>
+          </button>
+        )}
         <button
           onClick={() => onTabChange('home')}
-          className="flex items-center gap-2.5 text-left focus:outline-none group select-none active:scale-98 transition-transform"
+          className="flex items-center gap-2 sm:gap-2.5 text-left focus:outline-none group select-none active:scale-98 transition-transform"
           title="Return to Home"
         >
           <AeroQuantumLogo size={38} />
