@@ -96,6 +96,17 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
     setSearchVal(site.name);
   }, [site.lat, site.lon, site.name]);
 
+  // Fly/re-center map and update boundary polygon whenever site coordinates update
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    map.setView([site.lat, site.lon], 12);
+    renderBoundary(site.lat, site.lon, site.areaKm2, site.boundary as [number, number][]);
+    setTimeout(() => {
+      try { map.invalidateSize(); } catch (_) {}
+    }, 150);
+  }, [site.lat, site.lon, site.areaKm2, site.boundary]);
+
   // 1. Initialize Leaflet Map
   useEffect(() => {
     if (is3DActive) return;

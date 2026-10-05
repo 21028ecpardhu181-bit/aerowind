@@ -1,5 +1,6 @@
 export type WorkflowScreen = 
   | 'home'
+  | 'dashboard'
   | 's1_site'
   | 's2_config'
   | 's3_analysis'
