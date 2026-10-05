@@ -281,16 +281,28 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
     });
     drawnMarkersRef.current = [];
 
-    const stride = Math.max(1, Math.floor(vertices.length / 16));
+    // Add prominent, glowing vertex dots outlining boundary ("dots from where to where in the same village borders")
+    const totalPts = vertices.length;
+    const stride = totalPts <= 32 ? 1 : Math.max(1, Math.floor(totalPts / 24));
     vertices.forEach((pt: [number, number], i: number) => {
-      if (i % stride === 0) {
+      if (i % stride === 0 || i === 0 || i === totalPts - 1) {
+        const isAnchor = i === 0;
         const dot = L.circleMarker(pt, {
-          radius: 3.5,
-          color: '#0f172a',
-          weight: 1.5,
-          fillColor: '#FFD21F',
+          radius: isAnchor ? 6.5 : 5.0,
+          color: isAnchor ? '#10B981' : '#ffffff',
+          weight: isAnchor ? 2.5 : 2.0,
+          fillColor: isAnchor ? '#10B981' : '#FFD21F',
           fillOpacity: 1.0,
+          className: isAnchor ? 'gis-first-vertex-dot' : 'gis-boundary-vertex-dot',
         }).addTo(map);
+
+        dot.bindTooltip(
+          isAnchor
+            ? `Start / Anchor Vertex (Pt #1)<br/>${pt[0].toFixed(4)}°N, ${pt[1].toFixed(4)}°E`
+            : `Border Point #${i + 1}<br/>${pt[0].toFixed(4)}°N, ${pt[1].toFixed(4)}°E`,
+          { direction: 'top', className: 'gis-vertex-tooltip' }
+        );
+
         drawnMarkersRef.current.push(dot);
       }
     });
@@ -316,6 +328,11 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
       iconAnchor: [80, 24],
     });
     areaBadgeRef.current = L.marker([lat, lon], { icon: unifiedBadgeIcon }).addTo(map);
+
+    // Invalidate size to guarantee smooth tile rendering after fitBounds
+    setTimeout(() => {
+      try { map.invalidateSize(); } catch (_) {}
+    }, 100);
   }, [calculatePolygonAreaKm2, generateCircleVertices, selectedRadius, site.name, site.radiusKm, site.shortName]);
 
   // Fly/re-center map and update boundary polygon whenever site coordinates update
@@ -351,40 +368,35 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
         attributionControl: false,
       });
 
-      // Direct Global CDN Tile Layers (High-speed, Zero-Proxy, No 500 error)
+      // Direct Global Edge CDN Tile Layers (High-speed, Zero-Proxy, Edge-cached Google Maps Hybrid/Roadmap/Terrain)
       const satellite = L.tileLayer(
-        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        'https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
         {
-          maxZoom: 19,
-          attribution: 'Esri World Imagery',
+          subdomains: ['0', '1', '2', '3'],
+          maxZoom: 20,
+          attribution: 'Imagery © Google Maps',
         }
       );
 
       const street = L.tileLayer(
-        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+        'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
         {
-          maxZoom: 19,
-          attribution: '© OpenStreetMap contributors',
+          subdomains: ['0', '1', '2', '3'],
+          maxZoom: 20,
+          attribution: 'Map data © Google Maps',
         }
       );
 
       const terrain = L.tileLayer(
-        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+        'https://mt{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}',
         {
-          maxZoom: 19,
-          attribution: 'Esri World Topo Map',
+          subdomains: ['0', '1', '2', '3'],
+          maxZoom: 20,
+          attribution: 'Terrain © Google Maps',
         }
       );
 
-      // Reference Places & Boundaries overlay for satellite
-      const labels = L.tileLayer(
-        'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
-        {
-          maxZoom: 19,
-        }
-      );
-
-      baseLayersRef.current = { satellite, street, terrain, labels };
+      baseLayersRef.current = { satellite, street, terrain };
 
       // Set initial base layer
       if (activeBaseLayer === 'street') {
@@ -393,7 +405,6 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
         terrain.addTo(map);
       } else {
         satellite.addTo(map);
-        labels.addTo(map);
       }
 
       setTimeout(() => {
@@ -494,11 +505,28 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
     const target = baseLayersRef.current[layerKey];
     if (target) target.addTo(map);
 
-    if (layerKey === 'satellite' && baseLayersRef.current.labels) {
-      baseLayersRef.current.labels.addTo(map);
-    }
+    setTimeout(() => {
+      try { map.invalidateSize(); } catch (_) {}
+    }, 50);
     setShowLayerMenu(false);
   };
+
+  // Ensure Leaflet map canvas re-measures and redraws tiles whenever mode or UI panels change
+  useEffect(() => {
+    if (is3DActive) return;
+    const map = mapRef.current;
+    if (!map) return;
+    const timer1 = setTimeout(() => {
+      try { map.invalidateSize(); } catch (_) {}
+    }, 60);
+    const timer2 = setTimeout(() => {
+      try { map.invalidateSize(); } catch (_) {}
+    }, 250);
+    return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+    };
+  }, [mode, is3DActive]);
 
   // 8. Photoshop Lasso Mode Drawing Updates
   useEffect(() => {
@@ -745,14 +773,24 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
   };
 
   // Village Boundary Auto-Snap Handler
-  const handleSnapToVillage = async (villageName: string) => {
-    if (!villageName.trim()) return;
+  const handleSnapToVillage = useCallback(async (forcedName?: string) => {
+    const rawName = forcedName !== undefined ? forcedName : (villageSearchQuery.trim() || site.shortName || site.name.split(',')[0]);
+    // Ignore pure coordinate strings
+    const isCoords = /^[-+]?[0-9]*\.?[0-9]+°?[NS]?,?\s*[-+]?[0-9]*\.?[0-9]+°?[EW]?/i.test(rawName);
+    const villageName = isCoords ? '' : rawName;
+
     setIsVillageLoading(true);
     setSearchError('');
     try {
-      const res = await fetchVillageBoundary(villageName, site.lat, site.lon);
+      let res = await fetchVillageBoundary(villageName, site.lat, site.lon);
+      if (!res || !res.boundary || res.boundary.length < 3) {
+        // Fallback to coordinates reverse geocode
+        res = await fetchVillageBoundary('', site.lat, site.lon);
+      }
+
       if (res && res.boundary && res.boundary.length >= 3) {
         setVillageData(res);
+        setVillageSearchQuery(res.village_name || villageName || 'Village Cadastre');
         const centerLat = res.center ? res.center[0] : (res.latitude ?? site.lat);
         const centerLon = res.center ? res.center[1] : (res.longitude ?? site.lon);
         const area = res.area_km2 || calculatePolygonAreaKm2(res.boundary);
@@ -765,8 +803,8 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
         setActiveDrawerTab('village');
 
         onSiteChange({
-          name: res.display_name || res.village_name || villageName,
-          shortName: res.village_name || villageName,
+          name: res.display_name || res.village_name || villageName || site.name,
+          shortName: res.village_name || villageName || site.shortName,
           lat: centerLat,
           lon: centerLon,
           radiusKm: autoRadius,
@@ -791,14 +829,14 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
           .catch(() => {})
           .finally(() => setIsSoilLoading(false));
       } else {
-        setSearchError(`Administrative boundary for "${villageName}" not found in OSM cadastre. Using concession radius.`);
+        setSearchError(`Administrative boundary for "${villageName || 'this site'}" not found in OSM cadastre. Using concession radius.`);
       }
     } catch (err: any) {
       setSearchError('Village boundary lookup failed. Using radius concession.');
     } finally {
       setIsVillageLoading(false);
     }
-  };
+  }, [calculatePolygonAreaKm2, onSelectRadius, onSiteChange, renderBoundary, site.lat, site.lon, site.name, site.shortName, villageSearchQuery]);
 
   // GPS Current Location
   const handleUseGps = () => {
@@ -1067,7 +1105,11 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
             <button
               type="button"
               id="btn-village-mode"
-              onClick={() => { setMode('village'); onToggleDrawMode(false); }}
+              onClick={() => {
+                setMode('village');
+                onToggleDrawMode(false);
+                handleSnapToVillage();
+              }}
               className={`px-3 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
                 mode === 'village'
                   ? 'bg-emerald-600 text-white shadow-xs'
@@ -1184,6 +1226,7 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
               <div className="flex gap-1.5">
                 <input
                   type="text"
+                  id="input-village-search"
                   value={villageSearchQuery}
                   onChange={(e) => setVillageSearchQuery(e.target.value)}
                   placeholder="e.g. Brahmanigaon, Muppandal, Kayathar"
@@ -1191,19 +1234,25 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
                 />
                 <button
                   type="button"
-                  disabled={isVillageLoading || !villageSearchQuery.trim()}
+                  id="btn-village-snap"
+                  disabled={isVillageLoading}
                   onClick={() => handleSnapToVillage(villageSearchQuery)}
-                  className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all disabled:opacity-50"
+                  className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all disabled:opacity-50 shrink-0 cursor-pointer"
                 >
                   {isVillageLoading ? 'Loading...' : 'Snap Border'}
                 </button>
               </div>
               {villageData && (
-                <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/50 text-[11px] text-emerald-900 dark:text-emerald-200">
-                  <div className="font-bold">{villageData.name}</div>
-                  <div className="text-[10px] text-emerald-700 dark:text-emerald-300">
-                    Cadastral Area: <strong>{villageData.area_km2?.toFixed(2)} km²</strong> · {villageData.display_name}
+                <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/50 text-[11px] text-emerald-900 dark:text-emerald-200 flex items-center justify-between">
+                  <div>
+                    <div className="font-bold">{villageData.village_name || villageData.name}</div>
+                    <div className="text-[10px] text-emerald-700 dark:text-emerald-300">
+                      Cadastral Area: <strong>{villageData.area_km2?.toFixed(2)} km²</strong> · {villageData.coordinates?.length || villageData.boundary?.length || 24} border vertices
+                    </div>
                   </div>
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-mono text-[10px] font-black">
+                    Auto-Snapped
+                  </span>
                 </div>
               )}
             </div>
@@ -1273,14 +1322,14 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
 
         {/* ── PHOTOSHOP LASSO IN-CANVAS FLOATING TOOLBAR ── */}
         {mode === 'draw' && (
-          <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[1060] flex items-center gap-2 px-3 py-2 rounded-full bg-slate-950/90 text-white backdrop-blur-2xl border border-white/20 shadow-2xl pointer-events-auto">
-            <span className="flex items-center gap-1.5 text-xs font-bold">
+          <div className="absolute bottom-24 md:bottom-8 left-1/2 -translate-x-1/2 z-[1060] flex items-center gap-2 px-3.5 py-2 rounded-full bg-slate-950/90 text-white backdrop-blur-2xl border border-white/20 shadow-2xl pointer-events-auto max-w-[95vw] overflow-x-auto no-scrollbar">
+            <span className="flex items-center gap-1.5 text-xs font-bold whitespace-nowrap">
               <span className="w-2 h-2 rounded-full bg-[#FFD21F] animate-ping" />
               <span>Lasso: {drawnPoints.length} vertices</span>
             </span>
 
             {drawStats && (
-              <span className="text-xs font-mono font-black text-[#FFD21F] px-2 py-0.5 rounded-full bg-white/10">
+              <span className="text-xs font-mono font-black text-[#FFD21F] px-2 py-0.5 rounded-full bg-white/10 whitespace-nowrap">
                 {drawStats.areaKm2.toFixed(1)} km²
               </span>
             )}
@@ -1290,7 +1339,7 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
               id="btn-close-polygon-draw"
               disabled={drawnPoints.length < 3}
               onClick={handleClosePolygon}
-              className="px-3 py-1 rounded-full bg-[#FFD21F] hover:bg-[#F2C50F] text-slate-950 font-black text-xs disabled:opacity-40 transition-all active:scale-95 flex items-center gap-1"
+              className="px-3 py-1 rounded-full bg-[#FFD21F] hover:bg-[#F2C50F] text-slate-950 font-black text-xs disabled:opacity-40 transition-all active:scale-95 flex items-center gap-1 whitespace-nowrap cursor-pointer"
             >
               <Check className="w-3 h-3 stroke-[3]" />
               <span>Enclose Boundary</span>
@@ -1300,7 +1349,7 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
               type="button"
               id="btn-clear-polygon-draw"
               onClick={() => setDrawnPoints([])}
-              className="px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-semibold"
+              className="px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-semibold whitespace-nowrap cursor-pointer"
             >
               Clear
             </button>
@@ -1309,7 +1358,7 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
               type="button"
               id="btn-fit-drawn-polygon"
               onClick={handleFitSite}
-              className="hidden sm:inline-block px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-semibold"
+              className="hidden sm:inline-block px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-semibold whitespace-nowrap cursor-pointer"
             >
               Fit
             </button>

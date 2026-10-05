@@ -83,6 +83,28 @@
 }
 
 /* GIS Map Markers & Badges */
+.gis-boundary-vertex-dot {
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.6));
+  cursor: pointer;
+}
+
+.gis-first-vertex-dot {
+  filter: drop-shadow(0 0 8px rgba(16, 185, 129, 0.8));
+  cursor: pointer;
+}
+
+.gis-vertex-tooltip {
+  background: rgba(15, 23, 42, 0.95) !important;
+  color: #FFD21F !important;
+  border: 1px solid rgba(255, 210, 31, 0.5) !important;
+  border-radius: 8px !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  font-family: monospace !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4) !important;
+  padding: 4px 8px !important;
+}
+
 .site-unified-badge-wrapper {
   background: transparent !important;
   border: none !important;

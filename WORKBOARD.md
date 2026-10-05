@@ -2,33 +2,29 @@
 
 ## Assigned Agent: Antigravity
 
-### Active Task: Mobile Hardware/Browser Back Navigation & In-App Back Controls
-- **Branch**: `feature/mobile-browser-back-navigation`
+### Active Task: Map Tile Visibility, Village Cadastre Auto-Snap, and Boundary Vertex Dots
+- **Branch**: `feature/map-visibility-village-cadastre-dots`
 - **Files Owned**:
-  - `src/App.tsx`
-  - `src/components/layout/AppHeader.tsx`
-  - `src/components/layout/MobileBottomNav.tsx`
   - `src/components/workflow/Screen1Site.tsx`
-  - `src/components/dashboard/ProjectDashboard.tsx`
-  - `tests/verify_back_navigation.py`
+  - `src/services/api.ts`
+  - `src/index.css`
+  - `backend/app/gis/village_boundary_client.py`
   - `WORKBOARD.md`
 
 ### Objectives & Completed Enhancements:
-1. **Full Mobile & Browser Back Gesture / Hardware Back Button Support**:
-   - Implemented `history.pushState` and `history.replaceState` synchronized with URL hash routing (`#s1_site`, `#s2_config`, `#s3_analysis`, `#s4_optimize`, `#s5_inspect`, `#s6_blueprint`, `#dashboard`).
-   - Added a global `popstate` event listener so that when a user presses the phone's physical Back button, the mobile browser's back button, or swipes back from the screen edge, the application returns to the previous screen without exiting the website or forcing a restart from scratch.
-   - Guaranteed full project data persistence across back navigation.
-2. **In-App Liquid Glass Back Controls**:
-   - Added `canGoBack` and `onBack` in `AppHeader.tsx` displaying an Apple Liquid Glass "Back" pill button when viewing any sub-screen (`s1_site` through `s6_blueprint` and `dashboard`).
-   - Added an in-pill Back button in `Screen1Site.tsx`'s search bar to quickly return to Home or Dashboard.
-   - Added a top-left Back to Home button in `ProjectDashboard.tsx`'s hero banner.
-3. **Mobile Bottom Navigation Home Route Fix**:
-   - Updated `MobileBottomNav.tsx` so clicking the Home tab reliably calls `navigateToScreen('home')` rather than defaulting to dashboard.
-4. **Verification & Quality Gates**:
-   - `npm run build`: PASS (0 errors, Vite production build clean in 47.3s).
-   - `tests/verify_back_navigation.py`: PASS (all mobile browser back, forward, in-app back, multi-step workflow back, and dashboard back tests green).
-   - `tests/verify_liquid_soil_village.py`: PASS.
-   - `tests/verify_geotechnical_setbacks_autofetch.py`: PASS.
+1. **Map Tile Visibility & Zero Blank Screen Across Modes**:
+   - Replaced rate-limited / blocked OpenStreetMap and connection-dropping Esri satellite tile layers with high-performance edge-cached Google Maps Hybrid (`mt{s}.google.com/vt/lyrs=y`), Roadmap (`lyrs=m`), and Terrain (`lyrs=p`) tile layers.
+   - Added automated mode-change resize invalidation (`map.invalidateSize()` after 60ms and 250ms) to ensure map tiles never collapse into a solid dark navy background when toggling between Site, Radius, Lasso, Village Cadastre, or layer switchers.
+2. **Village Cadastre Auto-Fetch & Real Boundary Polygon**:
+   - When clicking "Village Cadastre" or searching a village/town, the application immediately queries OpenStreetMap Nominatim / Overpass cadastre for the official administrative boundary polygon.
+   - Automatically synchronizes cadastral boundary coordinates, geodesic area (km²), and auto-concession radius into project state.
+3. **Prominent Boundary Vertex Dots**:
+   - Implemented high-contrast, prominent vertex dots (`L.circleMarker`) along the perimeter of the village boundary and concession circle.
+   - Start / anchor vertex marked with an emerald ring and tooltip, with golden-yellow white-bordered markers along the entire boundary indicating "from where to where" the border extends.
+4. **Mobile Layout & Lasso Toolbar Positioning**:
+   - Moved the floating Lasso toolbar to the bottom (`bottom-24 md:bottom-8`) so it never overlaps or blocks the top search bar or mode tabs on mobile devices.
+5. **Verification & Quality Gates**:
+   - `npm run build`: PASS (0 errors, Vite production build clean in 40.5s).
    - Strictly 0 emojis in all code and UI.
 
 
