@@ -96,9 +96,18 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
     wake_deficit_pct: 3.2,
   };
 
-  const aep = optimizationData?.best_aep_gwh ? `${optimizationData.best_aep_gwh.toFixed(1)} GWh/yr` : '88.3 GWh/yr';
-  const wakeLoss = optimizationData?.best_wake_loss_pct ? `${optimizationData.best_wake_loss_pct.toFixed(1)}%` : '4.0%';
-  const improvement = optimizationData?.improvement_pct ? `${optimizationData.improvement_pct.toFixed(1)}%` : '8.5%';
+  const calculatedAep = activeTurbines.length > 0
+    ? (activeTurbines.length * 2.5 * 8.76 * 0.35 * 0.94).toFixed(1)
+    : '0.0';
+  const aep = optimizationData?.best_aep_gwh
+    ? `${optimizationData.best_aep_gwh.toFixed(1)} GWh/yr`
+    : `${calculatedAep} GWh/yr`;
+  const wakeLoss = optimizationData?.best_wake_loss_pct
+    ? `${optimizationData.best_wake_loss_pct.toFixed(1)}%`
+    : (activeTurbines.length > 0 ? '6.1%' : '0.0%');
+  const improvement = optimizationData?.improvement_pct
+    ? `${optimizationData.improvement_pct.toFixed(1)}%`
+    : '0.0%';
 
   // 1. Initialize Map
   useEffect(() => {

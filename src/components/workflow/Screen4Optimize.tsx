@@ -30,9 +30,9 @@ export const Screen4Optimize: React.FC<Screen4OptimizeProps> = ({
     return () => clearInterval(timer);
   }, []);
 
-  const bestAep = optimizationData?.best_aep_gwh ? optimizationData.best_aep_gwh.toFixed(1) : '88.3';
-  const currAep = optimizationData?.initial_aep_gwh ? optimizationData.initial_aep_gwh.toFixed(1) : '81.4';
-  const improvement = optimizationData?.improvement_pct ? optimizationData.improvement_pct.toFixed(1) : '8.5';
+  const bestAep = optimizationData?.best_aep_gwh ? optimizationData.best_aep_gwh.toFixed(1) : (isDone ? '0.0' : '--');
+  const currAep = optimizationData?.initial_aep_gwh ? optimizationData.initial_aep_gwh.toFixed(1) : '--';
+  const improvement = optimizationData?.improvement_pct ? optimizationData.improvement_pct.toFixed(1) : '0.0';
   const statusHeadline = isDone ? 'Best feasible layout identified' : 'Quantum WS-QAOA Optimization Active';
 
   return (

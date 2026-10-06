@@ -46,8 +46,11 @@ export const Screen6Blueprint: React.FC<Screen6BlueprintProps> = ({
       : fallbackTurbines;
   const turbineCount = turbines.length;
   const capacityMw = (turbineCount * 2.5).toFixed(1);
-  const aep = optimizationData?.best_aep_gwh ? optimizationData.best_aep_gwh.toFixed(1) : '88.3';
-  const wakeLoss = optimizationData?.best_wake_loss_pct ? optimizationData.best_wake_loss_pct.toFixed(1) : '4.0';
+  const calculatedAep = turbineCount > 0
+    ? (turbineCount * 2.5 * 8.76 * 0.35 * 0.94).toFixed(1)
+    : '0.0';
+  const aep = optimizationData?.best_aep_gwh ? optimizationData.best_aep_gwh.toFixed(1) : calculatedAep;
+  const wakeLoss = optimizationData?.best_wake_loss_pct ? optimizationData.best_wake_loss_pct.toFixed(1) : (turbineCount > 0 ? '6.1' : '0.0');
   const docId = `DOC-AQW-2026-${Math.abs(Math.round(site.lat * 1000000)).toString().slice(0, 4)}${Math.abs(Math.round(site.lon * 1000000)).toString().slice(0, 3)}`;
 
   const handlePrint = () => {

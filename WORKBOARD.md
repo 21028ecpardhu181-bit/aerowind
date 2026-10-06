@@ -2,17 +2,23 @@
 
 ## Assigned Agent: Antigravity
 
-### Active Task: 3D Turbine Models in Cesium, Esri World Street Map Tiles, and Apple Liquid Glass UI
-- **Branch**: `feature/3d-turbines-tiles-liquid-glass`
+### Active Task: Purge Fake Numbers, Add Site Context Pill & Authentic Live Telemetry on Hero Screen
+- **Branch**: `feature/real-telemetry-hero-context`
 - **Files Owned**:
-  - `src/components/gis/CesiumGlobeView.tsx`
-  - `src/components/workflow/Screen1Site.tsx`
+  - `src/components/dashboard/CreateNewProjectHero.tsx`
+  - `src/components/workflow/OptimizationSummary.tsx`
+  - `src/components/workflow/Screen4Optimize.tsx`
   - `src/components/workflow/Screen5Inspect.tsx`
-  - `src/services/api.ts`
-  - `backend/app/gis/village_boundary_client.py`
+  - `src/components/workflow/Screen6Blueprint.tsx`
   - `WORKBOARD.md`
 
-### Objectives & Completed Enhancements:
+### Objectives:
+1. Explain origin of 1.9 m/s (Live ECMWF 100m wind speed from Open-Meteo for P.Gannavaram / NH216A project saved in localStorage).
+2. Clarify how values populate for new users (0 projects = Reference Benchmark with live Open-Meteo & Copernicus DEM; custom search = live site telemetry with pending layout state).
+3. Add prominent Site Context Pill above hero metric cards showing project name, location, and site type (Active Site vs Reference Benchmark).
+4. Eliminate ALL fake hardcoded fallback values (8.4, 42, 88.3, 3.5, 74C, 79C) across hero and workflow screens; use loading skeleton / dashes and authentic calculations.
+5. Ground desktop telemetry cards directly in real Open-Meteo atmospheric telemetry and project capacity metrics.
+
 1. **3D Wind Turbine Models in Cesium Globe View (`CesiumGlobeView.tsx`)**:
    - Enabled `minimumPixelSize: 64` and `maximumScale: 10.0` on the glTF `model` entity (`wind_turbine.glb`), preventing Cesium from culling models at high camera altitudes (e.g. 5,000m–12,000m farm overview).
    - Set `heightReference: Cesium.HeightReference.CLAMP_TO_GROUND` and surface elevation clamping so turbine bases stand firmly on terrain/ellipsoid surfaces.

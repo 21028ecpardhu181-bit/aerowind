@@ -14,10 +14,10 @@ export const OptimizationSummary: React.FC<OptimizationSummaryProps> = ({
 }) => {
   if (!optimizationData) return null;
 
-  const bestAep = optimizationData.best_aep_gwh ? optimizationData.best_aep_gwh.toFixed(2) : '88.30';
-  const initialAep = optimizationData.initial_aep_gwh ? optimizationData.initial_aep_gwh.toFixed(2) : '81.40';
-  const improvement = optimizationData.improvement_pct ? optimizationData.improvement_pct.toFixed(2) : '8.48';
-  const wakeLoss = optimizationData.best_wake_loss_pct ? optimizationData.best_wake_loss_pct.toFixed(2) : '6.12';
+  const bestAep = optimizationData.best_aep_gwh ? optimizationData.best_aep_gwh.toFixed(2) : '--';
+  const initialAep = optimizationData.initial_aep_gwh ? optimizationData.initial_aep_gwh.toFixed(2) : '--';
+  const improvement = optimizationData.improvement_pct ? optimizationData.improvement_pct.toFixed(2) : '0.00';
+  const wakeLoss = optimizationData.best_wake_loss_pct ? optimizationData.best_wake_loss_pct.toFixed(2) : '--';
 
   return (
     <GlassPanel variant="standard" className={`p-5 flex flex-col gap-4 ${className || ''}`}>
