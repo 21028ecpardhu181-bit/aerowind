@@ -9,6 +9,7 @@ export interface ProjectSelectorProps {
   selectedProjectId: string | null;
   onSelectProject: (p: ProjectSummary) => void;
   onNewProject: () => void;
+  onDeleteProject?: (projectId: string) => void;
 }
 
 export const ProjectSelector: React.FC<ProjectSelectorProps> = ({
@@ -16,6 +17,7 @@ export const ProjectSelector: React.FC<ProjectSelectorProps> = ({
   selectedProjectId,
   onSelectProject,
   onNewProject,
+  onDeleteProject,
 }) => {
   return (
     <div className="flex flex-col gap-3 w-full">
@@ -48,6 +50,15 @@ export const ProjectSelector: React.FC<ProjectSelectorProps> = ({
               project={p}
               isSelected={selectedProjectId === p.id}
               onSelect={onSelectProject}
+              onDelete={
+                onDeleteProject
+                  ? (proj) => {
+                      if (window.confirm(`Permanently delete project "${proj.name}"?`)) {
+                        onDeleteProject(proj.id);
+                      }
+                    }
+                  : undefined
+              }
             />
           ))}
         </div>

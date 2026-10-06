@@ -24,6 +24,18 @@ export async function createProject(data: Partial<ProjectDetail>): Promise<Proje
   return res.json();
 }
 
+export async function deleteProject(id: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/projects/${id}`, {
+      method: 'DELETE',
+    });
+    return res.ok;
+  } catch (err) {
+    console.warn(`Failed to delete project ${id}:`, err);
+    return false;
+  }
+}
+
 export async function geocodeLocation(query: string): Promise<any> {
   // Support both /api/geo/geocode?q=... and POST /api/geo/geocode
   try {

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   MapPin,
   ArrowRight,
@@ -9,7 +9,9 @@ import {
   Sun,
   ChevronRight,
   ChevronLeft,
-  ExternalLink
+  ExternalLink,
+  Trash2,
+  AlertTriangle,
 } from 'lucide-react';
 import { ProjectSummary, ProjectDetail, TelemetryData } from '../../types';
 import { Button } from '../ui/Button';
@@ -26,6 +28,8 @@ interface ProjectDashboardProps {
   onOpenProject: (proj: ProjectSummary | ProjectDetail) => void;
   onViewBlueprint: (proj: ProjectSummary | ProjectDetail) => void;
   onSelectProject: (proj: ProjectSummary) => void;
+  onDeleteProject?: (projectId: string) => void;
+  onDeleteDrafts?: () => void;
   onToggle3D?: () => void;
   is3D?: boolean;
   onBack?: () => void;
@@ -38,10 +42,15 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
   onOpenProject,
   onViewBlueprint,
   onSelectProject,
+  onDeleteProject,
+  onDeleteDrafts,
   onToggle3D,
   is3D = false,
   onBack,
 }) => {
+  const [projectToDelete, setProjectToDelete] = useState<ProjectSummary | null>(null);
+  const [isClearDraftsOpen, setIsClearDraftsOpen] = useState(false);
+
   // Authentic engineering values calculated from project state
   const turbineCount = project.turbine_count || 12;
   const getTurbineRating = (model?: string): number => {
@@ -168,6 +177,20 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
               <FileText className="w-4 h-4" />
               <span>View Blueprint</span>
             </Button>
+
+            {onDeleteProject && (
+              <Button
+                id="btn-delete-active-project"
+                variant="glass"
+                size="md"
+                onClick={() => setProjectToDelete(project as ProjectSummary)}
+                className="text-rose-200 hover:text-white hover:bg-rose-600/30 border-rose-400/40 shadow-glass transition-all"
+                title="Delete this project"
+              >
+                <Trash2 className="w-4 h-4 text-rose-400" />
+                <span>Delete</span>
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -376,11 +399,24 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
         </GlassPanel>
       </div>
 
-      {/* ── 4. RECENT PROJECTS SECTION (Mobile & Tablet) ── */}
-      <div className="md:hidden mt-2">
+      {/* ── 4. RECENT PROJECTS SECTION (Responsive: Mobile, Tablet & Desktop) ── */}
+      <div className="mt-4 pt-4 border-t border-slate-200/80">
         <div className="flex items-center justify-between mb-3 px-1">
-          <h3 className="text-sm font-bold text-slate-900">Recent Projects</h3>
-          <span className="text-xs font-semibold text-amber-700">All ({projects.length})</span>
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-bold text-slate-900">Recent Projects</h3>
+            <span className="text-xs font-semibold text-amber-700 font-mono">All ({projects.length})</span>
+          </div>
+          {projects.some((p) => (p.status || '').toLowerCase() === 'draft') && onDeleteDrafts && (
+            <button
+              type="button"
+              id="btn-clear-drafts"
+              onClick={() => setIsClearDraftsOpen(true)}
+              className="text-[11px] font-bold text-slate-500 hover:text-rose-600 transition-colors flex items-center gap-1 cursor-pointer px-2.5 py-1 rounded-lg hover:bg-rose-50"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+              <span>Clear Drafts</span>
+            </button>
+          )}
         </div>
         <div className="flex flex-col gap-2">
           {projects.map((p) => {
@@ -389,7 +425,7 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
               <div
                 key={p.id}
                 onClick={() => onSelectProject(p)}
-                className={`p-3 rounded-2xl border transition-all flex items-center justify-between gap-3 cursor-pointer ${
+                className={`p-3 rounded-2xl border transition-all flex items-center justify-between gap-3 cursor-pointer group ${
                   isSelected
                     ? 'bg-amber-50/90 border-[#FFD21F] shadow-sm ring-1 ring-[#FFD21F]'
                     : 'bg-white/80 hover:bg-white border-slate-200/80 shadow-xs'
@@ -400,23 +436,142 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
                     <img
                       src="/assets/real-turbines-photo.jpg"
                       alt={p.name}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                     />
                   </div>
                   <div className="min-w-0">
-                    <h4 className="text-xs font-bold text-slate-900 truncate">{p.name}</h4>
+                    <h4 className="text-xs font-bold text-slate-900 truncate group-hover:text-amber-600 transition-colors">
+                      {p.name}
+                    </h4>
                     <p className="text-[11px] text-slate-500 truncate">{p.location_name}</p>
                     <div className="mt-0.5">
                       <Badge status={p.status} className="text-[9px] py-0 px-1.5" />
                     </div>
                   </div>
                 </div>
-                <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
+
+                <div className="flex items-center gap-1 shrink-0">
+                  {onDeleteProject && (
+                    <button
+                      type="button"
+                      id={`btn-delete-project-${p.id}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setProjectToDelete(p);
+                      }}
+                      className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 active:scale-90 transition-all cursor-pointer"
+                      title={`Delete ${p.name}`}
+                    >
+                      <Trash2 className="w-4 h-4 stroke-[2]" />
+                    </button>
+                  )}
+                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
+                </div>
               </div>
             );
           })}
         </div>
       </div>
+
+      {/* ── 5. DELETE PROJECT CONFIRMATION MODAL ── */}
+      {projectToDelete && (
+        <div className="fixed inset-0 z-[1300] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md animate-fadeIn">
+          <div
+            className="w-full max-w-sm bg-white/95 backdrop-blur-2xl border border-white/90 rounded-[28px] p-5 sm:p-6 shadow-[0_24px_50px_rgba(0,0,0,0.18)] flex flex-col gap-4 text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Warning Icon Pill */}
+            <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-600 flex items-center justify-center mx-auto shadow-xs">
+              <Trash2 className="w-6 h-6 stroke-[2.2]" />
+            </div>
+
+            {/* Title & Description */}
+            <div>
+              <h3 className="text-base font-black text-slate-950">
+                Delete Project?
+              </h3>
+              <p className="text-xs text-slate-600 font-medium leading-relaxed mt-1.5">
+                Are you sure you want to delete <strong className="text-slate-900 font-bold">"{projectToDelete.name}"</strong>? This will permanently remove its site boundaries, terrain data, and turbine layout.
+              </p>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="grid grid-cols-2 gap-2.5 pt-1">
+              <button
+                type="button"
+                id="btn-cancel-delete-project"
+                onClick={() => setProjectToDelete(null)}
+                className="w-full py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer active:scale-95"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                id="btn-confirm-delete-project"
+                onClick={() => {
+                  if (onDeleteProject) {
+                    onDeleteProject(projectToDelete.id);
+                  }
+                  setProjectToDelete(null);
+                }}
+                className="w-full py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black shadow-md shadow-rose-600/30 transition-all cursor-pointer active:scale-95 flex items-center justify-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 6. CLEAR ALL DRAFTS CONFIRMATION MODAL ── */}
+      {isClearDraftsOpen && (
+        <div className="fixed inset-0 z-[1300] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md animate-fadeIn">
+          <div
+            className="w-full max-w-sm bg-white/95 backdrop-blur-2xl border border-white/90 rounded-[28px] p-5 sm:p-6 shadow-[0_24px_50px_rgba(0,0,0,0.18)] flex flex-col gap-4 text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-600 flex items-center justify-center mx-auto shadow-xs">
+              <AlertTriangle className="w-6 h-6 stroke-[2.2]" />
+            </div>
+
+            <div>
+              <h3 className="text-base font-black text-slate-950">
+                Clear All Draft Projects?
+              </h3>
+              <p className="text-xs text-slate-600 font-medium leading-relaxed mt-1.5">
+                This will delete all unconfigured draft projects. Any configured or optimized wind farm concessions will be preserved.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5 pt-1">
+              <button
+                type="button"
+                id="btn-cancel-clear-drafts"
+                onClick={() => setIsClearDraftsOpen(false)}
+                className="w-full py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer active:scale-95"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                id="btn-confirm-clear-drafts"
+                onClick={() => {
+                  if (onDeleteDrafts) {
+                    onDeleteDrafts();
+                  }
+                  setIsClearDraftsOpen(false);
+                }}
+                className="w-full py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black shadow-md shadow-rose-600/30 transition-all cursor-pointer active:scale-95 flex items-center justify-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Clear Drafts</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+

@@ -7,7 +7,8 @@ import {
   CloudSun,
   FileSpreadsheet,
   Settings,
-  ChevronRight
+  ChevronRight,
+  Trash2,
 } from 'lucide-react';
 import { ProjectSummary } from '../../types';
 import { Badge } from '../ui/Badge';
@@ -19,6 +20,7 @@ interface AppSidebarProps {
   selectedProjectId: string | null;
   onSelectProject: (proj: ProjectSummary) => void;
   onNewWindFarm: () => void;
+  onDeleteProject?: (projectId: string) => void;
 }
 
 export const AppSidebar: React.FC<AppSidebarProps> = ({
@@ -28,6 +30,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
   selectedProjectId,
   onSelectProject,
   onNewWindFarm,
+  onDeleteProject,
 }) => {
   return (
     <aside className="w-64 flex-shrink-0 flex flex-col justify-between h-[calc(100vh-53px)] bg-white/70 backdrop-blur-md border-r border-slate-200/80 p-4 overflow-y-auto">
@@ -122,10 +125,18 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
               projects.slice(0, 5).map((proj) => {
                 const isSelected = selectedProjectId === proj.id;
                 return (
-                  <button
+                  <div
                     key={proj.id}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => onSelectProject(proj)}
-                    className={`w-full text-left p-2.5 rounded-xl border transition-all flex items-center gap-3 group ${
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        onSelectProject(proj);
+                      }
+                    }}
+                    className={`w-full text-left p-2.5 rounded-xl border transition-all flex items-center gap-3 group cursor-pointer ${
                       isSelected
                         ? 'bg-amber-50/80 border-amber-300 shadow-xs'
                         : 'bg-white/60 hover:bg-white border-slate-200/80 hover:shadow-subtle'
@@ -150,8 +161,26 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
                         <Badge status={proj.status} className="text-[9px] py-0 px-1.5" />
                       </div>
                     </div>
-                    <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 flex-shrink-0" />
-                  </button>
+                    <div className="flex items-center gap-0.5 flex-shrink-0">
+                      {onDeleteProject && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.confirm(`Permanently delete "${proj.name}"?`)) {
+                              onDeleteProject(proj.id);
+                            }
+                          }}
+                          title="Delete Project"
+                          aria-label={`Delete ${proj.name}`}
+                          className="p-1 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-md transition-all opacity-0 group-hover:opacity-100"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 flex-shrink-0" />
+                    </div>
+                  </div>
                 );
               })
             )}

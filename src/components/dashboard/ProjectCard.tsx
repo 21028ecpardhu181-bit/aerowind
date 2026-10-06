@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Trash2 } from 'lucide-react';
 import { ProjectSummary } from '../../types';
 import { GlassPanel } from '../ui/GlassPanel';
 import { Badge } from '../ui/Badge';
@@ -9,6 +9,7 @@ export interface ProjectCardProps {
   project: ProjectSummary;
   isSelected?: boolean;
   onSelect: (p: ProjectSummary) => void;
+  onDelete?: (p: ProjectSummary) => void;
   className?: string;
 }
 
@@ -16,6 +17,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
   project,
   isSelected = false,
   onSelect,
+  onDelete,
   className,
 }) => {
   // Generate consistent thumbnail based on location
@@ -82,7 +84,23 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
         </div>
       </div>
 
-      <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-900 group-hover:translate-x-0.5 transition-all shrink-0" />
+      <div className="flex items-center gap-1 shrink-0">
+        {onDelete && (
+          <button
+            type="button"
+            id={`btn-delete-card-${project.id}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(project);
+            }}
+            className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 active:scale-90 transition-all cursor-pointer"
+            title={`Delete ${project.name}`}
+          >
+            <Trash2 className="w-4 h-4 stroke-[2]" />
+          </button>
+        )}
+        <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-900 group-hover:translate-x-0.5 transition-all" />
+      </div>
     </div>
   );
 };

@@ -2,22 +2,26 @@
 
 ## Assigned Agent: Antigravity
 
-### Active Task: Purge Fake Numbers, Add Site Context Pill & Authentic Live Telemetry on Hero Screen
-- **Branch**: `feature/real-telemetry-hero-context`
+### Status: Completed (Ready for Merge & Push)
+- **Branch**: `feature/delete-project-option`
 - **Files Owned**:
-  - `src/components/dashboard/CreateNewProjectHero.tsx`
-  - `src/components/workflow/OptimizationSummary.tsx`
-  - `src/components/workflow/Screen4Optimize.tsx`
-  - `src/components/workflow/Screen5Inspect.tsx`
-  - `src/components/workflow/Screen6Blueprint.tsx`
+  - `src/components/dashboard/ProjectDashboard.tsx`
+  - `src/components/dashboard/ProjectCard.tsx`
+  - `src/components/dashboard/ProjectSelector.tsx`
+  - `src/components/layout/AppSidebar.tsx`
+  - `src/services/api.ts`
+  - `src/App.tsx`
   - `WORKBOARD.md`
 
-### Objectives:
-1. Explain origin of 1.9 m/s (Live ECMWF 100m wind speed from Open-Meteo for P.Gannavaram / NH216A project saved in localStorage).
-2. Clarify how values populate for new users (0 projects = Reference Benchmark with live Open-Meteo & Copernicus DEM; custom search = live site telemetry with pending layout state).
-3. Add prominent Site Context Pill above hero metric cards showing project name, location, and site type (Active Site vs Reference Benchmark).
-4. Eliminate ALL fake hardcoded fallback values (8.4, 42, 88.3, 3.5, 74C, 79C) across hero and workflow screens; use loading skeleton / dashes and authentic calculations.
-5. Ground desktop telemetry cards directly in real Open-Meteo atmospheric telemetry and project capacity metrics.
+### Completed Objectives:
+1. Added `deleteProject` API client in `src/services/api.ts` communicating with `DELETE /api/projects/{id}` in FastAPI backend.
+2. Implemented `handleDeleteProject` in `src/App.tsx` managing React state, `localStorage` (`aqw_user_projects` and `aqw_deleted_project_ids`), active project fallback switching, and backend persistence.
+3. Added "Clear Drafts" batch deletion (`handleDeleteDrafts`) in `App.tsx` and `ProjectDashboard.tsx` to clear duplicate unconfigured drafts in one click.
+4. Added delete button on each project card in `ProjectDashboard.tsx` (mobile and desktop) with an Apple Liquid Glass confirmation modal.
+5. Added delete project button to `ProjectCard.tsx`, mobile sheet `ProjectSelector.tsx`, and desktop `AppSidebar.tsx` with user confirmations.
+6. Added delete project option to the top active project hero banner in `ProjectDashboard.tsx`.
+7. Verified: `npm run build` PASS, 54 of 54 pytest tests PASS. Strictly 0 emojis.
+
 
 1. **3D Wind Turbine Models in Cesium Globe View (`CesiumGlobeView.tsx`)**:
    - Enabled `minimumPixelSize: 64` and `maximumScale: 10.0` on the glTF `model` entity (`wind_turbine.glb`), preventing Cesium from culling models at high camera altitudes (e.g. 5,000m–12,000m farm overview).

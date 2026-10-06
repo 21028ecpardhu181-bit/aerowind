@@ -15,6 +15,7 @@ import {
   fetchProjects,
   fetchProject,
   createProject,
+  deleteProject,
   fetchTelemetry,
   generateInitialLayout,
   runOptimization,
@@ -299,12 +300,18 @@ export function App() {
 
         const serverProjects = await fetchProjects().catch(() => []);
         
+        let deletedIds = new Set<string>();
+        try {
+          const rawDel = localStorage.getItem('aqw_deleted_project_ids');
+          if (rawDel) deletedIds = new Set(JSON.parse(rawDel));
+        } catch (_) {}
+
         // Merge without duplicates (user saved projects first, then server, then defaults)
         const seenIds = new Set<string>();
         const merged: ProjectSummary[] = [];
         
         for (const p of [...userProjects, ...serverProjects, ...DEFAULT_PROJECTS]) {
-          if (!seenIds.has(p.id)) {
+          if (!seenIds.has(p.id) && !deletedIds.has(p.id)) {
             seenIds.add(p.id);
             merged.push(p);
           }
@@ -387,6 +394,53 @@ export function App() {
     }));
     fetchTelemetry(p.latitude, p.longitude).then(setTelemetry).catch(() => {});
     navigateToScreen('dashboard');
+  };
+
+  // Delete project from state, localStorage, and backend
+  const handleDeleteProject = (projectId: string) => {
+    const remaining = projects.filter((p) => p.id !== projectId);
+    setProjects(remaining);
+
+    // 1. Remove from user projects in localStorage
+    try {
+      const stored = JSON.parse(localStorage.getItem('aqw_user_projects') || '[]');
+      const filtered = stored.filter((p: any) => p.id !== projectId);
+      localStorage.setItem('aqw_user_projects', JSON.stringify(filtered));
+
+      // 2. Add to deleted IDs list so it never revives on reload
+      const deletedIds = JSON.parse(localStorage.getItem('aqw_deleted_project_ids') || '[]');
+      if (!deletedIds.includes(projectId)) {
+        localStorage.setItem('aqw_deleted_project_ids', JSON.stringify([...deletedIds, projectId]));
+      }
+    } catch (_) {}
+
+    // 3. Call backend DELETE endpoint
+    deleteProject(projectId).catch(() => {});
+
+    // 4. If deleting activeProject, switch to first remaining project
+    if (activeProject?.id === projectId) {
+      if (remaining.length > 0) {
+        const next = remaining[0];
+        setActiveProject(next);
+        setSite((prev) => ({
+          ...prev,
+          name: next.location_name,
+          shortName: next.location_name.split(',')[0],
+          lat: next.latitude,
+          lon: next.longitude,
+          areaKm2: next.area_km2 || 24.8,
+        }));
+        fetchTelemetry(next.latitude, next.longitude).then(setTelemetry).catch(() => {});
+      } else {
+        setActiveProject(null);
+      }
+    }
+  };
+
+  // Clear all draft projects
+  const handleDeleteDrafts = () => {
+    const drafts = projects.filter((p) => (p.status || '').toLowerCase() === 'draft');
+    drafts.forEach((d) => handleDeleteProject(d.id));
   };
 
   // Open existing project from Dashboard into workflow
@@ -999,6 +1053,7 @@ export function App() {
               selectedProjectId={activeProject?.id || null}
               onSelectProject={handleSelectProject}
               onNewWindFarm={handleNewProject}
+              onDeleteProject={handleDeleteProject}
             />
           </div>
         )}
@@ -1030,6 +1085,8 @@ export function App() {
               onOpenProject={handleOpenProject}
               onViewBlueprint={handleViewBlueprint}
               onSelectProject={handleSelectProject}
+              onDeleteProject={handleDeleteProject}
+              onDeleteDrafts={handleDeleteDrafts}
               onToggle3D={() => setIs3DActive(!is3DActive)}
               is3D={is3DActive}
               onBack={handleGoBack}
@@ -1156,6 +1213,7 @@ export function App() {
             setIsMobileProjectSheetOpen(false);
             handleNewProject();
           }}
+          onDeleteProject={handleDeleteProject}
         />
       </BottomSheet>
 
