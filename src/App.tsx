@@ -9,7 +9,8 @@ import {
   LayoutAnalysisData,
   OptimizationData,
   Turbine,
-  AuthUser
+  AuthUser,
+  isDraftProject
 } from './types';
 import {
   fetchProjects,
@@ -127,24 +128,35 @@ const DEFAULT_PROJECTS: ProjectSummary[] = [
   },
 ];
 
+function resolveWorkflowScreen(rawHash?: string | null): WorkflowScreen {
+  if (!rawHash) return 'home';
+  const clean = rawHash.replace('#', '').trim().toLowerCase();
+  if (clean === 'dash' || clean === 'dashboard') return 'dashboard';
+  if (clean === 'site' || clean === 's1' || clean === 's1_site') return 's1_site';
+  if (clean === 'config' || clean === 's2' || clean === 's2_config') return 's2_config';
+  if (clean === 'analysis' || clean === 's3' || clean === 's3_analysis') return 's3_analysis';
+  if (clean === 'optimize' || clean === 's4' || clean === 's4_optimize') return 's4_optimize';
+  if (clean === 'inspect' || clean === 's5' || clean === 's5_inspect') return 's5_inspect';
+  if (clean === 'blueprint' || clean === 'blueprints' || clean === 's6' || clean === 's6_blueprint') return 's6_blueprint';
+  const validScreens: WorkflowScreen[] = ['home', 'dashboard', 's1_site', 's2_config', 's3_analysis', 's4_optimize', 's5_inspect', 's6_blueprint'];
+  return validScreens.includes(clean as WorkflowScreen) ? (clean as WorkflowScreen) : 'home';
+}
+
 export function App() {
   const isNavigatingFromHistory = useRef(false);
   const [currentScreen, setCurrentScreen] = useState<WorkflowScreen>(() => {
     try {
-      const hash = window.location.hash.replace('#', '') as WorkflowScreen;
-      const validScreens: WorkflowScreen[] = ['home', 'dashboard', 's1_site', 's2_config', 's3_analysis', 's4_optimize', 's5_inspect', 's6_blueprint'];
-      if (hash && validScreens.includes(hash)) {
-        return hash;
-      }
-    } catch (_) {}
-    return 'home';
+      return resolveWorkflowScreen(window.location.hash);
+    } catch (_) {
+      return 'home';
+    }
   });
   const [currentTab, setCurrentTab] = useState<string>(() => {
     try {
-      const hash = window.location.hash.replace('#', '');
-      if (hash === 'dashboard') return 'dashboard';
-      if (hash === 's1_site') return 'new';
-      if (hash === 's6_blueprint') return 'blueprints';
+      const scr = resolveWorkflowScreen(window.location.hash);
+      if (scr === 'dashboard') return 'dashboard';
+      if (scr === 's1_site') return 'new';
+      if (scr === 's6_blueprint') return 'blueprints';
     } catch (_) {}
     return 'home';
   });
@@ -193,19 +205,13 @@ export function App() {
   // Synchronize browser history and listen for mobile hardware/browser back events
   useEffect(() => {
     try {
-      const initialHash = window.location.hash.replace('#', '') as WorkflowScreen;
-      const validScreens: WorkflowScreen[] = ['home', 'dashboard', 's1_site', 's2_config', 's3_analysis', 's4_optimize', 's5_inspect', 's6_blueprint'];
-      const screen = (initialHash && validScreens.includes(initialHash)) ? initialHash : 'home';
+      const screen = resolveWorkflowScreen(window.location.hash);
       window.history.replaceState({ screen }, '', screen === 'home' ? window.location.pathname : `#${screen}`);
     } catch (_) {}
 
     const handlePopState = (event: PopStateEvent) => {
-      const targetScreen = (event.state?.screen as WorkflowScreen) || 
-        (window.location.hash.replace('#', '') as WorkflowScreen) || 
-        'home';
-      
-      const validScreens: WorkflowScreen[] = ['home', 'dashboard', 's1_site', 's2_config', 's3_analysis', 's4_optimize', 's5_inspect', 's6_blueprint'];
-      const resolvedScreen = validScreens.includes(targetScreen) ? targetScreen : 'home';
+      const targetScreen = (event.state?.screen as string) || window.location.hash;
+      const resolvedScreen = resolveWorkflowScreen(targetScreen);
 
       isNavigatingFromHistory.current = true;
       setCurrentScreen(resolvedScreen);
@@ -398,49 +404,95 @@ export function App() {
 
   // Delete project from state, localStorage, and backend
   const handleDeleteProject = (projectId: string) => {
-    const remaining = projects.filter((p) => p.id !== projectId);
-    setProjects(remaining);
+    // 1. Atomically filter React state using functional updater
+    setProjects((prev) => prev.filter((p) => p.id !== projectId));
 
-    // 1. Remove from user projects in localStorage
+    // 2. Remove from user projects in localStorage
     try {
       const stored = JSON.parse(localStorage.getItem('aqw_user_projects') || '[]');
       const filtered = stored.filter((p: any) => p.id !== projectId);
       localStorage.setItem('aqw_user_projects', JSON.stringify(filtered));
 
-      // 2. Add to deleted IDs list so it never revives on reload
+      // 3. Add to deleted IDs list so it never revives on reload
       const deletedIds = JSON.parse(localStorage.getItem('aqw_deleted_project_ids') || '[]');
       if (!deletedIds.includes(projectId)) {
         localStorage.setItem('aqw_deleted_project_ids', JSON.stringify([...deletedIds, projectId]));
       }
     } catch (_) {}
 
-    // 3. Call backend DELETE endpoint
+    // 4. Call backend DELETE endpoint
     deleteProject(projectId).catch(() => {});
 
-    // 4. If deleting activeProject, switch to first remaining project
+    // 5. If deleting activeProject, switch to first remaining project
     if (activeProject?.id === projectId) {
-      if (remaining.length > 0) {
-        const next = remaining[0];
-        setActiveProject(next);
-        setSite((prev) => ({
-          ...prev,
-          name: next.location_name,
-          shortName: next.location_name.split(',')[0],
-          lat: next.latitude,
-          lon: next.longitude,
-          areaKm2: next.area_km2 || 24.8,
-        }));
-        fetchTelemetry(next.latitude, next.longitude).then(setTelemetry).catch(() => {});
-      } else {
-        setActiveProject(null);
-      }
+      setProjects((currentList) => {
+        const remaining = currentList.filter((p) => p.id !== projectId);
+        if (remaining.length > 0) {
+          const next = remaining[0];
+          setActiveProject(next);
+          setSite((prev) => ({
+            ...prev,
+            name: next.location_name,
+            shortName: next.location_name.split(',')[0],
+            lat: next.latitude,
+            lon: next.longitude,
+            areaKm2: next.area_km2 || 24.8,
+          }));
+          fetchTelemetry(next.latitude, next.longitude).then(setTelemetry).catch(() => {});
+        } else {
+          setActiveProject(null);
+        }
+        return remaining;
+      });
     }
   };
 
-  // Clear all draft projects
+  // Clear all draft projects (includes preliminary/unfinalized/configured sites)
   const handleDeleteDrafts = () => {
-    const drafts = projects.filter((p) => (p.status || '').toLowerCase() === 'draft');
-    drafts.forEach((d) => handleDeleteProject(d.id));
+    const draftProjects = projects.filter(isDraftProject);
+    const draftIds = new Set(draftProjects.map((p) => p.id));
+    if (draftIds.size === 0) return;
+
+    // 1. Atomically filter React state
+    setProjects((prev) => prev.filter((p) => !draftIds.has(p.id)));
+
+    // 2. Remove from user projects in localStorage
+    try {
+      const stored = JSON.parse(localStorage.getItem('aqw_user_projects') || '[]');
+      const filtered = stored.filter((p: any) => !draftIds.has(p.id));
+      localStorage.setItem('aqw_user_projects', JSON.stringify(filtered));
+
+      // 3. Batch update deleted IDs list so none of them ever revive on reload
+      const deletedIds = JSON.parse(localStorage.getItem('aqw_deleted_project_ids') || '[]');
+      const updatedDeleted = Array.from(new Set([...deletedIds, ...Array.from(draftIds)]));
+      localStorage.setItem('aqw_deleted_project_ids', JSON.stringify(updatedDeleted));
+    } catch (_) {}
+
+    // 4. Call backend DELETE endpoints for each draft
+    draftIds.forEach((id) => deleteProject(id).catch(() => {}));
+
+    // 5. If activeProject is one of the cleared drafts, switch to next available non-draft
+    if (activeProject && draftIds.has(activeProject.id)) {
+      setProjects((currentList) => {
+        const remainingNonDrafts = currentList.filter((p) => !draftIds.has(p.id));
+        if (remainingNonDrafts.length > 0) {
+          const next = remainingNonDrafts[0];
+          setActiveProject(next);
+          setSite((prev) => ({
+            ...prev,
+            name: next.location_name,
+            shortName: next.location_name.split(',')[0],
+            lat: next.latitude,
+            lon: next.longitude,
+            areaKm2: next.area_km2 || 24.8,
+          }));
+          fetchTelemetry(next.latitude, next.longitude).then(setTelemetry).catch(() => {});
+        } else {
+          setActiveProject(null);
+        }
+        return remainingNonDrafts;
+      });
+    }
   };
 
   // Open existing project from Dashboard into workflow

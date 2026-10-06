@@ -3,24 +3,21 @@
 ## Assigned Agent: Antigravity
 
 ### Status: Completed (Ready for Merge & Push)
-- **Branch**: `feature/delete-project-option`
+- **Branch**: `feature/refine-delete-drafts-and-hero-menu`
 - **Files Owned**:
+  - `src/App.tsx`
   - `src/components/dashboard/ProjectDashboard.tsx`
   - `src/components/dashboard/ProjectCard.tsx`
-  - `src/components/dashboard/ProjectSelector.tsx`
-  - `src/components/layout/AppSidebar.tsx`
-  - `src/services/api.ts`
-  - `src/App.tsx`
+  - `src/types/index.ts`
   - `WORKBOARD.md`
 
 ### Completed Objectives:
-1. Added `deleteProject` API client in `src/services/api.ts` communicating with `DELETE /api/projects/{id}` in FastAPI backend.
-2. Implemented `handleDeleteProject` in `src/App.tsx` managing React state, `localStorage` (`aqw_user_projects` and `aqw_deleted_project_ids`), active project fallback switching, and backend persistence.
-3. Added "Clear Drafts" batch deletion (`handleDeleteDrafts`) in `App.tsx` and `ProjectDashboard.tsx` to clear duplicate unconfigured drafts in one click.
-4. Added delete button on each project card in `ProjectDashboard.tsx` (mobile and desktop) with an Apple Liquid Glass confirmation modal.
-5. Added delete project button to `ProjectCard.tsx`, mobile sheet `ProjectSelector.tsx`, and desktop `AppSidebar.tsx` with user confirmations.
-6. Added delete project option to the top active project hero banner in `ProjectDashboard.tsx`.
-7. Verified: `npm run build` PASS, 54 of 54 pytest tests PASS. Strictly 0 emojis.
+1. Fixed draft project classification (`isDraftProject` in `types/index.ts`): all unfinalized/configured concessions matching the "Draft" badge in UI are recognized and purged when clicking "Clear Drafts".
+2. Fixed state closure bug in `handleDeleteDrafts` with atomic functional state updates (`setProjects((prev) => ...)`), batch `localStorage` purge, and backend database cleanup.
+3. Replaced prominent hero delete button with a professional three-dots overflow menu (`MoreVertical`), opening a discreet dark Apple Liquid Glass dropdown menu.
+4. Preserved user-loved `Trash2` delete button on all project cards in Recent Projects, project selector drawers, and sidebar.
+5. Added routing alias so `#dash` seamlessly resolves to `#dashboard`.
+6. Verified with Playwright on Desktop (1280px) and Mobile (390px): draft purge verified, dropping count from 11 to 4 optimized projects. Strictly 0 emojis.
 
 
 1. **3D Wind Turbine Models in Cesium Globe View (`CesiumGlobeView.tsx`)**:

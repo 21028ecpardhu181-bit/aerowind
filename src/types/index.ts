@@ -32,6 +32,21 @@ export interface ProjectSummary {
   thumbnail_url?: string;
 }
 
+export const isDraftProject = (p: ProjectSummary): boolean => {
+  const norm = (p.status || '').toLowerCase().trim();
+  // Completed, optimized, or blueprint ready wind farms are not drafts
+  if (
+    norm.includes('opt') ||
+    norm.includes('done') ||
+    norm.includes('blue') ||
+    norm.includes('ready')
+  ) {
+    return false;
+  }
+  // Any preliminary, unfinalized, configured, or explicitly draft project is a draft
+  return true;
+};
+
 export interface ProjectDetail extends ProjectSummary {
   rotor_diameter: number;
   hub_height: number;

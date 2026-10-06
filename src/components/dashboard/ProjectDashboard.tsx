@@ -12,8 +12,9 @@ import {
   ExternalLink,
   Trash2,
   AlertTriangle,
+  MoreVertical,
 } from 'lucide-react';
-import { ProjectSummary, ProjectDetail, TelemetryData } from '../../types';
+import { ProjectSummary, ProjectDetail, TelemetryData, isDraftProject } from '../../types';
 import { Button } from '../ui/Button';
 import { GlassPanel } from '../ui/GlassPanel';
 import { MetricCard } from '../ui/MetricCard';
@@ -50,6 +51,9 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
 }) => {
   const [projectToDelete, setProjectToDelete] = useState<ProjectSummary | null>(null);
   const [isClearDraftsOpen, setIsClearDraftsOpen] = useState(false);
+  const [isHeroMenuOpen, setIsHeroMenuOpen] = useState(false);
+
+  const draftCount = projects.filter(isDraftProject).length;
 
   // Authentic engineering values calculated from project state
   const turbineCount = project.turbine_count || 12;
@@ -179,17 +183,41 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
             </Button>
 
             {onDeleteProject && (
-              <Button
-                id="btn-delete-active-project"
-                variant="glass"
-                size="md"
-                onClick={() => setProjectToDelete(project as ProjectSummary)}
-                className="text-rose-200 hover:text-white hover:bg-rose-600/30 border-rose-400/40 shadow-glass transition-all"
-                title="Delete this project"
-              >
-                <Trash2 className="w-4 h-4 text-rose-400" />
-                <span>Delete</span>
-              </Button>
+              <div className="relative">
+                <button
+                  type="button"
+                  id="btn-hero-more-menu"
+                  onClick={() => setIsHeroMenuOpen(!isHeroMenuOpen)}
+                  className="w-10 h-10 rounded-xl bg-white/20 hover:bg-white/30 active:scale-95 backdrop-blur-md border border-white/35 text-white flex items-center justify-center transition-all cursor-pointer shadow-glass"
+                  title="More actions"
+                  aria-label="More actions"
+                >
+                  <MoreVertical className="w-4 h-4" />
+                </button>
+
+                {isHeroMenuOpen && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => setIsHeroMenuOpen(false)}
+                    />
+                    <div className="absolute right-0 bottom-full mb-2 z-50 w-44 bg-slate-950/95 backdrop-blur-2xl border border-white/20 rounded-2xl shadow-2xl p-1.5 animate-fadeIn">
+                      <button
+                        type="button"
+                        id="btn-delete-active-project"
+                        onClick={() => {
+                          setIsHeroMenuOpen(false);
+                          setProjectToDelete(project as ProjectSummary);
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-rose-300 hover:text-white hover:bg-rose-500/20 rounded-xl transition-colors cursor-pointer text-left"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                        <span>Delete Project</span>
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -406,7 +434,7 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
             <h3 className="text-sm font-bold text-slate-900">Recent Projects</h3>
             <span className="text-xs font-semibold text-amber-700 font-mono">All ({projects.length})</span>
           </div>
-          {projects.some((p) => (p.status || '').toLowerCase() === 'draft') && onDeleteDrafts && (
+          {draftCount > 0 && onDeleteDrafts && (
             <button
               type="button"
               id="btn-clear-drafts"
@@ -414,7 +442,7 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
               className="text-[11px] font-bold text-slate-500 hover:text-rose-600 transition-colors flex items-center gap-1 cursor-pointer px-2.5 py-1 rounded-lg hover:bg-rose-50"
             >
               <Trash2 className="w-3.5 h-3.5 text-rose-500" />
-              <span>Clear Drafts</span>
+              <span>Clear Drafts ({draftCount})</span>
             </button>
           )}
         </div>
@@ -540,7 +568,7 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
                 Clear All Draft Projects?
               </h3>
               <p className="text-xs text-slate-600 font-medium leading-relaxed mt-1.5">
-                This will delete all unconfigured draft projects. Any configured or optimized wind farm concessions will be preserved.
+                This will delete {draftCount} preliminary and unfinalized draft {draftCount === 1 ? 'project' : 'projects'}. Any optimized or blueprint-ready wind farm concessions will be preserved.
               </p>
             </div>
 
