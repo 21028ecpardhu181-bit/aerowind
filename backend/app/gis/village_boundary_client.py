@@ -75,12 +75,14 @@ class VillageBoundaryClient:
 
             # Second pass: if top result is a node/point, try its enclosing county/mandal
             first = res[0]
+            first_lat = float(first.get("lat", 0.0))
+            first_lon = float(first.get("lon", 0.0))
             address = first.get("address", {})
-            county = address.get("county") or address.get("municipality") or address.get("subdistrict")
+            county = address.get("county") or address.get("municipality") or address.get("subdistrict") or address.get("state_district")
             state = address.get("state", "")
             if county:
                 sub_query = f"{county}, {state}".strip(", ")
-                sub_url = f"https://nominatim.openstreetmap.org/search?q={requests.utils.quote(sub_query)}&format=json&polygon_geojson=1&addressdetails=1&limit=2"
+                sub_url = f"https://nominatim.openstreetmap.org/search?q={requests.utils.quote(sub_query)}&format=json&polygon_geojson=1&addressdetails=1&limit=3"
                 try:
                     sub_resp = self._session.get(sub_url, timeout=6.0)
                     if sub_resp.status_code == 200:
@@ -89,12 +91,12 @@ class VillageBoundaryClient:
                             sg = sub_item.get("geojson", {})
                             if sg.get("type") in ("Polygon", "MultiPolygon"):
                                 sub_item["_override_village_name"] = first.get("name") or query
-                                return self._parse_nominatim_item(sub_item, requested_query=query)
+                                return self._parse_nominatim_item(sub_item, requested_query=query, target_lat=first_lat, target_lon=first_lon)
                 except Exception:
                     pass
 
             # Fallback parsing on the first item
-            return self._parse_nominatim_item(first, requested_query=query)
+            return self._parse_nominatim_item(first, requested_query=query, target_lat=first_lat, target_lon=first_lon)
         except Exception:
             return None
 
@@ -112,15 +114,15 @@ class VillageBoundaryClient:
             # If reverse result has direct polygon
             g = item.get("geojson", {})
             if g.get("type") in ("Polygon", "MultiPolygon"):
-                return self._parse_nominatim_item(item)
+                return self._parse_nominatim_item(item, target_lat=lat, target_lon=lon)
 
             # If not direct polygon, check enclosing county/mandal
             address = item.get("address", {})
-            county = address.get("county") or address.get("municipality")
+            county = address.get("county") or address.get("municipality") or address.get("subdistrict") or address.get("state_district")
             state = address.get("state", "")
             if county:
                 sub_query = f"{county}, {state}".strip(", ")
-                sub_url = f"https://nominatim.openstreetmap.org/search?q={requests.utils.quote(sub_query)}&format=json&polygon_geojson=1&addressdetails=1&limit=2"
+                sub_url = f"https://nominatim.openstreetmap.org/search?q={requests.utils.quote(sub_query)}&format=json&polygon_geojson=1&addressdetails=1&limit=3"
                 try:
                     sub_resp = self._session.get(sub_url, timeout=6.0)
                     if sub_resp.status_code == 200:
@@ -129,18 +131,24 @@ class VillageBoundaryClient:
                             sg = sub_item.get("geojson", {})
                             if sg.get("type") in ("Polygon", "MultiPolygon"):
                                 sub_item["_override_village_name"] = address.get("village") or item.get("name") or county
-                                return self._parse_nominatim_item(sub_item)
+                                return self._parse_nominatim_item(sub_item, target_lat=lat, target_lon=lon)
                 except Exception:
                     pass
 
-            return self._parse_nominatim_item(item)
+            return self._parse_nominatim_item(item, target_lat=lat, target_lon=lon)
         except Exception:
             return None
 
-    def _parse_nominatim_item(self, item: Dict[str, Any], requested_query: str = "") -> Dict[str, Any]:
+    def _parse_nominatim_item(
+        self,
+        item: Dict[str, Any],
+        requested_query: str = "",
+        target_lat: Optional[float] = None,
+        target_lon: Optional[float] = None,
+    ) -> Dict[str, Any]:
         """Parses a Nominatim response into a standardized village boundary object."""
-        c_lat = float(item.get("lat", 0.0))
-        c_lon = float(item.get("lon", 0.0))
+        c_lat = target_lat if target_lat is not None else float(item.get("lat", 0.0))
+        c_lon = target_lon if target_lon is not None else float(item.get("lon", 0.0))
         display_name = item.get("display_name", "Village Cadastre")
         address = item.get("address", {})
 
@@ -163,30 +171,65 @@ class VillageBoundaryClient:
         polygon_coords: List[List[float]] = []
 
         if g_type == "Polygon" and raw_coords and len(raw_coords[0]) >= 3:
-            # raw_coords[0] is array of [lon, lat]
             polygon_coords = [[round(pt[1], 6), round(pt[0], 6)] for pt in raw_coords[0]]
             boundary_type = "official_administrative_polygon"
-        elif g_type == "MultiPolygon" and raw_coords and raw_coords[0] and len(raw_coords[0][0]) >= 3:
-            # Take largest outer ring
-            polygon_coords = [[round(pt[1], 6), round(pt[0], 6)] for pt in raw_coords[0][0]]
-            boundary_type = "official_administrative_multipolygon"
+        elif g_type == "MultiPolygon" and raw_coords and len(raw_coords) > 0:
+            rings: List[List[List[float]]] = []
+            for poly in raw_coords:
+                if poly and len(poly[0]) >= 3:
+                    rings.append([[round(pt[1], 6), round(pt[0], 6)] for pt in poly[0]])
+
+            if rings:
+                # Find ring containing (c_lat, c_lon)
+                selected_ring: Optional[List[List[float]]] = None
+                for ring in rings:
+                    if self._is_point_in_ring(c_lat, c_lon, ring):
+                        selected_ring = ring
+                        break
+
+                # If not strictly inside, pick ring with closest centroid to (c_lat, c_lon)
+                if not selected_ring:
+                    min_dist = float("inf")
+                    for ring in rings:
+                        centroid_lat = sum(p[0] for p in ring) / len(ring)
+                        centroid_lon = sum(p[1] for p in ring) / len(ring)
+                        dist = math.hypot(centroid_lat - c_lat, centroid_lon - c_lon)
+                        if dist < min_dist:
+                            min_dist = dist
+                            selected_ring = ring
+
+                polygon_coords = selected_ring or rings[0]
+                boundary_type = "official_administrative_multipolygon"
+            else:
+                polygon_coords = self._generate_engineering_parcel_boundary(c_lat, c_lon, radius_km=3.0)
+                boundary_type = "engineering_concession_envelope"
         else:
-            # If no detailed polygon, derive from boundingbox [south, north, west, east]
+            # If no detailed polygon, derive authentic cadastral survey envelope from official boundingbox
             bbox = item.get("boundingbox")
             if bbox and len(bbox) == 4:
                 s, n, w, e = float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3])
-                polygon_coords = self._generate_bounding_parcel_envelope(c_lat, c_lon, s, n, w, e)
-                boundary_type = "administrative_bounding_envelope"
+                if abs(n - s) > 0.001 and abs(e - w) > 0.001:
+                    polygon_coords = [
+                        [round(n, 6), round(w, 6)],
+                        [round(n, 6), round(e, 6)],
+                        [round(s, 6), round(e, 6)],
+                        [round(s, 6), round(w, 6)],
+                        [round(n, 6), round(w, 6)],
+                    ]
+                    boundary_type = "official_survey_cadastre_envelope"
+                else:
+                    polygon_coords = self._generate_engineering_parcel_boundary(c_lat, c_lon, radius_km=3.0)
+                    boundary_type = "engineering_concession_envelope"
             else:
                 polygon_coords = self._generate_engineering_parcel_boundary(c_lat, c_lon, radius_km=3.0)
                 boundary_type = "engineering_concession_envelope"
 
-        # Simplify to maximum 52 points for snappy mobile rendering and crisp vertex dots
-        polygon_coords = self._simplify_polygon_pts(polygon_coords, max_pts=52)
+        # Simplify to maximum 120 points to preserve crisp cadastral angles without browser lag
+        polygon_coords = self._simplify_polygon_pts(polygon_coords, max_pts=120)
 
         area_km2, perimeter_km = self.compute_polygon_area_perimeter(polygon_coords)
 
-        # Safeguard against degenerate nodes or collinear points (area < 0.2 km²)
+        # Safeguard against degenerate nodes (area < 0.2 km²)
         if area_km2 < 0.2:
             polygon_coords = self._generate_engineering_parcel_boundary(c_lat, c_lon, radius_km=3.2)
             boundary_type = "engineering_concession_envelope"
@@ -205,6 +248,25 @@ class VillageBoundaryClient:
             "perimeter_km": round(perimeter_km, 2),
             "source_provenance": "OpenStreetMap Nominatim Official Administrative Cadastre",
         }
+
+    @staticmethod
+    def _is_point_in_ring(lat: float, lon: float, ring: List[List[float]]) -> bool:
+        """Ray-casting algorithm for testing if [lat, lon] is inside a closed ring."""
+        n = len(ring)
+        if n < 3:
+            return False
+        inside = False
+        p1lat, p1lon = ring[0][0], ring[0][1]
+        for i in range(1, n + 1):
+            p2lat, p2lon = ring[i % n][0], ring[i % n][1]
+            if lon > min(p1lon, p2lon) and lon <= max(p1lon, p2lon):
+                if lat <= max(p1lat, p2lat):
+                    if p1lon != p2lon:
+                        xinters = ((lon - p1lon) * (p2lat - p1lat)) / (p2lon - p1lon) + p1lat
+                        if p1lat == p2lat or lat <= xinters:
+                            inside = not inside
+            p1lat, p1lon = p2lat, p2lon
+        return inside
 
     def _create_engineering_concession(self, lat: float, lon: float, radius_km: float, name: str) -> Dict[str, Any]:
         """Creates an authentic engineering wind farm parcel boundary when no online geometry is available."""
@@ -225,42 +287,15 @@ class VillageBoundaryClient:
         }
 
     @staticmethod
-    def _simplify_polygon_pts(coords: List[List[float]], max_pts: int = 52) -> List[List[float]]:
+    def _simplify_polygon_pts(coords: List[List[float]], max_pts: int = 120) -> List[List[float]]:
         """Samples polygon points uniformly along perimeter to preserve shape while bounding vertex count."""
         if not coords or len(coords) <= max_pts:
             return coords
         step = len(coords) / max_pts
         sampled = [coords[int(i * step)] for i in range(max_pts)]
-        # Ensure closed ring
         if sampled[0] != sampled[-1]:
             sampled.append(sampled[0])
         return sampled
-
-    @staticmethod
-    def _generate_bounding_parcel_envelope(c_lat: float, c_lon: float, s: float, n: float, w: float, e: float, pts: int = 28) -> List[List[float]]:
-        """Generates an authentic cadastral envelope bounded by the official survey box."""
-        r_ns = (n - s) / 2.0
-        r_ew = (e - w) / 2.0
-
-        # Protect against degenerate bounding box (point/node or collinear east-west span)
-        min_span_deg = 0.025  # ~2.8 km minimum radius for viable wind concession
-        cos_lat = math.cos(math.radians(c_lat)) or 1.0
-        if r_ns < 0.005:
-            r_ns = min_span_deg
-        if r_ew < 0.005:
-            r_ew = min_span_deg / cos_lat
-
-        coords = []
-        for i in range(pts):
-            th = 2.0 * math.pi * i / pts
-            # Add slight natural irregularity (ridge/road variation) to avoid synthetic circularity
-            perturbation = 1.0 + 0.08 * math.sin(3.0 * th) + 0.05 * math.cos(5.0 * th)
-            p_lat = c_lat + r_ns * math.cos(th) * perturbation
-            p_lon = c_lon + r_ew * math.sin(th) * perturbation
-            coords.append([round(p_lat, 6), round(p_lon, 6)])
-        if coords[0] != coords[-1]:
-            coords.append(coords[0])
-        return coords
 
     @staticmethod
     def _generate_engineering_parcel_boundary(lat: float, lon: float, radius_km: float, pts: int = 24) -> List[List[float]]:

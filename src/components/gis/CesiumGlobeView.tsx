@@ -367,8 +367,10 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
 
     if (!turbines || turbines.length === 0) return;
 
-    // Canonical upwind alignment: glTF model +Z rotor disk faces directly into oncoming meteorological wind vector
-    const turbineHeadingRad = Cesium.Math.toRadians((windDirectionDeg + 180) % 360);
+    // Canonical upwind HAWT alignment: GlTF model axis correction maps glTF Z (rotor facing) to Cesium East (+X, 90 deg clockwise from North).
+    // To face strictly UPWIND directly into the oncoming meteorological wind vector (windDirectionDeg):
+    const gltfHeadingDeg = (windDirectionDeg - 90 + 360) % 360;
+    const turbineHeadingRad = Cesium.Math.toRadians(gltfHeadingDeg);
     const modelScale = Math.max(0.8, Math.min(1.8, rotorDiameter / 120.0));
 
     // Downwind vector
@@ -433,22 +435,6 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
         },
       });
 
-      // 1c. Nacelle Housing at Hub Height
-      const nacelleEntity = viewer.entities.add({
-        turbineIndex: idx,
-        name: `Nacelle ${labelText}`,
-        position: Cesium.Cartesian3.fromDegrees(t.lon, t.lat, surfaceElev + hubHeight),
-        orientation: orientation,
-        box: {
-          dimensions: new Cesium.Cartesian3(4.2, 13.0, 4.4),
-          material: isSelected
-            ? Cesium.Color.fromCssColorString('#FFD21F')
-            : Cesium.Color.fromCssColorString('#E2E8F0'),
-          shadows: Cesium.ShadowMode.ENABLED,
-          heightReference: Cesium.HeightReference.NONE,
-        },
-      });
-
       // 2. Heavy Structural Concrete Foundation Pad (R=16m)
       const groundRing = viewer.entities.add({
         turbineIndex: idx,
@@ -480,7 +466,7 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
         },
       });
 
-      entitiesRef.current.turbines.push(turbineEntity, mastEntity, nacelleEntity, groundRing, label);
+      entitiesRef.current.turbines.push(turbineEntity, mastEntity, groundRing, label);
 
       // 4. Downwind Horizontal Aerodynamic Wake Plume Footprint (Draped on Terrain)
       // Physically derived Jensen expanding wake corridor (8.5D length, k=0.05 decay)
@@ -689,6 +675,66 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
     <div className={`relative w-full h-full overflow-hidden ${className}`}>
       {/* Cesium 3D WebGL Canvas Container */}
       <div id={containerId} className="w-full h-full absolute inset-0 bg-slate-950" />
+
+      {/* Floating Apple Liquid Glass Wind Telemetry & Turbine Yaw Indicator */}
+      <div 
+        id="cesium-wind-telemetry-badge"
+        className="absolute top-36 left-2 sm:top-16 sm:left-3 md:top-16 md:left-4 z-30 flex flex-col gap-1.5 p-2 sm:p-2.5 rounded-2xl bg-slate-950/85 backdrop-blur-2xl border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.5)] pointer-events-auto text-white max-w-[280px]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-1.5">
+          <div className="flex items-center gap-1.5">
+            <div className="w-5 h-5 rounded-lg bg-amber-400/20 border border-amber-400/40 flex items-center justify-center">
+              <Wind className="w-3 h-3 text-amber-400" />
+            </div>
+            <span className="text-[11px] font-bold tracking-tight text-white">Wind & Yaw Telemetry</span>
+          </div>
+          <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-[10px] font-mono text-emerald-400">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span>IEC 61400</span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2.5 pt-0.5">
+          {/* Animated 360-degree Compass Rose */}
+          <div className="relative w-8 h-8 rounded-full border border-white/20 bg-white/5 flex items-center justify-center shrink-0">
+            <span className="absolute top-0 text-[7px] text-slate-400 font-bold leading-none">N</span>
+            <svg
+              className="w-5 h-5 text-amber-400 transition-transform duration-500 drop-shadow-[0_0_4px_rgba(251,191,36,0.6)]"
+              style={{ transform: `rotate(${windDirectionDeg}deg)` }}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+            >
+              <line x1="12" y1="19" x2="12" y2="5" />
+              <polyline points="5 12 12 5 19 12" />
+            </svg>
+          </div>
+
+          <div className="flex flex-col text-left font-mono">
+            <div className="flex items-baseline gap-1 text-xs font-bold text-white">
+              <span>{windSpeedMps.toFixed(1)} m/s</span>
+              <span className="text-slate-400 text-[10px]">·</span>
+              <span className="text-amber-300 font-bold">{windDirectionDeg}°</span>
+              <span className="text-[10px] text-slate-400">
+                {windDirectionDeg >= 337.5 || windDirectionDeg < 22.5 ? 'N' :
+                 windDirectionDeg < 67.5 ? 'NE' :
+                 windDirectionDeg < 112.5 ? 'E' :
+                 windDirectionDeg < 157.5 ? 'SE' :
+                 windDirectionDeg < 202.5 ? 'S' :
+                 windDirectionDeg < 247.5 ? 'SW' :
+                 windDirectionDeg < 292.5 ? 'W' : 'NW'}
+              </span>
+            </div>
+            <div className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
+              <span>Rotor Yaw: {windDirectionDeg}°</span>
+              <span className="text-slate-400">·</span>
+              <span className="text-slate-300">Upwind Aligned</span>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Floating 3D Engineering & Flow Controls Dock (Top-Right, Non-Overlapping) */}
       <div 

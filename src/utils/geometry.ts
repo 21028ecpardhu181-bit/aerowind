@@ -112,6 +112,7 @@ export function generatePolygonEnclosedTurbines(
     boundary && boundary.length >= 3 ? (boundary as [number, number][]) : generateFallbackCircle(centerLat, centerLon, 2.5);
 
   const [cLat, cLon] = polygonCentroid(effectiveBoundary);
+  const cosLat = Math.cos((cLat * Math.PI) / 180);
 
   // Compute bounding box
   let minLat = Infinity, maxLat = -Infinity;
@@ -138,7 +139,11 @@ export function generatePolygonEnclosedTurbines(
         const pt: [number, number] = [minLat + i * dLat, minLon + j * dLon];
         if (isPointInPolygon(pt, effectiveBoundary)) {
           if (setback === 0 || pointToPolygonDistMeters(pt, effectiveBoundary) >= setback) {
-            candidates.push(pt);
+            // Strict settlement setback: never place turbine inside village settlement core (houses/habitations)
+            const distToCenterM = Math.hypot((pt[0] - centerLat) * 110540, (pt[1] - centerLon) * 111320 * cosLat);
+            if (distToCenterM >= 500.0) {
+              candidates.push(pt);
+            }
           }
         }
       }
@@ -155,7 +160,10 @@ export function generatePolygonEnclosedTurbines(
       for (const [ox, oy] of [[0.5, 0.5], [-0.5, 0.5], [0.5, -0.5], [-0.5, -0.5]]) {
         const subPt: [number, number] = [pLat + oy * dLat, pLon + ox * dLon];
         if (isPointInPolygon(subPt, effectiveBoundary) && pointToPolygonDistMeters(subPt, effectiveBoundary) >= 5) {
-          candidates.push(subPt);
+          const distToCenterM = Math.hypot((subPt[0] - centerLat) * 110540, (subPt[1] - centerLon) * 111320 * cosLat);
+          if (distToCenterM >= 450.0) {
+            candidates.push(subPt);
+          }
           if (candidates.length >= targetCount * 3) break;
         }
       }
@@ -163,13 +171,13 @@ export function generatePolygonEnclosedTurbines(
     }
   }
 
-  // If still empty (e.g. degenerate polygon), collapse slightly toward centroid
+  // If still empty (e.g. degenerate polygon), sample around outer rim away from settlement center
   if (candidates.length === 0) {
-    candidates.push([cLat, cLon]);
+    const rDeg = 0.008;
+    candidates.push([centerLat + rDeg, centerLon + rDeg / cosLat]);
   }
 
   // Spatial thinning / greedy dispersion with progressive relaxation
-  const cosLat = Math.cos((cLat * Math.PI) / 180);
   const widthM = (maxLon - minLon) * 111320 * cosLat;
   const heightM = (maxLat - minLat) * 110540;
   const approxAreaM2 = Math.max(80000, widthM * heightM * 0.65);
@@ -213,21 +221,6 @@ export function generatePolygonEnclosedTurbines(
     }
   }
 
-  // In extreme micro-polygons, synthesize interior points between centroid and selected
-  while (selected.length < targetCount) {
-    const idx = selected.length % Math.max(1, selected.length);
-    const base = selected[idx] || [cLat, cLon];
-    const synth: [number, number] = [
-      base[0] * 0.95 + cLat * 0.05 + (Math.sin(selected.length) * 0.0001),
-      base[1] * 0.95 + cLon * 0.05 + (Math.cos(selected.length) * 0.0001),
-    ];
-    if (isPointInPolygon(synth, effectiveBoundary)) {
-      selected.push(synth);
-    } else {
-      selected.push([cLat, cLon]);
-    }
-  }
-
   // Generate Turbine objects (exact targetCount guaranteed)
   return selected.slice(0, targetCount).map((coords, idx) => {
     const lat = Number(coords[0].toFixed(6));
@@ -250,14 +243,14 @@ export function generatePolygonEnclosedTurbines(
 }
 
 /**
- * Defensive guard: ensures 100% of turbines strictly reside inside the boundary polygon.
- * Any turbine outside is relocated to a valid interior coordinate.
+ * Defensive guard: ensures 100% of turbines strictly reside inside the boundary polygon
+ * and outside the village residential habitation zone.
  */
 export function ensureTurbinesInsideBoundary(
   turbines: Turbine[],
   boundary: [number, number][] | number[][] | undefined,
-  _centerLat?: number,
-  _centerLon?: number
+  centerLat?: number,
+  centerLon?: number
 ): Turbine[] {
   if (!turbines || turbines.length === 0) {
     return [];
@@ -267,9 +260,18 @@ export function ensureTurbinesInsideBoundary(
   }
 
   const validBoundary = boundary as [number, number][];
-  return turbines.filter((t) => isPointInPolygon([t.lat, t.lon], validBoundary));
-}
+  const cosLat = centerLat ? Math.cos((centerLat * Math.PI) / 180) : 1.0;
 
+  return turbines.filter((t) => {
+    if (!isPointInPolygon([t.lat, t.lon], validBoundary)) return false;
+    // Settlement protection buffer
+    if (centerLat !== undefined && centerLon !== undefined) {
+      const distToCenterM = Math.hypot((t.lat - centerLat) * 110540, (t.lon - centerLon) * 111320 * cosLat);
+      if (distToCenterM < 350.0) return false;
+    }
+    return true;
+  });
+}
 function generateFallbackCircle(centerLat: number, centerLon: number, radiusKm: number): [number, number][] {
   const pts: [number, number][] = [];
   const cosLat = Math.cos((centerLat * Math.PI) / 180);

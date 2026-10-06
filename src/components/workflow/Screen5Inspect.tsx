@@ -400,13 +400,15 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
             <span>Optimize</span>
           </button>
 
-          <div
-            id="s5-indicator-text"
-            className="hidden sm:flex px-3.5 py-1.5 rounded-xl bg-white/95 backdrop-blur-xl border border-white/90 text-xs font-bold text-slate-900 shadow-glass items-center gap-2"
-          >
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>{site.shortName || site.name} · {activeTurbines.length} Turbines (WS-QAOA)</span>
-          </div>
+          {!is3DActive && (
+            <div
+              id="s5-indicator-text"
+              className="hidden sm:flex px-3.5 py-1.5 rounded-xl bg-white/95 backdrop-blur-xl border border-white/90 text-xs font-bold text-slate-900 shadow-glass items-center gap-2"
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>{site.shortName || site.name} · {activeTurbines.length} Turbines (WS-QAOA)</span>
+            </div>
+          )}
         </div>
 
         {/* Right: Controls (Basemap, 3D, Wakes, Presets) */}

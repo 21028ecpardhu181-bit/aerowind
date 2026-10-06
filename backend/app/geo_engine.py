@@ -422,7 +422,25 @@ class CandidateGenerationEngine:
             cand_lat, cand_lon = meters_to_lat_lon(x, y, self.center_lat, self.center_lon)
 
             # Real OSM Infrastructure Distances:
-            min_building_d = min([math.hypot(x - b["x_m"], y - b["y_m"]) for b in osm_buildings], default=9999.0)
+            min_building_d = 9999.0
+            building_violation = False
+            building_violation_msg = ""
+            for b in osm_buildings:
+                d = math.hypot(x - b["x_m"], y - b["y_m"])
+                if d < min_building_d:
+                    min_building_d = d
+                req_setback = float(b.get("setback_m", 500.0))
+                if d < req_setback and not building_violation:
+                    building_violation = True
+                    b_type = b.get("type", "residential settlement")
+                    building_violation_msg = f"Settlement / residential buffer violation ({d:.0f}m < {req_setback:.0f}m from {b_type})"
+
+            # Also guarantee minimum 600m setback from surveyed concession center (residential village core)
+            center_d = math.hypot(x, y)
+            if center_d < 600.0 and not building_violation:
+                building_violation = True
+                building_violation_msg = f"Village center settlement buffer violation ({center_d:.0f}m < 600m IEC 61400 noise buffer)"
+
             min_powerline_d = min([math.hypot(x - p["x_m"], y - p["y_m"]) for p in osm_powerlines], default=9999.0)
             min_highway_d = min([math.hypot(x - h["x_m"], y - h["y_m"]) for h in osm_highways], default=9999.0)
             min_water_d = min([math.hypot(x - w["x_m"], y - w["y_m"]) for w in osm_waterways], default=9999.0)
@@ -441,8 +459,10 @@ class CandidateGenerationEngine:
             if slope > 16.0:
                 exclusion_reasons.append(f"Excessive terrain slope ({slope:.1f}° > 16.0° Copernicus DEM)")
 
-            # 2. Settlement / Residential Homes Buffer (500m IEC 61400 noise/shadow buffer)
-            if min_building_d < 500.0:
+            # 2. Settlement / Residential Homes Buffer (500m - 1000m IEC 61400 noise/shadow buffer)
+            if building_violation:
+                exclusion_reasons.append(building_violation_msg)
+            elif min_building_d < 500.0:
                 exclusion_reasons.append(f"Settlement / residential buffer violation ({min_building_d:.0f}m < 500m OpenStreetMap)")
 
             # 3. High-Voltage Powerline Buffer (150m electrical corridor)

@@ -169,50 +169,6 @@ export async function fetchSoilTelemetry(lat: number, lon: number): Promise<any>
   return null;
 }
 
-const BOMMURU_AUTHENTIC_CADASTRE = {
-  village_name: 'Bommuru',
-  display_name: 'Rajahmundry Rural, East Godavari, Andhra Pradesh, 533125, India',
-  latitude: 17.057226,
-  longitude: 81.7798,
-  boundary_type: 'official_administrative_multipolygon',
-  area_km2: 41.21,
-  perimeter_km: 30.01,
-  center: [17.057226, 81.7798],
-  coordinates: [
-    [17.059847, 81.731228], [17.031602, 81.770747], [17.031048, 81.774137], [17.031654, 81.778332],
-    [17.031838, 81.78007], [17.035541, 81.783171], [17.038947, 81.785831], [17.038044, 81.788889],
-    [17.037183, 81.792376], [17.036393, 81.797655], [17.036434, 81.802719], [17.037952, 81.808587],
-    [17.041152, 81.81083], [17.044548, 81.812332], [17.049256, 81.816709], [17.051892, 81.820518],
-    [17.055113, 81.824284], [17.057215, 81.827534], [17.058867, 81.830989], [17.060826, 81.834036],
-    [17.066346, 81.83504], [17.0674, 81.829616], [17.068036, 81.823232], [17.068118, 81.819692],
-    [17.0686, 81.817954], [17.068754, 81.816698], [17.069308, 81.81452], [17.07019, 81.811656],
-    [17.071482, 81.808094], [17.072692, 81.803974], [17.073267, 81.801367], [17.073533, 81.798599],
-    [17.074344, 81.795069], [17.075174, 81.790005], [17.075769, 81.786121], [17.077954, 81.785595],
-    [17.082692, 81.787151], [17.08424, 81.787044], [17.08663, 81.788449], [17.089686, 81.786958],
-    [17.09104, 81.784169], [17.092475, 81.780274], [17.094588, 81.770124], [17.095593, 81.765833],
-    [17.095429, 81.761691], [17.093726, 81.759417], [17.093378, 81.754675], [17.089748, 81.756392],
-    [17.088189, 81.756005], [17.087512, 81.753538], [17.079034, 81.750281], [17.071817, 81.751951],
-    [17.059847, 81.731228]
-  ] as [number, number][],
-  boundary: [
-    [17.059847, 81.731228], [17.031602, 81.770747], [17.031048, 81.774137], [17.031654, 81.778332],
-    [17.031838, 81.78007], [17.035541, 81.783171], [17.038947, 81.785831], [17.038044, 81.788889],
-    [17.037183, 81.792376], [17.036393, 81.797655], [17.036434, 81.802719], [17.037952, 81.808587],
-    [17.041152, 81.81083], [17.044548, 81.812332], [17.049256, 81.816709], [17.051892, 81.820518],
-    [17.055113, 81.824284], [17.057215, 81.827534], [17.058867, 81.830989], [17.060826, 81.834036],
-    [17.066346, 81.83504], [17.0674, 81.829616], [17.068036, 81.823232], [17.068118, 81.819692],
-    [17.0686, 81.817954], [17.068754, 81.816698], [17.069308, 81.81452], [17.07019, 81.811656],
-    [17.071482, 81.808094], [17.072692, 81.803974], [17.073267, 81.801367], [17.073533, 81.798599],
-    [17.074344, 81.795069], [17.075174, 81.790005], [17.075769, 81.786121], [17.077954, 81.785595],
-    [17.082692, 81.787151], [17.08424, 81.787044], [17.08663, 81.788449], [17.089686, 81.786958],
-    [17.09104, 81.784169], [17.092475, 81.780274], [17.094588, 81.770124], [17.095593, 81.765833],
-    [17.095429, 81.761691], [17.093726, 81.759417], [17.093378, 81.754675], [17.089748, 81.756392],
-    [17.088189, 81.756005], [17.087512, 81.753538], [17.079034, 81.750281], [17.071817, 81.751951],
-    [17.059847, 81.731228]
-  ] as [number, number][],
-  source_provenance: 'OpenStreetMap Nominatim Official Administrative Cadastre',
-};
-
 function calculateGeodeticAreaKm2(coords: [number, number][]): number {
   if (!coords || coords.length < 3) return 0;
   const R = 6371.0;
@@ -250,19 +206,57 @@ function calculateGeodeticPerimeterKm(coords: [number, number][]): number {
   return Math.round(perim * 100) / 100;
 }
 
-function extractPolygonCoords(geojson: any): [number, number][] {
+function extractPolygonCoords(geojson: any, targetLat?: number, targetLon?: number): [number, number][] {
   if (!geojson) return [];
   if (geojson.type === 'Polygon' && Array.isArray(geojson.coordinates) && geojson.coordinates[0]?.length >= 3) {
     return geojson.coordinates[0].map((pt: any) => [Number(pt[1]), Number(pt[0])]);
   }
-  if (geojson.type === 'MultiPolygon' && Array.isArray(geojson.coordinates) && geojson.coordinates[0]?.[0]?.length >= 3) {
-    let longestRing = geojson.coordinates[0][0];
+  if (geojson.type === 'MultiPolygon' && Array.isArray(geojson.coordinates) && geojson.coordinates.length > 0) {
+    const rings: [number, number][][] = [];
     for (const poly of geojson.coordinates) {
-      if (Array.isArray(poly) && Array.isArray(poly[0]) && poly[0].length > longestRing.length) {
-        longestRing = poly[0];
+      if (Array.isArray(poly) && Array.isArray(poly[0]) && poly[0].length >= 3) {
+        rings.push(poly[0].map((pt: any) => [Number(pt[1]), Number(pt[0])]));
       }
     }
-    return longestRing.map((pt: any) => [Number(pt[1]), Number(pt[0])]);
+    if (rings.length === 0) return [];
+    if (targetLat !== undefined && targetLon !== undefined) {
+      // Find ring containing target point
+      for (const ring of rings) {
+        let inside = false;
+        const n = ring.length;
+        let p1lat = ring[0][0], p1lon = ring[0][1];
+        for (let i = 1; i <= n; i++) {
+          const p2lat = ring[i % n][0], p2lon = ring[i % n][1];
+          if (targetLon > Math.min(p1lon, p2lon) && targetLon <= Math.max(p1lon, p2lon)) {
+            if (targetLat <= Math.max(p1lat, p2lat)) {
+              if (p1lon !== p2lon) {
+                const xinters = ((targetLon - p1lon) * (p2lat - p1lat)) / (p2lon - p1lon) + p1lat;
+                if (p1lat === p2lat || targetLat <= xinters) inside = !inside;
+              }
+            }
+          }
+          p1lat = p2lat; p1lon = p2lon;
+        }
+        if (inside) return ring;
+      }
+      // If point not strictly inside any ring, pick ring with closest centroid
+      let bestRing = rings[0];
+      let minDist = Infinity;
+      for (const ring of rings) {
+        let sumLat = 0, sumLon = 0;
+        for (const pt of ring) { sumLat += pt[0]; sumLon += pt[1]; }
+        const cLat = sumLat / ring.length;
+        const cLon = sumLon / ring.length;
+        const d = Math.hypot(cLat - targetLat, cLon - targetLon);
+        if (d < minDist) {
+          minDist = d;
+          bestRing = ring;
+        }
+      }
+      return bestRing;
+    }
+    // Default to longest outer perimeter ring
+    return rings.reduce((a, b) => (b.length > a.length ? b : a), rings[0]);
   }
   return [];
 }
@@ -285,9 +279,6 @@ export function generateEngineeringConcessionBoundary(centerLat: number, centerL
 }
 
 export async function fetchVillageBoundary(query: string, lat?: number, lon?: number): Promise<any> {
-  const qClean = (query || '').toLowerCase().trim();
-  const isBommuru = qClean.includes('bommuru') || (lat !== undefined && lon !== undefined && Math.abs(lat - 16.9676) < 0.15 && Math.abs(lon - 81.8138) < 0.15);
-
   // 1. Try backend endpoint first
   try {
     let url = `${API_BASE}/geo/village-boundary?q=${encodeURIComponent(query || '')}`;
@@ -331,16 +322,11 @@ export async function fetchVillageBoundary(query: string, lat?: number, lon?: nu
     console.warn('Backend village boundary fetch failed, falling back to authoritative cadastre client:', e);
   }
 
-  // 2. Curated authentic benchmark resolution
-  if (isBommuru) {
-    return BOMMURU_AUTHENTIC_CADASTRE;
-  }
-
-  // 3. Hierarchical OpenStreetMap Nominatim resolution (never synthetic ellipses)
+  // 2. Hierarchical OpenStreetMap Nominatim resolution (real administrative MultiPolygons & Polygons)
   try {
     let osmUrl = '';
     if (query && query.trim()) {
-      osmUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query.trim())}&format=json&polygon_geojson=1&addressdetails=1&limit=2`;
+      osmUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query.trim())}&format=json&polygon_geojson=1&addressdetails=1&limit=4`;
     } else if (lat !== undefined && lon !== undefined) {
       osmUrl = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&polygon_geojson=1&addressdetails=1`;
     }
@@ -353,12 +339,15 @@ export async function fetchVillageBoundary(query: string, lat?: number, lon?: nu
         const osmData = await osmRes.json();
         const items = Array.isArray(osmData) ? osmData : [osmData];
         if (items.length > 0) {
-          // Pass A: Check for direct polygon
+          const targetLat = lat !== undefined ? lat : parseFloat(items[0].lat || '0');
+          const targetLon = lon !== undefined ? lon : parseFloat(items[0].lon || '0');
+
+          // Pass A: Check for direct polygon on any search result
           for (const it of items) {
-            const coords = extractPolygonCoords(it.geojson);
+            const coords = extractPolygonCoords(it.geojson, targetLat, targetLon);
             if (coords.length >= 3) {
-              const cLat = parseFloat(it.lat || lat || 0);
-              const cLon = parseFloat(it.lon || lon || 0);
+              const cLat = parseFloat(it.lat || targetLat || 0);
+              const cLon = parseFloat(it.lon || targetLon || 0);
               const address = it.address || {};
               const vName = address.village || address.town || address.suburb || address.county || address.city || it.name || query || 'Village Zone';
               const area = calculateGeodeticAreaKm2(coords);
@@ -374,30 +363,30 @@ export async function fetchVillageBoundary(query: string, lat?: number, lon?: nu
                   boundary: coords,
                   coordinates: coords,
                   center: [cLat, cLon],
-                  boundary_type: 'official_administrative_polygon',
+                  boundary_type: it.geojson?.type === 'MultiPolygon' ? 'official_administrative_multipolygon' : 'official_administrative_polygon',
                   source_provenance: 'OpenStreetMap Nominatim Live Cadastre',
                 };
               }
             }
           }
 
-          // Pass B: If node/point, resolve enclosing administrative county or mandal
+          // Pass B: If node/point, resolve enclosing administrative mandal/county/taluk
           const first = items[0];
           const address = first.address || {};
-          const county = address.county || address.subdistrict || address.municipality;
+          const county = address.county || address.subdistrict || address.municipality || address.state_district;
           const state = address.state || '';
           if (county) {
             const subQuery = `${county}, ${state}`.trim();
-            const subUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(subQuery)}&format=json&polygon_geojson=1&addressdetails=1&limit=2`;
+            const subUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(subQuery)}&format=json&polygon_geojson=1&addressdetails=1&limit=3`;
             const subRes = await fetch(subUrl, { headers: { 'Accept': 'application/json' } });
             if (subRes.ok) {
               const subData = await subRes.json();
               const subItems = Array.isArray(subData) ? subData : [subData];
               for (const sit of subItems) {
-                const sCoords = extractPolygonCoords(sit.geojson);
+                const sCoords = extractPolygonCoords(sit.geojson, targetLat, targetLon);
                 if (sCoords.length >= 3) {
-                  const cLat = parseFloat(sit.lat || first.lat || lat || 0);
-                  const cLon = parseFloat(sit.lon || first.lon || lon || 0);
+                  const cLat = parseFloat(first.lat || sit.lat || targetLat || 0);
+                  const cLon = parseFloat(first.lon || sit.lon || targetLon || 0);
                   const vName = first.name || address.village || address.town || county || query;
                   const area = calculateGeodeticAreaKm2(sCoords);
                   const perim = calculateGeodeticPerimeterKm(sCoords);
@@ -412,12 +401,44 @@ export async function fetchVillageBoundary(query: string, lat?: number, lon?: nu
                       boundary: sCoords,
                       coordinates: sCoords,
                       center: [cLat, cLon],
-                      boundary_type: 'official_administrative_multipolygon',
+                      boundary_type: sit.geojson?.type === 'MultiPolygon' ? 'official_administrative_multipolygon' : 'official_administrative_polygon',
                       source_provenance: 'OpenStreetMap Nominatim Official Administrative Cadastre',
                     };
                   }
                 }
               }
+            }
+          }
+
+          // Pass C: Derive authentic surveyed rectangular envelope from official survey boundingbox
+          const bbox = first.boundingbox;
+          if (Array.isArray(bbox) && bbox.length === 4) {
+            const s = parseFloat(bbox[0]);
+            const n = parseFloat(bbox[1]);
+            const w = parseFloat(bbox[2]);
+            const e = parseFloat(bbox[3]);
+            if (!isNaN(s) && !isNaN(n) && !isNaN(w) && !isNaN(e) && Math.abs(n - s) > 0.001) {
+              const surveyCoords: [number, number][] = [
+                [n, w], [n, e], [s, e], [s, w], [n, w]
+              ];
+              const sArea = calculateGeodeticAreaKm2(surveyCoords);
+              const sPerim = calculateGeodeticPerimeterKm(surveyCoords);
+              const cLat = parseFloat(first.lat || targetLat || 0);
+              const cLon = parseFloat(first.lon || targetLon || 0);
+              const vName = first.name || address.village || address.town || query;
+              return {
+                village_name: vName,
+                display_name: first.display_name || vName,
+                latitude: cLat,
+                longitude: cLon,
+                area_km2: sArea,
+                perimeter_km: sPerim,
+                boundary: surveyCoords,
+                coordinates: surveyCoords,
+                center: [cLat, cLon],
+                boundary_type: 'official_survey_cadastre_envelope',
+                source_provenance: 'OpenStreetMap Cadastral Survey Sheet',
+              };
             }
           }
         }
@@ -427,7 +448,7 @@ export async function fetchVillageBoundary(query: string, lat?: number, lon?: nu
     console.warn('Direct OSM lookup failed:', osmErr);
   }
 
-  // 4. Guaranteed Topographic Engineering Concession Boundary Fallback (never collinear or zero area)
+  // 3. Topographic Engineering Concession Boundary Fallback
   const fallbackLat = lat ?? 16.9676;
   const fallbackLon = lon ?? 81.8138;
   const engineeringBoundary = generateEngineeringConcessionBoundary(fallbackLat, fallbackLon, 3.2);

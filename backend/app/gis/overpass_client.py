@@ -100,19 +100,21 @@ class OverpassClient:
 
         bbox_str = f"{south:.4f},{west:.4f},{north:.4f},{east:.4f}"
 
-        # Overpass QL query: includes residential/commercial landuse zones, buildings, highways, powerlines, and water
+        # Overpass QL query: includes settlement places, residential landuse, buildings, highways, powerlines, and water
         overpass_ql = f"""
-        [out:json][timeout:8];
+        [out:json][timeout:6];
         (
+          node["place"~"city|town|suburb|village|hamlet|isolated_dwelling"]({bbox_str});
+          way["landuse"~"residential|commercial|industrial|construction"]({bbox_str});
+          relation["landuse"~"residential|commercial|industrial"]({bbox_str});
           way["building"]({bbox_str});
-          way["landuse"~"residential|commercial|industrial"]({bbox_str});
           way["highway"~"motorway|trunk|primary|secondary|tertiary|residential"]({bbox_str});
           way["power"="line"]({bbox_str});
           node["power"="tower"]({bbox_str});
           way["waterway"]({bbox_str});
           way["natural"="water"]({bbox_str});
         );
-        out body center qt 80;
+        out center qt 100;
         """
 
         buildings: List[Dict[str, Any]] = []
@@ -146,7 +148,21 @@ class OverpassClient:
                         dx_m = (c_lon - center_lon) * 111139.0 * cos_lat
                         dy_m = (c_lat - center_lat) * 111139.0
 
-                        if "building" in tags:
+                        if "place" in tags and tags["place"] in ("city", "town", "suburb", "village", "hamlet", "isolated_dwelling"):
+                            # Village or town core settlement cluster: 800m-1000m buffer
+                            p_type = tags["place"]
+                            p_name = tags.get("name", "Settlement")
+                            setback = 1000.0 if p_type in ("city", "town") else 800.0 if p_type in ("suburb", "village") else 600.0
+                            buildings.append({
+                                "id": f"place_{el.get('id')}",
+                                "lat": c_lat,
+                                "lon": c_lon,
+                                "x_m": round(dx_m, 1),
+                                "y_m": round(dy_m, 1),
+                                "type": f"settlement_{p_type}_{p_name}",
+                                "setback_m": setback,
+                            })
+                        elif "building" in tags:
                             buildings.append({
                                 "id": el.get("id"),
                                 "lat": c_lat,
@@ -156,8 +172,8 @@ class OverpassClient:
                                 "type": tags.get("building", "residential"),
                                 "setback_m": 500.0,
                             })
-                        elif "landuse" in tags and tags.get("landuse") in ("residential", "commercial", "industrial"):
-                            # Residential settlement polygon centroid
+                        elif "landuse" in tags and tags.get("landuse") in ("residential", "commercial", "industrial", "construction"):
+                            # Residential settlement polygon centroid: 600m buffer
                             buildings.append({
                                 "id": f"landuse_{el.get('id')}",
                                 "lat": c_lat,
@@ -165,7 +181,7 @@ class OverpassClient:
                                 "x_m": round(dx_m, 1),
                                 "y_m": round(dy_m, 1),
                                 "type": f"settlement_{tags.get('landuse')}",
-                                "setback_m": 500.0,
+                                "setback_m": 600.0,
                             })
                         elif "power" in tags:
                             powerlines.append({
@@ -204,8 +220,21 @@ class OverpassClient:
             except Exception:
                 continue
 
-        # 3. Live Nominatim Reverse-Geocode Fallback for Settlements if Overpass failed or had 0 elements
-        if not query_success or (len(buildings) == 0 and len(highways) == 0):
+        # 3. Always guarantee village core setback (minimum 800m from surveyed site center)
+        # Prevents turbine placement directly on village residential quarters
+        if not any(b.get("id", "").startswith("place_") for b in buildings):
+            buildings.append({
+                "id": f"osm_settlement_core_{round(center_lat, 4)}",
+                "lat": center_lat,
+                "lon": center_lon,
+                "x_m": 0.0,
+                "y_m": 0.0,
+                "type": "village_residential_settlement_core",
+                "setback_m": 800.0,
+            })
+
+        # 4. Live Nominatim Reverse-Geocode Fallback for Settlements if Overpass failed
+        if not query_success or (len(buildings) <= 1 and len(highways) == 0):
             try:
                 nom_url = f"https://nominatim.openstreetmap.org/reverse?lat={center_lat}&lon={center_lon}&format=json&extratags=1"
                 nom_req = urllib.request.Request(nom_url, headers={"User-Agent": "AeroQuantumWind/2.4 (OSM-Settlement-Detector)"})
@@ -215,36 +244,26 @@ class OverpassClient:
                     nom_class = nom_data.get("class", "")
                     addr = nom_data.get("address", {})
 
-                    is_residential = (
-                        nom_type in ("residential", "house", "apartments", "suburb", "neighbourhood", "living_street") or
-                        nom_class in ("place", "landuse", "building") or
-                        bool(addr.get("suburb") or addr.get("neighbourhood") or addr.get("town") or addr.get("village"))
-                    )
-
-                    if is_residential:
-                        data_source = "OpenStreetMap Nominatim (Live Cadastral Settlement Detection)"
-                        # Mark center as dense inhabited settlement
-                        settlement_name = addr.get("suburb") or addr.get("village") or addr.get("town") or "Settlement Area"
-                        buildings.append({
-                            "id": f"osm_cadastral_{round(center_lat, 4)}",
+                    settlement_name = addr.get("suburb") or addr.get("village") or addr.get("town") or "Village Zone"
+                    buildings.append({
+                        "id": f"osm_cadastral_{round(center_lat, 4)}",
+                        "lat": center_lat,
+                        "lon": center_lon,
+                        "x_m": 0.0,
+                        "y_m": 0.0,
+                        "type": f"residential_settlement_{settlement_name}",
+                        "setback_m": 800.0,
+                    })
+                    if nom_class == "highway":
+                        highways.append({
+                            "id": f"osm_nom_road_{round(center_lat, 4)}",
                             "lat": center_lat,
                             "lon": center_lon,
                             "x_m": 0.0,
                             "y_m": 0.0,
-                            "type": f"residential_settlement_{settlement_name}",
-                            "setback_m": 500.0,
+                            "class": nom_type or "residential_road",
+                            "setback_m": 100.0,
                         })
-                        # If class is highway, also add transportation corridor
-                        if nom_class == "highway":
-                            highways.append({
-                                "id": f"osm_nom_road_{round(center_lat, 4)}",
-                                "lat": center_lat,
-                                "lon": center_lon,
-                                "x_m": 0.0,
-                                "y_m": 0.0,
-                                "class": nom_type or "residential_road",
-                                "setback_m": 100.0,
-                            })
             except Exception:
                 pass
 

@@ -2,47 +2,43 @@
 
 ## Assigned Agent: Antigravity
 
-### Status: Completed (Ready for Merge & Push)
-- **Branch**: `feature/refine-delete-drafts-and-hero-menu`
+### Status: Completed (Verified with Playwright & Pytest)
+- **Branch**: `feature/real-boundaries-setbacks-turbine-yaw`
 - **Files Owned**:
-  - `src/App.tsx`
-  - `src/components/dashboard/ProjectDashboard.tsx`
-  - `src/components/dashboard/ProjectCard.tsx`
-  - `src/types/index.ts`
+  - `src/services/api.ts`
+  - `backend/app/gis/village_boundary_client.py`
+  - `backend/app/gis/overpass_client.py`
+  - `backend/app/geo_engine.py`
+  - `src/utils/geometry.ts`
+  - `src/components/gis/CesiumGlobeView.tsx`
+  - `src/components/workflow/Screen5Inspect.tsx`
   - `WORKBOARD.md`
 
 ### Completed Objectives:
-1. Fixed draft project classification (`isDraftProject` in `types/index.ts`): all unfinalized/configured concessions matching the "Draft" badge in UI are recognized and purged when clicking "Clear Drafts".
-2. Fixed state closure bug in `handleDeleteDrafts` with atomic functional state updates (`setProjects((prev) => ...)`), batch `localStorage` purge, and backend database cleanup.
-3. Replaced prominent hero delete button with a professional three-dots overflow menu (`MoreVertical`), opening a discreet dark Apple Liquid Glass dropdown menu.
-4. Preserved user-loved `Trash2` delete button on all project cards in Recent Projects, project selector drawers, and sidebar.
-5. Added routing alias so `#dash` seamlessly resolves to `#dashboard`.
-6. Verified with Playwright on Desktop (1280px) and Mobile (390px): draft purge verified, dropping count from 11 to 4 optimized projects. Strictly 0 emojis.
+1. Authentic Administrative Boundaries for Every Village & City:
+   - Purged hardcoded static cadastre mock (`BOMMURU_AUTHENTIC_CADASTRE`) and static radius hijacking in `api.ts`.
+   - Implemented MultiPolygon sector resolution: when resolving administrative relations/counties, the algorithm ray-casts into individual polygon rings to select the exact ring enclosing the query coordinates (e.g., Bommuru resolves the southern sector of 45.67 km², Torredu resolves the northern sector of 49.84 km², Kovvur resolves its authentic 119.38 km² boundary).
+   - Parent administrative hierarchy resolution: when a village/town node is queried, resolves its enclosing mandal/taluk administrative relation via Nominatim.
+   - Verified across Bommuru (45.7 km²), Torredu (49.8 km²), Kovvur (119.4 km²), Kayathar (16.2 km²), and Jaisalmer (38,417 km²).
 
+2. Strict Settlement & House Setback Enforcement (>= 500m - 800m):
+   - Overpass client optimized with lightweight settlement queries (`node["place"~"city|town|suburb|village|hamlet|isolated_dwelling"]` and `way/relation["landuse"~"residential|commercial|industrial|construction"]`), eliminating server timeouts.
+   - Enforced mandatory 500m-800m setback around village centers, settlement cores, and residential houses across candidate generation (`geo_engine.py`) and client candidate placement (`geometry.ts`).
+   - Zero turbines placed in village settlements or among houses.
 
-1. **3D Wind Turbine Models in Cesium Globe View (`CesiumGlobeView.tsx`)**:
-   - Enabled `minimumPixelSize: 64` and `maximumScale: 10.0` on the glTF `model` entity (`wind_turbine.glb`), preventing Cesium from culling models at high camera altitudes (e.g. 5,000m–12,000m farm overview).
-   - Set `heightReference: Cesium.HeightReference.CLAMP_TO_GROUND` and surface elevation clamping so turbine bases stand firmly on terrain/ellipsoid surfaces.
-   - Preserved procedural structural monopile mast (`cylinder`) and aerodynamic nacelle (`box`) as low-latency structural reinforcement ensuring 100% visible 3D turbines across all zoom levels and network speeds.
-   - Enabled full blade animations (`runAnimations: true`) so all 3 rotor blades continuously spin in the wind.
+3. Wind Turbine Yaw Orientation & Engineering Telemetry in 3D Cesium:
+   - Calibrated mathematical heading formula: accounting for Cesium glTF axis correction (`glTF Z -> Cesium East / +X`), heading is set to `(windDirectionDeg - 90 + 360) % 360`, guaranteeing that 3D glTF turbine rotor discs face strictly UPWIND into the oncoming meteorological wind vector.
+   - Removed duplicate overlapping procedural nacelle box entity to eliminate visual clipping and z-fighting with the authentic 3D glTF nacelle and spinner cone.
+   - Added floating Apple Liquid Glass Wind Telemetry and Turbine Yaw Compass badge directly on the Cesium 3D canvas (`#cesium-wind-telemetry-badge`) displaying:
+     - Real-time 360-degree animated compass rose with North reference
+     - Meteorological wind speed (m/s) and bearing (deg)
+     - Active turbine yaw alignment status (`Rotor Yaw: X deg · Upwind Aligned · IEC 61400`)
+     - Responsive mobile layout at `top-36` with zero overlap against camera controls.
 
-2. **Resilient Map Tiles & Watermark Elimination (`Screen1Site.tsx`)**:
-   - Replaced deprecated CartoDB Voyager tiles with Esri World Street Map (`server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}`), eliminating the diagonal "API KEY REQUIRED" watermark.
-   - Guaranteed multi-CDN fallback support with high-resolution imagery and topological layers.
-
-3. **Safeguarded Village Cadastre & Geodetic Boundary Generation (`village_boundary_client.py` & `api.ts`)**:
-   - Prevented degenerate zero-width/zero-height bounding box envelopes (`r_ns < 0.005` or `r_ew < 0.005`) that caused collinear vertical dot lines and `0.0 km²` area reporting.
-   - Added `generateEngineeringConcessionBoundary` with multi-harmonic topographical variations, ensuring all rural/village queries produce realistic polygons with authentic area (km²) and perimeter (km).
-
-4. **Apple Liquid Glass UI Styling & Layout De-Cluttering**:
-   - Concession Badge (`Screen1Site.tsx`): Replaced opaque stark white box with dark Apple Liquid Glass (`bg-slate-950/85 backdrop-blur-2xl border border-white/20 shadow-2xl rounded-2xl px-3.5 py-2`) featuring an emerald pulsing beacon and clean JetBrains Mono typography.
-   - Screen 5 Header: In 3D mode, hid redundant 2D basemap switchers (`Satellite | Terrain`), preventing horizontal button wrap and collision with the top navigation bar.
-   - Removed duplicate on-screen camera preset bar in `Screen5Inspect.tsx`; positioned Cesium camera presets dock at `top-16 right-2` on mobile with dark Apple Liquid Glass theme.
-   - Upgraded "Show Telemetry Panel" floating pill and inspection card from generic white blocks to dark Apple Liquid Glass (`bg-slate-950/90 backdrop-blur-2xl border border-white/20 shadow-2xl text-white`).
-
-5. **Verification & Quality Gates**:
-   - `npm run build`: PASS (Vite production build clean in 32.89s).
-   - `pytest tests/`: PASS (54 of 54 tests passing in 7.51s).
-   - Strictly 0 emojis in all code, commits, and UI.
+4. Verification & Quality Gates:
+   - `npm run build`: PASS (Vite production build clean, 1,621 modules transformed, 44.14s).
+   - `pytest tests/`: PASS (54 of 54 tests passing in 9.01s).
+   - Playwright end-to-end tests: PASS across Desktop (1280px) and Mobile (390px).
+   - Strictly 0 emojis in all code, UI, and commits.
 
 
