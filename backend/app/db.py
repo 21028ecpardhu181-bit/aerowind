@@ -24,7 +24,16 @@ import shutil
 
 SEED_DB_PATH = Path(__file__).resolve().parent.parent / "data" / "aeroquantum.db"
 
-if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+if os.environ.get("AEROQUANTUM_DB_PATH"):
+    DB_PATH = Path(os.environ["AEROQUANTUM_DB_PATH"])
+    DB_DIR = DB_PATH.parent
+    DB_DIR.mkdir(parents=True, exist_ok=True)
+    if SEED_DB_PATH.exists() and not DB_PATH.exists():
+        try:
+            shutil.copy2(SEED_DB_PATH, DB_PATH)
+        except Exception as e:
+            print(f"Warning: could not copy seed database to {DB_PATH}: {e}")
+elif os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
     DB_DIR = Path("/tmp/aeroquantum_data")
     DB_DIR.mkdir(parents=True, exist_ok=True)
     DB_PATH = DB_DIR / "aeroquantum.db"
