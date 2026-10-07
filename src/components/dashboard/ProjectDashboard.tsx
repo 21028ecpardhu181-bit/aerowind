@@ -312,7 +312,7 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
                 <div className="flex items-center justify-between">
                   <span className="text-slate-500 font-medium">Soil Bearing Capacity</span>
                   <span className="font-bold text-amber-600 font-mono tabular-nums">
-                    {(project as any).soil_bearing_capacity_kpa || 231.2} kPa ({(project as any).usda_texture_class || 'Clay Loam'})
+                    {(project as any).soil_bearing_capacity_kpa ? `${(project as any).soil_bearing_capacity_kpa} kPa` : 'UNKNOWN'} ({(project as any).usda_texture_class || 'Clay Loam'})
                   </span>
                 </div>
                 <div className="flex items-center justify-between">

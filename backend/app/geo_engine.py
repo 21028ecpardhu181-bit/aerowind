@@ -395,6 +395,8 @@ class CandidateGenerationEngine:
         # Uses real Copernicus DEM elevation and actual spatial slopes
         geo_filtered_candidates: List[Dict[str, Any]] = []
         site_id = 0
+        nearest_overall_b_type = None
+        nearest_overall_b_dist = 9999.0
 
         for x, y in raw_points:
             # Boundary test
@@ -421,7 +423,7 @@ class CandidateGenerationEngine:
             # Geographic coordinates
             cand_lat, cand_lon = meters_to_lat_lon(x, y, self.center_lat, self.center_lon)
 
-            # Real OSM Infrastructure Distances:
+            # Real OSM Infrastructure Distances (strictly mapped features, no synthetic buffers):
             min_building_d = 9999.0
             building_violation = False
             building_violation_msg = ""
@@ -429,18 +431,16 @@ class CandidateGenerationEngine:
                 d = math.hypot(x - b["x_m"], y - b["y_m"])
                 if d < min_building_d:
                     min_building_d = d
+                if d < nearest_overall_b_dist:
+                    nearest_overall_b_dist = d
+                    nearest_overall_b_type = b.get("type", "habitation")
                 raw_sb = b.get("setback_m")
-                req_setback = float(raw_sb if raw_sb is not None else 185.0)
+                # Statutory residential setback: 500m from actual mapped habitation
+                req_setback = float(raw_sb if raw_sb is not None else 500.0)
                 if d < req_setback and not building_violation:
                     building_violation = True
-                    b_type = b.get("type", "residential settlement")
-                    building_violation_msg = f"Settlement / residential buffer violation ({d:.0f}m < {req_setback:.0f}m from {b_type})"
-
-            # Also guarantee minimum 600m setback from surveyed concession center (residential village core)
-            center_d = math.hypot(x, y)
-            if center_d < 600.0 and not building_violation:
-                building_violation = True
-                building_violation_msg = f"Village center settlement buffer violation ({center_d:.0f}m < 600m IEC 61400 noise buffer)"
+                    b_type = b.get("type", "residential habitation")
+                    building_violation_msg = f"Residential screening: TRIGGERED (Feature: {b_type}, Distance: {d:.0f}m < {req_setback:.0f}m)"
 
             min_powerline_d = min([math.hypot(x - p["x_m"], y - p["y_m"]) for p in osm_powerlines], default=9999.0)
             min_highway_d = min([math.hypot(x - h["x_m"], y - h["y_m"]) for h in osm_highways], default=9999.0)
@@ -460,11 +460,11 @@ class CandidateGenerationEngine:
             if slope > 16.0:
                 exclusion_reasons.append(f"Excessive terrain slope ({slope:.1f}° > 16.0° Copernicus DEM)")
 
-            # 2. Settlement / Residential Homes Buffer (500m - 1000m IEC 61400 noise/shadow buffer)
+            # 2. Settlement / Residential Homes Buffer (Statutory 500m setback from mapped habitations)
             if building_violation:
                 exclusion_reasons.append(building_violation_msg)
-            elif min_building_d < 500.0:
-                exclusion_reasons.append(f"Settlement / residential buffer violation ({min_building_d:.0f}m < 500m OpenStreetMap)")
+            elif osm_buildings and min_building_d < 500.0:
+                exclusion_reasons.append(f"Residential screening: TRIGGERED (Feature: residential building, Distance: {min_building_d:.0f}m < 500m)")
 
             # 3. High-Voltage Powerline Buffer (150m electrical corridor)
             if min_powerline_d < 150.0:
@@ -497,10 +497,6 @@ class CandidateGenerationEngine:
 
             if wind_resource < 4.0:
                 exclusion_reasons.append(f"Sub-cut-in wind resource ({wind_resource:.1f} m/s < 4.0 m/s)")
-
-            # Check settlement exclusion if urban / residential area detected
-            if wc_res.get("is_settlement_detected") and min_building_d < 800.0:
-                exclusion_reasons.append("Residential / settlement setback violation (IEC 61400 noise & safety buffer)")
 
             # Categorize Land Status per 3-Tier Engineering Mask
             if exclusion_reasons:
@@ -617,6 +613,25 @@ class CandidateGenerationEngine:
         elif len(wind_filtered) == 1:
             wind_filtered[0]["nearest_candidate_distance"] = 999.0
 
+        # Collect all exclusion reasons across evaluated candidates
+        all_reasons = []
+        for c in geo_filtered_candidates:
+            all_reasons.extend(c.get("exclusion_reasons", []))
+
+        from collections import Counter
+        reason_counts = Counter(all_reasons)
+        if reason_counts:
+            main_exclusion_reason = reason_counts.most_common(1)[0][0]
+            dominant_constraints = [f"{r} ({cnt} sites)" for r, cnt in reason_counts.most_common(4)]
+        else:
+            main_exclusion_reason = "None - All candidates feasible"
+            dominant_constraints = ["None - All candidate positions feasible"]
+
+        if nearest_overall_b_dist < 500.0 and nearest_overall_b_type:
+            residential_screening = f"TRIGGERED (Feature: {nearest_overall_b_type}, Distance: {nearest_overall_b_dist:.0f}m)"
+        else:
+            residential_screening = "NOT TRIGGERED"
+
         pipeline_stats = {
             "requested_turbines": requested_turbines,
             "generated_raw": count_raw,
@@ -636,15 +651,12 @@ class CandidateGenerationEngine:
             "count_excluded": count_excluded,
             "count_unknown": count_unknown,
             "site_unsuitable": len(wind_filtered) == 0,
+            "residential_screening": residential_screening,
+            "main_exclusion_reason": main_exclusion_reason,
             "status_headline": "Site unsuitable for wind-farm development" if len(wind_filtered) == 0 else f"{len(wind_filtered)} feasible candidate coordinates identified",
-            "dominant_constraints": [
-                "Settlements & Residential Homes: 500m mandatory buffer (IEC 61400 acoustic noise & shadow flicker mitigation)",
-                "Transportation Corridors: 100m-150m highway setback",
-                "High-Voltage Transmission Corridors: 150m electrical corridor buffer",
-                "River & Wetland Riparian Corridors: 120m buffer",
-            ],
+            "dominant_constraints": dominant_constraints,
             "engineering_compliance_notes": [
-                "Settlements & Residential Homes: 500m mandatory buffer (IEC 61400 acoustic noise & shadow flicker mitigation)",
+                f"Residential screening: {residential_screening}",
                 "River & Wetland Riparian Corridors: 120m buffer (Hydrological stability & flood prevention)",
                 "Ocean & Marine Coastline: 200m buffer (Coastal erosion & high-tide spray mitigation)",
                 "High-Voltage Transmission Corridors: 150m corridor (Arc-flash clearance & safety setback)",

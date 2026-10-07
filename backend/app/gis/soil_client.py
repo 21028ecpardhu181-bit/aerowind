@@ -51,52 +51,41 @@ class SoilClient:
         # USDA Soil Classification
         usda_class = self._classify_usda_texture(clay_pct, sand_pct, silt_pct)
 
-        # Geotechnical foundation bearing capacity estimation (DNV-GL / IEC 61400-6)
-        bearing_capacity_kpa = round(135.0 + bulk_density_kg_dm3 * 45.0 + (sand_pct / 100.0) * 35.0 - (clay_pct / 100.0) * 20.0, 1)
+        # Preliminary Geotechnical Screening (ISRIC SoilGrids v2.0):
+        # SoilGrids provides texture fraction and bulk density, NOT direct measured bearing capacity.
+        # Direct numeric bearing capacity requires in-situ geotechnical investigations (boreholes, CPT).
+        bearing_capacity_kpa = None
+        bearing_status = "UNKNOWN"
         soil_moisture = live_moisture_data.get("soil_moisture_0_to_1cm", 0.12)
         drainage_status = "WELL_DRAINED" if soil_moisture < 0.22 else ("MODERATE" if soil_moisture < 0.32 else "SATURATED")
 
-        # Rigorous Wind Engineering Geotechnical Hazard Assessment
+        # Rigorous Preliminary Wind Engineering Geotechnical Screening
         is_suitable_standard = True
         is_suitable_piled = True
         hazard_level = "SAFE"  # "SAFE" | "WARNING" | "CRITICAL_BLOCKED"
-        hazard_title = "Soil Certified for Wind Turbine Foundations"
-        hazard_details: List[str] = []
+        hazard_title = "Preliminary Geotechnical Screening"
+        hazard_details: List[str] = [
+            "Site-specific geotechnical investigation required before construction."
+        ]
 
         if clay_pct > 45.0:
             is_suitable_standard = False
             hazard_level = "WARNING"
-            hazard_title = "High Expansive Clay Hazard"
-            hazard_details.append(f"Expansive clay fraction ({clay_pct:.1f}% > 45%) causes seasonal shrink-swell and foundation tilting.")
-            foundation_recommendation = "Deep bored concrete piles (25-35m socketed into competent bedrock) required to prevent differential tilting."
+            hazard_title = "High Expansive Clay Advisory"
+            hazard_details.append(f"High clay fraction ({clay_pct:.1f}% > 45%) indicates potential shrink-swell behavior. Deep bored concrete piles or soil stabilization may be needed.")
+            foundation_recommendation = "Preliminary screening: High clay content. Deep bored piles or ground stabilization recommended subject to geotechnical borehole tests."
             foundation_type_required = "DEEP_PILED"
-            bearing_status = "EXPANSIVE_CLAY_HAZARD"
-        elif bearing_capacity_kpa < 155.0:
-            is_suitable_standard = False
-            hazard_level = "CRITICAL_BLOCKED"
-            hazard_title = "Critical Soil Bearing Failure Risk"
-            hazard_details.append(f"Sub-critical soil bearing capacity ({bearing_capacity_kpa:.1f} kPa < 160 kPa minimum allowable). Risk of foundation overturning under dynamic rotor thrust.")
-            foundation_recommendation = "Site ground improvement (vibro-replacement stone columns) or deep rock-socketed piling required."
-            foundation_type_required = "DEEP_PILED_GROUND_IMPROVEMENT"
-            bearing_status = "CRITICAL_INSUFFICIENT_BEARING"
         elif soil_moisture > 0.35 and bulk_density_kg_dm3 < 1.15:
             is_suitable_standard = False
-            hazard_level = "CRITICAL_BLOCKED"
-            hazard_title = "Saturated Alluvial Liquefaction Hazard"
-            hazard_details.append("Waterlogged saturated ground with low shear strength. High liquefaction risk under cyclic turbine vibrations.")
-            foundation_recommendation = "Sub-surface drainage network and heavy reinforced pile caps required."
+            hazard_level = "WARNING"
+            hazard_title = "Saturated Ground Advisory"
+            hazard_details.append("Waterlogged saturated ground. Geotechnical drainage and liquefaction risk assessment required.")
+            foundation_recommendation = "Preliminary screening: Saturated soils. Sub-surface drainage or piling required subject to site investigation."
             foundation_type_required = "DEEP_PILED"
-            bearing_status = "SATURATED_ALLUVIAL_RISK"
-        elif bearing_capacity_kpa >= 200.0:
-            hazard_level = "SAFE"
-            foundation_recommendation = "Shallow reinforced concrete gravity base foundation (circular pad D=18m, H=2.8m) certified."
-            foundation_type_required = "GRAVITY_BASE"
-            bearing_status = "EXCELLENT"
         else:
             hazard_level = "SAFE"
-            foundation_recommendation = "Standard gravity base foundation with 1.2m compacted crushed rock sub-base."
-            foundation_type_required = "GRAVITY_BASE_COMPACTED"
-            bearing_status = "GOOD"
+            foundation_recommendation = "Preliminary screening: Shallow spread footing or gravity base foundation typically suitable subject to site-specific geotechnical borehole investigation."
+            foundation_type_required = "GRAVITY_BASE"
 
         result = {
             "latitude": round(lat, 5),
@@ -106,8 +95,10 @@ class SoilClient:
             "sand_percentage": round(sand_pct, 1),
             "silt_percentage": round(silt_pct, 1),
             "bulk_density_kg_dm3": round(bulk_density_kg_dm3, 2),
-            "estimated_bearing_capacity_kpa": bearing_capacity_kpa,
-            "bearing_status": bearing_status,
+            "estimated_bearing_capacity_kpa": None,
+            "bearing_status": "UNKNOWN",
+            "bearing_capacity_display": "UNKNOWN",
+            "geotechnical_notice": "Site-specific geotechnical investigation required before construction.",
             "foundation_recommendation": foundation_recommendation,
             "foundation_type_required": foundation_type_required,
             "is_suitable_standard_foundation": is_suitable_standard,

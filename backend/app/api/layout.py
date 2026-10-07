@@ -87,6 +87,11 @@ class InitialLayoutResponse(BaseModel):
     wake_loss_percent: Optional[float] = None
     min_spacing_m: Optional[float] = None
     conflicts_count: Optional[int] = None
+    site_unsuitable: Optional[bool] = None
+    pipeline_stats: Optional[Dict[str, Any]] = None
+    dominant_constraints: Optional[List[str]] = None
+    residential_screening: Optional[str] = None
+    main_exclusion_reason: Optional[str] = None
 
 
 def get_cardinal_label(deg: float) -> str:
@@ -271,6 +276,8 @@ def compute_initial_layout(req: InitialLayoutRequest) -> InitialLayoutResponse:
     except Exception:
         pass
 
+    pipe_stats = pipeline_res.get("pipeline_stats", {})
+
     return InitialLayoutResponse(
         turbines=turbines,
         candidate_positions=formatted_candidates,
@@ -289,6 +296,11 @@ def compute_initial_layout(req: InitialLayoutRequest) -> InitialLayoutResponse:
         wake_loss_percent=wake_loss,
         min_spacing_m=round(min_spacing, 0),
         conflicts_count=len(wake_conflicts),
+        site_unsuitable=len(turbines) == 0,
+        pipeline_stats=pipe_stats,
+        dominant_constraints=pipe_stats.get("dominant_constraints"),
+        residential_screening=pipe_stats.get("residential_screening", "NOT TRIGGERED"),
+        main_exclusion_reason=pipe_stats.get("main_exclusion_reason"),
     )
 
 

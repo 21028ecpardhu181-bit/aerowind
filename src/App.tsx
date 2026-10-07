@@ -793,6 +793,11 @@ export function App() {
           conflicts_count: res.conflicts_count || 0,
           wind_speed_mps: site.windSpeedMps,
           wind_direction_deg: config.windDirectionDeg,
+          site_unsuitable: res.site_unsuitable || containedTurbines.length === 0,
+          pipeline_stats: res.pipeline_stats,
+          residential_screening: res.residential_screening || res.pipeline_stats?.residential_screening,
+          main_exclusion_reason: res.main_exclusion_reason || res.pipeline_stats?.main_exclusion_reason,
+          dominant_constraints: res.dominant_constraints || res.pipeline_stats?.dominant_constraints,
         });
 
         // Update active project status and turbine count

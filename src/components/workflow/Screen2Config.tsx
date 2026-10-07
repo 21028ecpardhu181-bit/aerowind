@@ -168,7 +168,7 @@ export const Screen2Config: React.FC<Screen2ConfigProps> = ({
               <div>
                 <span className="text-[10px] font-sans text-slate-400 block">Soil Bearing</span>
                 <span id="s2-meta-soil" className="font-bold text-amber-600">
-                  {site.soil_bearing_capacity_kpa || 231.2} kPa
+                  {site.soil_bearing_capacity_kpa ? `${site.soil_bearing_capacity_kpa} kPa` : 'UNKNOWN'}
                 </span>
               </div>
               <div>
@@ -596,7 +596,10 @@ export const Screen2Config: React.FC<Screen2ConfigProps> = ({
                 <span>Foundation Engineering & Compliance</span>
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                ISRIC Soil Bearing: <strong className="text-slate-800 font-mono">{site.soil_bearing_capacity_kpa || 231.2} kPa</strong> ({site.usda_texture_class || 'Clay Loam'})
+                ISRIC Soil Texture: <strong className="text-slate-800 font-mono">{site.usda_texture_class || 'Clay Loam'}</strong> · Bearing: <strong className="text-amber-600 font-mono">{site.soil_bearing_capacity_kpa ? `${site.soil_bearing_capacity_kpa} kPa` : 'UNKNOWN'}</strong>
+              </p>
+              <p className="text-[11px] text-amber-800 dark:text-amber-300 italic mt-0.5">
+                "Site-specific geotechnical investigation required before construction."
               </p>
             </div>
             <div className={`px-3 py-1 rounded-xl text-xs font-bold border ${

@@ -693,11 +693,20 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
                 <AlertTriangle className="w-4 h-4 text-rose-400 flex-shrink-0" />
                 <span>Site unsuitable for wind-farm development</span>
               </div>
-              <p className="text-[11px] text-slate-300 leading-relaxed">
-                Mandatory residential setbacks (500m IEC 61400 noise/shadow buffer) or transportation/grid corridors exclude turbine siting inside this boundary.
-              </p>
+              <div className="text-[11px] font-mono text-slate-200 font-bold bg-black/40 p-2 rounded-lg border border-rose-500/30 flex flex-col gap-1">
+                <div>
+                  Residential screening: <span className={String((optimizationData as any)?.pipeline_stats?.residential_screening || '').includes('TRIGGERED') ? 'text-rose-400 font-black' : 'text-emerald-400 font-black'}>
+                    {(optimizationData as any)?.pipeline_stats?.residential_screening || 'NOT TRIGGERED'}
+                  </span>
+                </div>
+                {(optimizationData as any)?.pipeline_stats?.main_exclusion_reason && (
+                  <div className="text-[10px] text-slate-400 font-normal">
+                    Primary exclusion constraint: <strong>{(optimizationData as any)?.pipeline_stats?.main_exclusion_reason}</strong>
+                  </div>
+                )}
+              </div>
               <div className="text-[10px] font-mono text-rose-200 bg-rose-900/40 p-2 rounded-lg border border-rose-500/20">
-                0 feasible turbine positions identified. WS-QAOA optimizer halted to prevent hazardous civil placement.
+                0 feasible turbine positions identified. Layout optimization halted to satisfy civil safety constraints.
               </div>
             </div>
           ) : (

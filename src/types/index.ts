@@ -194,6 +194,10 @@ export interface LayoutAnalysisData {
   site_unsuitable?: boolean;
   status_headline?: string;
   status_description?: string;
+  pipeline_stats?: any;
+  residential_screening?: string;
+  main_exclusion_reason?: string;
+  dominant_constraints?: string[];
 }
 
 export type OptimizationEngineType = 'classical' | 'aer_qaoa' | 'ibm_quantum';

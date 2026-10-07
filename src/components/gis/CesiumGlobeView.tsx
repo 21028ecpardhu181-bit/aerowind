@@ -270,6 +270,18 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
         scene.fog.density = 0.00008;
       }
 
+      // Add real global satellite imagery provider so 3D mode renders true geographic data everywhere
+      try {
+        const satelliteProvider = new Cesium.UrlTemplateImageryProvider({
+          url: 'https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+          subdomains: ['0', '1', '2', '3'],
+          maximumLevel: 20,
+        });
+        viewer.imageryLayers.addImageryProvider(satelliteProvider);
+      } catch (err) {
+        console.warn('[CesiumGlobeView] Could not load global satellite provider:', err);
+      }
+
       // Load Google Photorealistic 3D Tiles if API key is provided
       const googleMapsKey =
         (window as any).GOOGLE_MAPS_API_KEY ||

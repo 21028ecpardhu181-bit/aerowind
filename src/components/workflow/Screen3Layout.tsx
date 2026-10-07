@@ -544,11 +544,20 @@ export const Screen3Layout: React.FC<Screen3LayoutProps> = ({
                 <AlertTriangle className="w-4 h-4 text-rose-600 flex-shrink-0" />
                 <span>Site unsuitable for wind-farm development</span>
               </div>
-              <p className="text-[11px] text-slate-700 leading-relaxed">
-                Mandatory residential setbacks (500m IEC 61400 noise/shadow buffer) or transportation/grid corridors exclude turbine siting inside this boundary.
-              </p>
+              <div className="text-[11px] font-mono text-slate-800 font-bold bg-white/90 p-2 rounded-lg border border-rose-200 flex flex-col gap-1">
+                <div>
+                  Residential screening: <span className={String(layoutData.residential_screening || layoutData.pipeline_stats?.residential_screening || '').includes('TRIGGERED') ? 'text-rose-700 font-black' : 'text-emerald-700 font-black'}>
+                    {layoutData.residential_screening || layoutData.pipeline_stats?.residential_screening || 'NOT TRIGGERED'}
+                  </span>
+                </div>
+                {layoutData.main_exclusion_reason && (
+                  <div className="text-[10px] text-slate-600 font-normal">
+                    Primary exclusion constraint: <strong>{layoutData.main_exclusion_reason}</strong>
+                  </div>
+                )}
+              </div>
               <div className="text-[10px] font-mono text-slate-600 bg-white/80 p-2 rounded-lg border border-rose-100">
-                Identified: 0 feasible turbine positions (100% of candidate sites violate residential or civil setbacks).
+                0 feasible turbine positions identified within concession boundary.
               </div>
             </div>
           ) : (
@@ -582,10 +591,10 @@ export const Screen3Layout: React.FC<Screen3LayoutProps> = ({
           <div className="flex items-center justify-between text-xs px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 font-medium">
             <span className="flex items-center gap-1.5">
               <ShieldCheck className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-              <span>{isSiteUnsuitable ? 'IEC 61400 Setback Mask Active' : `${turbines.length} Feasible Positions Identified`}</span>
+              <span>{isSiteUnsuitable ? 'Multi-Criteria Exclusion Mask Active' : `${turbines.length} Feasible Positions Identified`}</span>
             </span>
-            <span className="font-bold text-[11px] font-mono">
-              {turbines.length} Turbines Placed
+            <span className="font-bold text-[10px] font-mono">
+              Residential: {layoutData.residential_screening || layoutData.pipeline_stats?.residential_screening || 'NOT TRIGGERED'}
             </span>
           </div>
 

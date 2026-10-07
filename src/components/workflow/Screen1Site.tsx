@@ -117,7 +117,7 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
   const [acknowledgedSoilHazard, setAcknowledgedSoilHazard] = useState<boolean>(false);
 
   // Normalized geotechnical metrics supporting flat and nested API structures
-  const bearingKpa = soilData?.estimated_bearing_capacity_kpa ?? soilData?.geotechnical_metrics?.bearing_capacity_kpa ?? 231.2;
+  const bearingKpa: number | null = soilData?.measured_bearing_capacity_kpa ?? null;
   const usdaClass = soilData?.usda_texture_class ?? soilData?.soil_classification?.usda_texture_class ?? 'Clay Loam';
   const hazardLevel = soilData?.hazard_level ?? soilData?.geotechnical_metrics?.hazard_level ?? 'SAFE';
   const hazardTitle = soilData?.hazard_title ?? soilData?.geotechnical_metrics?.hazard_title ?? '';
@@ -382,7 +382,7 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
         tap: false, // Critical for mobile touch clicks in Android Chrome & iOS Safari
       });
 
-      // Resilient Multi-CDN Tile Layers (Google Hybrid, CartoDB Voyager, OpenTopoMap)
+      // Resilient Multi-CDN Tile Layers (Google Hybrid, CartoDB Voyager / OpenStreetMap, OpenTopoMap)
       const satellite = L.tileLayer(
         'https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
         {
@@ -394,18 +394,20 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
       );
 
       const street = L.tileLayer(
-        '/api/geo/tiles/satellite/{z}/{x}/{y}',
+        'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
         {
+          subdomains: 'abcd',
           maxZoom: 19,
-          attribution: 'Google / Esri Satellite',
+          attribution: '© OpenStreetMap contributors © CARTO',
         }
       );
 
       const terrain = L.tileLayer(
-        '/api/geo/tiles/topo/{z}/{x}/{y}',
+        'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
         {
+          subdomains: 'abc',
           maxZoom: 17,
-          attribution: 'Topographic Terrain',
+          attribution: 'Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap (CC-BY-SA)',
         }
       );
 
@@ -1291,8 +1293,8 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
     },
     { 
       label: 'Geotechnical soil integrity', 
-      source: isCriticalSoil ? 'Critical: Piled Foundation Required' : (hazardLevel === 'WARNING' ? 'Advisory: Ground Improvement' : `Verified (${bearingKpa} kPa ISRIC)`), 
-      status: isCriticalSoil ? 'error' : (hazardLevel === 'WARNING' ? 'warning' : 'verified') 
+      source: 'Preliminary Geotechnical Screening (ISRIC SoilGrids v2.0)', 
+      status: 'verified' 
     },
   ];
 
@@ -2055,8 +2057,8 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
                   </div>
                   <div className="p-2 rounded-xl bg-white/70 dark:bg-slate-800/70 border border-white/60">
                     <span className="text-[10px] text-slate-500 block">Bearing Capacity</span>
-                    <strong className={`font-mono font-black text-sm ${isCriticalSoil ? 'text-rose-600' : 'text-amber-600 dark:text-amber-400'}`}>
-                      {bearingKpa} kPa
+                    <strong className="font-mono font-bold text-xs text-amber-600 dark:text-amber-400">
+                      {bearingKpa !== null ? `${bearingKpa} kPa` : 'UNKNOWN'}
                     </strong>
                   </div>
                   <div className="p-2 rounded-xl bg-white/70 dark:bg-slate-800/70 border border-white/60">
@@ -2368,109 +2370,24 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
             </div>
           )}
 
-          {/* Geotechnical Soil Risk Warning Banner & Gating */}
-          {isCriticalSoil ? (
-            <div id="soil-critical-warning-banner" className="p-3 rounded-2xl bg-rose-500/10 border-2 border-rose-500/30 flex flex-col gap-2">
-              <div className="flex items-start gap-2">
-                <ShieldAlert className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-black text-rose-950 dark:text-rose-200 uppercase tracking-wide">
-                      Soil Risk Warning: Bearing {bearingKpa} kPa
-                    </h4>
-                    <span className="px-2 py-0.5 rounded-full bg-rose-200 text-rose-900 text-[9px] font-black uppercase">
-                      Gravity Base Prohibited
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-rose-800 dark:text-rose-300 mt-0.5 leading-snug">
-                    {hazardTitle || 'Low bearing capacity or expansive clay hazard'}. Standard shallow gravity base foundations are not permitted by IEC 61400-6 safety codes.
-                  </p>
-                </div>
-              </div>
-
-              {hazardDetails.length > 0 && (
-                <div className="p-2 rounded-xl bg-rose-500/5 border border-rose-500/15 text-[10px] text-rose-900 dark:text-rose-300 flex flex-col gap-1">
-                  {hazardDetails.map((detail, idx) => (
-                    <div key={idx} className="flex items-start gap-1.5">
-                      <AlertCircle className="w-3 h-3 text-rose-600 shrink-0 mt-0.5" />
-                      <span>{detail}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Foundation Gating Selector */}
-              <div className="pt-2 border-t border-rose-500/20 flex flex-col gap-1.5">
-                <span className="text-[10px] font-black text-rose-950 dark:text-rose-200 uppercase tracking-wider">
-                  Select Required Foundation Engineering:
-                </span>
-                <div className="grid grid-cols-2 gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedFoundation('GRAVITY_BASE')}
-                    className={`p-2 rounded-xl border text-[10px] font-bold text-left transition-all ${
-                      selectedFoundation === 'GRAVITY_BASE'
-                        ? 'border-rose-400 bg-rose-100/80 text-rose-900 ring-2 ring-rose-400'
-                        : 'border-slate-200 bg-white/60 text-slate-500 opacity-70'
-                    }`}
-                  >
-                    <span className="block font-black">Gravity Base</span>
-                    <span className="text-[9px] text-rose-700 font-semibold block">Prohibited (&lt;155 kPa)</span>
-                  </button>
-                  <button
-                    type="button"
-                    id="btn-select-deep-piled-foundation"
-                    onClick={() => setSelectedFoundation('DEEP_PILED')}
-                    className={`p-2 rounded-xl border text-[10px] font-bold text-left transition-all ${
-                      selectedFoundation === 'DEEP_PILED'
-                        ? 'border-emerald-500 bg-emerald-500/15 text-emerald-950 dark:text-emerald-200 ring-2 ring-emerald-500 font-black shadow-xs'
-                        : 'border-slate-300 bg-white hover:bg-slate-50 text-slate-800'
-                    }`}
-                  >
-                    <span className="block font-black text-emerald-800 dark:text-emerald-300">Deep Bored Piles</span>
-                    <span className="text-[9px] text-emerald-700 font-semibold block">30m Bedrock Sockets (Approved)</span>
-                  </button>
-                </div>
-
-                {isProceedBlocked ? (
-                  <div className="text-[10px] text-rose-700 dark:text-rose-300 font-bold flex items-center gap-1.5 mt-0.5">
-                    <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-                    <span>Select Deep Bored Piles above to unlock construction.</span>
-                  </div>
-                ) : (
-                  <div className="text-[10px] text-emerald-700 dark:text-emerald-300 font-bold flex items-center gap-1.5 mt-0.5">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    <span>Deep bored piled foundation certified. Foundation safety guaranteed.</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : hazardLevel === 'WARNING' ? (
-            <div id="soil-warning-banner" className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex flex-col gap-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-amber-950 dark:text-amber-200 flex items-center gap-1.5">
-                  <AlertTriangle className="w-4 h-4 text-amber-600" />
-                  <span>Geotechnical Advisory ({bearingKpa} kPa)</span>
-                </span>
-                <span className="px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 text-[9px] font-bold">
-                  Ground Improvement Advised
-                </span>
-              </div>
-              <p className="text-[11px] text-amber-900 dark:text-amber-300">
-                {hazardTitle || 'Moderate soil bearing capacity'}. 1.2m crushed rock sub-base compaction or piled foundation recommended.
-              </p>
-            </div>
-          ) : (
-            <div id="soil-safe-banner" className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between text-xs">
-              <div className="flex items-center gap-1.5 text-emerald-900 dark:text-emerald-200">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                <span className="font-bold">Soil Bearing Verified: {bearingKpa} kPa</span>
-              </div>
-              <span className="text-[10px] font-mono font-bold text-emerald-700 dark:text-emerald-400">
-                {usdaClass} · Standard Pad Certified
+          {/* Preliminary Geotechnical Screening Banner */}
+          <div id="soil-screening-banner" className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black text-amber-950 dark:text-amber-200 flex items-center gap-1.5 uppercase tracking-wide">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>PRELIMINARY GEOTECHNICAL SCREENING</span>
+              </span>
+              <span className="px-2.5 py-0.5 rounded-full bg-amber-200/90 text-amber-900 dark:bg-amber-950/80 dark:text-amber-300 text-[10px] font-mono font-black uppercase">
+                Bearing capacity: {bearingKpa !== null ? `${bearingKpa} kPa` : 'UNKNOWN'}
               </span>
             </div>
-          )}
+            <p className="text-[11px] text-amber-900 dark:text-amber-300 italic font-semibold leading-relaxed">
+              "Site-specific geotechnical investigation required before construction."
+            </p>
+            <div className="text-[10px] text-slate-600 dark:text-slate-400 bg-white/70 dark:bg-slate-800/70 p-2 rounded-xl border border-amber-500/15">
+              ISRIC SoilGrids taxonomy: <strong className="text-slate-900 dark:text-white font-bold">{usdaClass}</strong> (Clay: {clayPct}%, Sand: {sandPct}%, Silt: {siltPct}%, Bulk Density: {bulkDensity} g/cm³). General soil classification does not constitute measured foundation bearing capacity.
+            </div>
+          </div>
 
           {/* Confirm Concession Button (WhatsApp / Apple Glow) */}
           <div className="pt-2 mt-auto">
