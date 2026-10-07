@@ -293,6 +293,11 @@ export function App() {
   const [optimizationData, setOptimizationData] = useState<OptimizationData | null>(null);
   const [solverEngine, setSolverEngine] = useState<OptimizationEngineType>('aer_qaoa');
 
+  // Initial Layout generation state & duplicate request lock
+  const [isGeneratingLayout, setIsGeneratingLayout] = useState<boolean>(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
+  const isGeneratingLayoutRef = useRef<boolean>(false);
+
   // 1. Initial Load of Projects & Telemetry
   useEffect(() => {
     async function initData() {
@@ -742,6 +747,11 @@ export function App() {
   };
 
   const handleGenerateLayout = async () => {
+    if (isGeneratingLayoutRef.current) return;
+    isGeneratingLayoutRef.current = true;
+    setIsGeneratingLayout(true);
+    setGenerationError(null);
+
     try {
       const payload = {
         center_lat: site.lat,
@@ -803,42 +813,19 @@ export function App() {
             localStorage.setItem('aqw_user_projects', JSON.stringify(stored.map((p: any) => p.id === updated.id ? updated : p)));
           } catch (_) {}
         }
-      }
-    } catch (e) {
-      console.warn('Initial layout generation error, checking site constraints:', e);
-      setLayoutData({
-        turbines: [],
-        candidates: [],
-        candidate_positions: [],
-        gross_aep_gwh: 0.0,
-        net_aep_gwh: 0.0,
-        wake_loss_percent: 0.0,
-        min_spacing_m: 600,
-        conflicts_count: 0,
-        wind_speed_mps: site.windSpeedMps,
-        wind_direction_deg: config.windDirectionDeg,
-        site_unsuitable: true,
-      });
 
-      if (activeProject) {
-        const updated: ProjectSummary = {
-          ...activeProject,
-          turbine_count: 0,
-          turbine_model: config.modelName,
-          net_aep: 0.0,
-          wake_loss_percent: 0.0,
-          status: 'Constrained Site',
-          updated_at: 'Just now',
-        };
-        setActiveProject(updated);
-        setProjects(prev => prev.map(p => p.id === updated.id ? updated : p));
-        try {
-          const stored = JSON.parse(localStorage.getItem('aqw_user_projects') || '[]');
-          localStorage.setItem('aqw_user_projects', JSON.stringify(stored.map((p: any) => p.id === updated.id ? updated : p)));
-        } catch (_) {}
+        navigateToScreen('s3_analysis');
+      } else {
+        throw new Error('Engineering layout service returned an incomplete result.');
       }
+    } catch (e: any) {
+      console.warn('Initial layout generation error:', e);
+      const errMsg = e?.response?.data?.detail || e?.message || 'Failed to generate layout. Please check site boundary and constraints.';
+      setGenerationError(errMsg);
+    } finally {
+      setIsGeneratingLayout(false);
+      isGeneratingLayoutRef.current = false;
     }
-    navigateToScreen('s3_analysis');
   };
 
   const handleLaunchOptimize = async () => {
@@ -1285,6 +1272,10 @@ export function App() {
               onUpdateConfig={handleUpdateConfig}
               onGenerateLayout={handleGenerateLayout}
               onBack={handleGoBack}
+              isGeneratingLayout={isGeneratingLayout}
+              generationError={generationError}
+              onRetryGeneration={handleGenerateLayout}
+              onClearGenerationError={() => setGenerationError(null)}
             />
           )}
 

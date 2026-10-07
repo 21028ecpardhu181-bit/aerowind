@@ -116,6 +116,20 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
   const [selectedFoundation, setSelectedFoundation] = useState<string>('GRAVITY_BASE');
   const [acknowledgedSoilHazard, setAcknowledgedSoilHazard] = useState<boolean>(false);
 
+  // Normalized geotechnical metrics supporting flat and nested API structures
+  const bearingKpa = soilData?.estimated_bearing_capacity_kpa ?? soilData?.geotechnical_metrics?.bearing_capacity_kpa ?? 231.2;
+  const usdaClass = soilData?.usda_texture_class ?? soilData?.soil_classification?.usda_texture_class ?? 'Clay Loam';
+  const hazardLevel = soilData?.hazard_level ?? soilData?.geotechnical_metrics?.hazard_level ?? 'SAFE';
+  const hazardTitle = soilData?.hazard_title ?? soilData?.geotechnical_metrics?.hazard_title ?? '';
+  const hazardDetails: string[] = soilData?.hazard_details ?? soilData?.geotechnical_metrics?.hazard_details ?? [];
+  const foundationRec = soilData?.foundation_recommendation ?? soilData?.geotechnical_metrics?.foundation_recommendation ?? 'Shallow spread footing or shallow pad foundation suitable for 3-5 MW class turbines with minimal risk of liquefaction.';
+  const clayPct = soilData?.clay_percentage ?? soilData?.soil_classification?.clay_pct ?? 31.2;
+  const sandPct = soilData?.sand_percentage ?? soilData?.soil_classification?.sand_pct ?? 36.4;
+  const siltPct = soilData?.silt_percentage ?? soilData?.soil_classification?.silt_pct ?? 32.4;
+  const bulkDensity = soilData?.bulk_density_kg_dm3 ?? soilData?.soil_classification?.bulk_density_g_cm3 ?? 1.38;
+  const moisture = soilData?.live_soil_moisture_m3_m3 ?? soilData?.live_telemetry?.soil_moisture_0_to_1cm_m3pm3 ?? 0.09;
+  const soilTemp = soilData?.live_soil_temperature_c ?? soilData?.live_telemetry?.soil_temperature_0cm_c ?? 31.4;
+
   // Real Village Boundary Data (OpenStreetMap Nominatim / Overpass)
   const [villageData, setVillageData] = useState<any>(null);
   const [isVillageLoading, setIsVillageLoading] = useState<boolean>(false);
@@ -124,6 +138,8 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
   // Real India Wind Hotspots & Land Database
   const [indiaHotspots, setIndiaHotspots] = useState<any[]>([]);
   const [selectedStateFilter, setSelectedStateFilter] = useState<string>('ALL');
+  const [selectedHotspot, setSelectedHotspot] = useState<any | null>(null);
+  const [isHotspotResolving, setIsHotspotResolving] = useState<boolean>(false);
   const [landData, setLandData] = useState<any>(null);
 
   // Photoshop-Style Polygonal Lasso State
@@ -136,6 +152,7 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
   const baseLayersRef = useRef<{ satellite?: any; street?: any; terrain?: any; labels?: any }>({});
   const polygonLayerRef = useRef<any>(null);
   const areaBadgeRef = useRef<any>(null);
+  const hotspotMarkersLayerRef = useRef<any>(null);
   const drawnMarkersRef = useRef<any[]>([]);
   const drawnPolylineRef = useRef<any>(null);
   const rubberbandPolylineRef = useRef<any>(null);
@@ -637,6 +654,220 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [drawnPoints, mode, calculatePolygonAreaKm2, calculatePolygonPerimeterKm]);
 
+  // Robust Hotspot Resolver and Selection Handler
+  const handleSelectHotspot = useCallback(async (h: any, action: 'select' | 'view' | 'use' = 'select') => {
+    const lat = Number(h.latitude ?? h.lat);
+    const lon = Number(h.longitude ?? h.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+      setSearchError('Hotspot does not contain valid geographic coordinates.');
+      return;
+    }
+
+    setSelectedHotspot(h);
+    setIsHotspotResolving(true);
+    setSearchError('');
+
+    const hName = h.location_name || h.name || `${lat.toFixed(3)}°N, ${lon.toFixed(3)}°E`;
+    const hDist = h.district || hName.split(',')[0].trim();
+    const hState = h.state || 'India';
+    const fullName = `${hDist}, ${hState}`;
+    const hSpeed = Number(h.annual_mean_wind_mps ?? h.wind_speed_mps ?? 7.8);
+    const hElevation = Number(h.elevation_m ?? 50);
+    const hTerrain = h.terrain_type || h.terrain || 'Plateau / Open Ridge';
+    const r = selectedRadius || site.radiusKm || 3.5;
+
+    try {
+      // 1. Resolve authentic administrative / cadastral boundary if available
+      const vRes = await fetchVillageBoundary(hDist, lat, lon).catch(() => null);
+
+      let effectiveBoundary: [number, number][];
+      let effectiveAreaKm2: number;
+      let effectiveRadiusKm = r;
+      let resolvedDisplayName = fullName;
+
+      if (vRes && vRes.boundary && vRes.boundary.length >= 3) {
+        effectiveBoundary = vRes.boundary;
+        effectiveAreaKm2 = vRes.area_km2 || calculatePolygonAreaKm2(vRes.boundary);
+        effectiveRadiusKm = Math.round(Math.sqrt(Math.max(0.5, effectiveAreaKm2) / Math.PI) * 10) / 10;
+        resolvedDisplayName = vRes.display_name || fullName;
+        setVillageData(vRes);
+      } else {
+        // Engineering concession buffer polygon
+        effectiveBoundary = generateEngineeringConcessionBoundary(lat, lon, r);
+        effectiveAreaKm2 = Math.round(Math.PI * r * r * 10) / 10;
+        setVillageData(null);
+      }
+
+      setSelectedRadius(effectiveRadiusKm);
+      onSelectRadius(effectiveRadiusKm);
+
+      const updatedSiteParams: Partial<SiteInfo> = {
+        name: resolvedDisplayName,
+        shortName: hDist,
+        lat,
+        lon,
+        radiusKm: effectiveRadiusKm,
+        areaKm2: effectiveAreaKm2,
+        boundary: effectiveBoundary,
+        windSpeedMps: hSpeed,
+        elevationM: hElevation,
+        terrainType: hTerrain,
+      };
+
+      onSiteChange(updatedSiteParams);
+
+      // 2. Pan and render boundary on map
+      if (mapRef.current) {
+        mapRef.current.setView([lat, lon], 12);
+      }
+      renderBoundary(lat, lon, effectiveAreaKm2, effectiveBoundary);
+
+      // 3. Fetch geotechnical soil data
+      setIsSoilLoading(true);
+      fetchSoilTelemetry(lat, lon)
+        .then((sRes) => {
+          if (sRes) {
+            setSoilData(sRes);
+            const hz = sRes.hazard_level || sRes.geotechnical_metrics?.hazard_level;
+            if (hz === 'CRITICAL_BLOCKED') {
+              setSelectedFoundation('DEEP_PILED');
+            }
+          }
+        })
+        .catch(() => {})
+        .finally(() => setIsSoilLoading(false));
+
+      // 4. Action handling
+      if (action === 'use') {
+        onConfirmSite({
+          ...site,
+          ...updatedSiteParams,
+          soil_bearing_capacity_kpa: bearingKpa,
+          usda_texture_class: usdaClass,
+          foundation_type: selectedFoundation,
+          soil_hazard_level: hazardLevel,
+        });
+      } else if (action === 'view') {
+        setIsSheetCollapsed(false);
+      }
+    } catch (err: any) {
+      console.warn('Hotspot resolution warning:', err);
+      // Fallback: apply direct hotspot coordinates
+      const fallbackBoundary = generateCircleVertices(lat, lon, r);
+      const fallbackAreaKm2 = Math.round(Math.PI * r * r * 10) / 10;
+      const updatedSiteParams: Partial<SiteInfo> = {
+        name: fullName,
+        shortName: hDist,
+        lat,
+        lon,
+        radiusKm: r,
+        areaKm2: fallbackAreaKm2,
+        boundary: fallbackBoundary,
+        windSpeedMps: hSpeed,
+      };
+      onSiteChange(updatedSiteParams);
+      renderBoundary(lat, lon, fallbackAreaKm2, fallbackBoundary);
+    } finally {
+      setIsHotspotResolving(false);
+    }
+  }, [
+    selectedRadius,
+    site,
+    calculatePolygonAreaKm2,
+    generateCircleVertices,
+    onSelectRadius,
+    onSiteChange,
+    renderBoundary,
+    onConfirmSite,
+    bearingKpa,
+    usdaClass,
+    selectedFoundation,
+    hazardLevel
+  ]);
+
+  // Leaflet Map Markers for Hotspots (Rendered when in 'hotspots' mode)
+  useEffect(() => {
+    const map = mapRef.current;
+    const L = window.L;
+    if (!map || !L) return;
+
+    if (hotspotMarkersLayerRef.current) {
+      try { map.removeLayer(hotspotMarkersLayerRef.current); } catch (_) {}
+      hotspotMarkersLayerRef.current = null;
+    }
+
+    if (mode !== 'hotspots') return;
+
+    const markersGroup = L.layerGroup();
+    const list = (indiaHotspots.length > 0 ? indiaHotspots : PRESET_LOCATIONS).filter((h: any) => {
+      if (selectedStateFilter === 'ALL') return true;
+      const st = h.state || h.name || '';
+      return st.toLowerCase().includes(selectedStateFilter.toLowerCase());
+    });
+
+    list.forEach((h: any) => {
+      const hLat = Number(h.latitude ?? h.lat);
+      const hLon = Number(h.longitude ?? h.lon);
+      if (!Number.isFinite(hLat) || !Number.isFinite(hLon)) return;
+
+      const hName = h.location_name || h.name || 'Wind Hotspot';
+      const hSpeed = Number(h.annual_mean_wind_mps ?? h.wind_speed_mps ?? 7.8);
+      const isSelected = selectedHotspot?.id === h.id || (Math.abs(site.lat - hLat) < 0.005 && Math.abs(site.lon - hLon) < 0.005);
+
+      const markerHtml = `
+        <div style="
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          background: ${isSelected ? '#FFD21F' : 'rgba(15, 23, 42, 0.92)'};
+          color: ${isSelected ? '#0f172a' : '#ffffff'};
+          padding: 4px 8px;
+          border-radius: 9999px;
+          border: 1.5px solid ${isSelected ? '#b45309' : 'rgba(255, 255, 255, 0.3)'};
+          box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+          font-family: ui-monospace, monospace;
+          font-size: 11px;
+          font-weight: 800;
+          cursor: pointer;
+          white-space: nowrap;
+          transform: translate(-50%, -50%);
+        ">
+          <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: ${isSelected ? '#0f172a' : '#FFD21F'};"></span>
+          <span>${hSpeed.toFixed(1)} m/s</span>
+        </div>
+      `;
+
+      const customIcon = L.divIcon({
+        html: markerHtml,
+        className: 'aqw-hotspot-map-pin',
+        iconSize: [80, 24],
+        iconAnchor: [40, 12],
+      });
+
+      const marker = L.marker([hLat, hLon], { icon: customIcon });
+      marker.on('click', () => {
+        handleSelectHotspot(h, 'select');
+      });
+
+      marker.bindTooltip(`<b>${hName}</b><br/>Resource: ${hSpeed.toFixed(1)} m/s<br/>Click to load site`, {
+        direction: 'top',
+        offset: [0, -12],
+      });
+
+      marker.addTo(markersGroup);
+    });
+
+    markersGroup.addTo(map);
+    hotspotMarkersLayerRef.current = markersGroup;
+
+    return () => {
+      if (hotspotMarkersLayerRef.current && map) {
+        try { map.removeLayer(hotspotMarkersLayerRef.current); } catch (_) {}
+        hotspotMarkersLayerRef.current = null;
+      }
+    };
+  }, [mode, indiaHotspots, selectedStateFilter, selectedHotspot, site.lat, site.lon, handleSelectHotspot]);
+
   // Direct Map Click
   const handleDirectMapSelection = (lat: number, lon: number) => {
     const shortName = `${lat.toFixed(3)}°N, ${lon.toFixed(3)}°E`;
@@ -1004,20 +1235,6 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
     }
   };
 
-  // Normalized geotechnical metrics supporting flat and nested API structures
-  const bearingKpa = soilData?.estimated_bearing_capacity_kpa ?? soilData?.geotechnical_metrics?.bearing_capacity_kpa ?? 231.2;
-  const usdaClass = soilData?.usda_texture_class ?? soilData?.soil_classification?.usda_texture_class ?? 'Clay Loam';
-  const hazardLevel = soilData?.hazard_level ?? soilData?.geotechnical_metrics?.hazard_level ?? 'SAFE';
-  const hazardTitle = soilData?.hazard_title ?? soilData?.geotechnical_metrics?.hazard_title ?? '';
-  const hazardDetails: string[] = soilData?.hazard_details ?? soilData?.geotechnical_metrics?.hazard_details ?? [];
-  const foundationRec = soilData?.foundation_recommendation ?? soilData?.geotechnical_metrics?.foundation_recommendation ?? 'Shallow spread footing or shallow pad foundation suitable for 3-5 MW class turbines with minimal risk of liquefaction.';
-  const clayPct = soilData?.clay_percentage ?? soilData?.soil_classification?.clay_pct ?? 31.2;
-  const sandPct = soilData?.sand_percentage ?? soilData?.soil_classification?.sand_pct ?? 36.4;
-  const siltPct = soilData?.silt_percentage ?? soilData?.soil_classification?.silt_pct ?? 32.4;
-  const bulkDensity = soilData?.bulk_density_kg_dm3 ?? soilData?.soil_classification?.bulk_density_g_cm3 ?? 1.38;
-  const moisture = soilData?.live_soil_moisture_m3_m3 ?? soilData?.live_telemetry?.soil_moisture_0_to_1cm_m3pm3 ?? 0.09;
-  const soilTemp = soilData?.live_soil_temperature_c ?? soilData?.live_telemetry?.soil_temperature_0cm_c ?? 31.4;
-
   const isCriticalSoil = hazardLevel === 'CRITICAL_BLOCKED';
   const isPiledSelected = selectedFoundation === 'DEEP_PILED';
   const isProceedBlocked = isCriticalSoil && !isPiledSelected;
@@ -1380,60 +1597,107 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
           )}
 
           {mode === 'hotspots' && (
-            <div className="p-3 rounded-2xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-2xl border border-white/60 dark:border-white/10 shadow-xl pointer-events-auto flex flex-col gap-2 max-h-56 overflow-y-auto">
+            <div className="p-3.5 rounded-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl border border-white/70 dark:border-white/10 shadow-xl pointer-events-auto flex flex-col gap-2.5 max-h-72 overflow-y-auto">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-800 dark:text-white">Verified India Wind Hotspots (NIWE)</span>
-                <span className="text-[10px] font-mono text-amber-600 font-bold">{indiaHotspots.length || 24} Sites</span>
+                <div>
+                  <div className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <Flame className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                    <span>Verified India Wind Hotspots (NIWE)</span>
+                  </div>
+                  <div className="text-[10px] text-slate-500">
+                    Select a resource hotspot to resolve geographic site &amp; concession boundary
+                  </div>
+                </div>
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300">
+                  {indiaHotspots.length || 24} Sites
+                </span>
               </div>
+
+              {/* State Filter Pills */}
               <div className="flex gap-1 overflow-x-auto no-scrollbar py-0.5">
-                {['ALL', 'Tamil Nadu', 'Gujarat', 'Rajasthan', 'Karnataka', 'Odisha'].map((st) => (
+                {['ALL', 'Tamil Nadu', 'Gujarat', 'Rajasthan', 'Karnataka', 'Odisha', 'Andhra Pradesh'].map((st) => (
                   <button
                     key={st}
                     type="button"
                     onClick={() => setSelectedStateFilter(st)}
-                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold whitespace-nowrap transition-all ${
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-bold whitespace-nowrap transition-all ${
                       selectedStateFilter === st
-                        ? 'bg-slate-900 text-white shadow-xs'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        ? 'bg-slate-950 text-white dark:bg-white dark:text-slate-950 shadow-xs'
+                        : 'bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
                     }`}
                   >
                     {st}
                   </button>
                 ))}
               </div>
-              <div className="flex flex-col gap-1">
-                {(indiaHotspots.length > 0 ? indiaHotspots : PRESET_LOCATIONS).filter(h => {
+
+              {/* Hotspot Cards List */}
+              <div className="flex flex-col gap-2">
+                {(indiaHotspots.length > 0 ? indiaHotspots : PRESET_LOCATIONS).filter((h: any) => {
                   if (selectedStateFilter === 'ALL') return true;
                   const st = h.state || h.name || '';
                   return st.toLowerCase().includes(selectedStateFilter.toLowerCase());
-                }).map((h) => {
+                }).map((h: any) => {
                   const hName = h.location_name || h.name;
                   const hDist = h.district || h.name.split(',')[0];
-                  const hSpeed = h.annual_mean_wind_mps || 7.8;
+                  const hState = h.state || 'India';
+                  const hSpeed = Number(h.annual_mean_wind_mps ?? h.wind_speed_mps ?? 7.8);
+                  const hElev = Number(h.elevation_m ?? 50);
+                  const hLat = Number(h.latitude ?? h.lat);
+                  const hLon = Number(h.longitude ?? h.lon);
+                  const isSelected = selectedHotspot?.id === h.id || (Math.abs(site.lat - hLat) < 0.005 && Math.abs(site.lon - hLon) < 0.005);
+
                   return (
-                    <button
+                    <div
                       key={h.id || h.name}
-                      type="button"
-                      onClick={() => {
-                        const r = selectedRadius || 3.0;
-                        onSiteChange({
-                          name: `${hDist}, ${h.state || 'India'}`,
-                          shortName: hDist,
-                          lat: h.latitude || h.lat,
-                          lon: h.longitude || h.lon,
-                          areaKm2: Math.round(Math.PI * r * r * 10) / 10,
-                          terrainType: h.terrain_type || h.terrain || 'Plateau',
-                          elevationM: h.elevation_m || 50,
-                          windSpeedMps: hSpeed,
-                        });
-                        renderBoundary(h.latitude || h.lat, h.longitude || h.lon, Math.round(Math.PI * r * r * 10) / 10);
-                        setMode('search');
-                      }}
-                      className="flex items-center justify-between p-1.5 rounded-xl bg-slate-50 hover:bg-[#FFD21F]/20 text-left border border-slate-200/80 transition-all text-xs"
+                      className={`p-2.5 rounded-xl border transition-all flex flex-col gap-2 ${
+                        isSelected
+                          ? 'border-amber-400 bg-amber-500/10 dark:bg-amber-500/15 shadow-xs'
+                          : 'border-slate-200/80 dark:border-white/10 bg-slate-50/70 dark:bg-white/5 hover:border-slate-300'
+                      }`}
                     >
-                      <span className="font-bold text-slate-900 truncate">{hName}</span>
-                      <span className="font-mono font-black text-amber-700 text-[10px]">{hSpeed.toFixed(1)} m/s</span>
-                    </button>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="text-xs font-black text-slate-900 dark:text-white truncate">
+                            {hName}
+                          </div>
+                          <div className="text-[10px] font-mono text-slate-500 flex items-center gap-2">
+                            <span>{hLat.toFixed(3)}°N, {hLon.toFixed(3)}°E</span>
+                            <span>·</span>
+                            <span>{hElev}m DEM</span>
+                            <span>·</span>
+                            <span>{hState}</span>
+                          </div>
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          <span className="inline-block px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-800 dark:text-amber-300 font-mono text-xs font-black">
+                            {hSpeed.toFixed(1)} m/s
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Action buttons */}
+                      <div className="flex items-center gap-1.5 pt-1 border-t border-slate-200/60 dark:border-white/10">
+                        <button
+                          type="button"
+                          disabled={isHotspotResolving}
+                          onClick={() => handleSelectHotspot(h, 'view')}
+                          className="flex-1 py-1 px-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-300 dark:border-white/15 text-[11px] font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition-all text-center cursor-pointer"
+                        >
+                          View site
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isHotspotResolving}
+                          onClick={() => handleSelectHotspot(h, 'use')}
+                          className="flex-1 py-1 px-2 rounded-lg bg-[#FFD21F] hover:bg-[#F2C50F] text-slate-950 text-[11px] font-black transition-all text-center shadow-xs cursor-pointer flex items-center justify-center gap-1"
+                        >
+                          <span>Use this site</span>
+                          <ArrowRight className="w-3 h-3 stroke-[2.5]" />
+                        </button>
+                      </div>
+                    </div>
                   );
                 })}
               </div>
@@ -1888,6 +2152,47 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
                   <span className="font-mono font-bold text-slate-900 dark:text-white">
                     {telemetry?.wind_speed_10m || (site.windSpeedMps ? (site.windSpeedMps * 0.82).toFixed(1) : 6.2)} m/s
                   </span>
+                </div>
+              </div>
+
+              {/* 3-Way Engineering Classification: Hotspot vs Site vs Buildable Concession */}
+              <div id="hotspot-site-distinction-card" className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-white/10 flex flex-col gap-2">
+                <span className="text-[11px] font-black uppercase text-slate-800 dark:text-white tracking-wider flex items-center gap-1.5">
+                  <Compass className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Site Feasibility Classification</span>
+                </span>
+                <div className="flex flex-col gap-1.5 text-[11px]">
+                  <div className="flex items-start justify-between p-1.5 rounded-lg bg-white/80 dark:bg-slate-900/40 border border-slate-100 dark:border-white/5">
+                    <div>
+                      <span className="font-bold text-slate-900 dark:text-white block">1. Wind Resource Hotspot</span>
+                      <span className="text-[10px] text-slate-500">NIWE meteorological point measurement</span>
+                    </div>
+                    <span className="font-mono font-black text-amber-600 text-[10px]">
+                      {(landData?.wind_speed_100m || site.windSpeedMps || 7.8).toFixed(1)} m/s
+                    </span>
+                  </div>
+
+                  <div className="flex items-start justify-between p-1.5 rounded-lg bg-white/80 dark:bg-slate-900/40 border border-slate-100 dark:border-white/5">
+                    <div>
+                      <span className="font-bold text-slate-900 dark:text-white block">2. Geographic Site</span>
+                      <span className="text-[10px] text-slate-500">
+                        {villageData ? 'Cadastral administrative parcel' : 'Engineering concession zone'}
+                      </span>
+                    </div>
+                    <span className="font-mono font-bold text-slate-700 dark:text-slate-300 text-[10px]">
+                      {(site.areaKm2 || 24.8).toFixed(1)} km²
+                    </span>
+                  </div>
+
+                  <div className="flex items-start justify-between p-1.5 rounded-lg bg-white/80 dark:bg-slate-900/40 border border-slate-100 dark:border-white/5">
+                    <div>
+                      <span className="font-bold text-slate-900 dark:text-white block">3. Buildable Feasible Area</span>
+                      <span className="text-[10px] text-slate-500">Net area after IEC 61400 exclusion buffers</span>
+                    </div>
+                    <span className="font-mono font-black text-emerald-600 text-[10px]">
+                      {landData ? `${landData.buildable_percent}% net` : 'Pending layout'}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>

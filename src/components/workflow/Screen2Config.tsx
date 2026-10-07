@@ -20,6 +20,7 @@ import {
 import { SiteInfo, FarmConfig } from '../../types';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
+import { InitialLayoutLoadingModal } from './InitialLayoutLoadingModal';
 
 interface Screen2ConfigProps {
   site: SiteInfo;
@@ -27,6 +28,10 @@ interface Screen2ConfigProps {
   onUpdateConfig: (newCfg: Partial<FarmConfig>) => void;
   onGenerateLayout: () => void;
   onBack: () => void;
+  isGeneratingLayout?: boolean;
+  generationError?: string | null;
+  onRetryGeneration?: () => void;
+  onClearGenerationError?: () => void;
 }
 
 const TURBINE_MODELS: Record<string, { name: string; rotor: number; hub: number; powerKw: number }> = {
@@ -43,6 +48,10 @@ export const Screen2Config: React.FC<Screen2ConfigProps> = ({
   onUpdateConfig,
   onGenerateLayout,
   onBack,
+  isGeneratingLayout = false,
+  generationError = null,
+  onRetryGeneration,
+  onClearGenerationError,
 }) => {
   const [turbineCount, setTurbineCount] = useState<number>(config.turbineCount || 12);
   const [model, setModel] = useState<string>(config.model || 'ge-120');
@@ -720,12 +729,35 @@ export const Screen2Config: React.FC<Screen2ConfigProps> = ({
           id="btn-generate-layout"
           variant="energy"
           size="lg"
+          disabled={isGeneratingLayout}
           onClick={onGenerateLayout}
-          className="w-full bg-[#FFD21F] hover:bg-[#F2C50F] text-slate-950 font-black py-4 text-sm shadow-md"
+          className="w-full bg-[#FFD21F] hover:bg-[#F2C50F] text-slate-950 font-black py-4 text-sm shadow-md disabled:opacity-60 disabled:cursor-not-allowed"
         >
-          <span>Generate Initial Micro-Siting Layout ({turbineCount} Turbines)</span>
-          <ArrowRight className="w-5 h-5 stroke-[2.5]" />
+          {isGeneratingLayout ? (
+            <span className="flex items-center gap-2">
+              <span className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+              <span>Generating Micro-Siting Layout...</span>
+            </span>
+          ) : (
+            <>
+              <span>Generate Initial Micro-Siting Layout ({turbineCount} Turbines)</span>
+              <ArrowRight className="w-5 h-5 stroke-[2.5]" />
+            </>
+          )}
         </Button>
+
+        {/* ── DEDICATED ENGINEERING MICRO-SITING LOADING MODAL ── */}
+        <InitialLayoutLoadingModal
+          isOpen={Boolean(isGeneratingLayout || generationError)}
+          turbineCount={turbineCount}
+          siteName={site.shortName || site.name.split(',')[0] || 'Selected Concession'}
+          error={generationError || null}
+          onRetry={() => {
+            if (onRetryGeneration) onRetryGeneration();
+            else onGenerateLayout();
+          }}
+          onCancel={onClearGenerationError}
+        />
       </div>
     </div>
   );
