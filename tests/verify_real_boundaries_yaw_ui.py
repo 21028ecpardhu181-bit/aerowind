@@ -75,6 +75,7 @@ def verify_all():
         page_d.click("#btn-s5-toggle-3d")
         page_d.wait_for_selector("#screen5-cesium-canvas", state="visible", timeout=20000)
         page_d.wait_for_timeout(4000)
+        page_d.wait_for_timeout(6000)
 
         # Verify Wind Telemetry & Yaw Badge in 3D
         yaw_badge = page_d.locator("#cesium-wind-telemetry-badge")
@@ -134,6 +135,7 @@ def verify_all():
         page_m.click("#btn-s5-toggle-3d")
         page_m.wait_for_selector("#screen5-cesium-canvas", state="visible", timeout=20000)
         page_m.wait_for_timeout(4000)
+        page_m.wait_for_timeout(6000)
 
         # Verify Wind Telemetry & Yaw Badge on Mobile
         yaw_badge_m = page_m.locator("#cesium-wind-telemetry-badge")

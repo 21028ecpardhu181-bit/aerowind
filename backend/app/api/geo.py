@@ -78,40 +78,6 @@ def generate_candidates(
 import urllib.request
 from fastapi import Response
 
-_TILE_CACHE = {}
-
-@router.get(
-    "/tiles/{layer}/{z}/{x}/{y}",
-    summary="Proxy satellite and terrain map tiles",
-    description="Fetches live geographic satellite and terrain tiles with in-memory caching.",
-)
-async def get_map_tile(layer: str, z: int, x: int, y: int):
-    cache_key = f"{layer}_{z}_{x}_{y}"
-    if cache_key in _TILE_CACHE:
-        return Response(content=_TILE_CACHE[cache_key], media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
-
-    if layer == "satellite":
-        url = f"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-    elif layer == "terrain":
-        url = f"https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}"
-    else:
-        url = f"https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-
-    try:
-        req = urllib.request.Request(
-            url,
-            headers={
-                "User-Agent": "AeroQuantumWind/2.4 (clean-energy-hackathon; contact@aeroquantum.org)"
-            }
-        )
-        with urllib.request.urlopen(req, timeout=10.0) as resp:
-            data = resp.read()
-            media_type = "image/png" if layer not in ("satellite", "terrain") else "image/jpeg"
-            if len(_TILE_CACHE) < 1000:
-                _TILE_CACHE[cache_key] = data
-            return Response(content=data, media_type=media_type, headers={"Cache-Control": "public, max-age=86400"})
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Failed to fetch tile: {e}")
 
 
 @router.get(
@@ -306,7 +272,7 @@ async def get_site_land_data(
             "source": "AeroQuantum Deployed GIS Database (Copernicus DEM 30m / Global Wind Atlas 3.0)",
         }
 
-    # 2. Fetch real data
+    # 2. Fetch real data and evaluate via EnvironmentalSuitabilityEngine
     sample_coords = [
         (lat, lon),
         (lat + 0.008 * (radius_km / 3.0), lon),
@@ -317,13 +283,33 @@ async def get_site_land_data(
     elevs = fetch_real_dem_elevations(sample_coords)
     wind = fetch_real_100m_wind_telemetry(lat, lon)
 
+    # Calculate search envelope circle polygon for evaluation
+    steps = 24
+    d_lat = radius_km / 111.0
+    cos_lat = max(0.1, math.cos(math.radians(lat)))
+    d_lon = radius_km / (111.0 * cos_lat)
+    ring = [
+        [
+            round(lon + d_lon * math.sin(i * 2 * math.pi / steps), 6),
+            round(lat + d_lat * math.cos(i * 2 * math.pi / steps), 6),
+        ]
+        for i in range(steps)
+    ]
+    ring.append(ring[0])
+    circle_geom = {"type": "Polygon", "coordinates": [ring]}
+
+    from backend.app.gis.suitability_engine import suitability_engine
+    suitability_res = suitability_engine.evaluate_site_suitability(
+        search_envelope_geometry=circle_geom,
+        hub_height_m=120.0,
+        rotor_diameter_m=120.0,
+    )
+
     elev_min = min(elevs) if elevs else 50.0
     elev_max = max(elevs) if elevs else 60.0
     elev_mean = round(sum(elevs) / len(elevs), 1) if elevs else 55.0
 
-    elev_span = elev_max - elev_min
-    horiz_span = radius_km * 1000.0
-    slope_deg = round(math.degrees(math.atan(elev_span / max(50.0, horiz_span))), 1)
+    slope_deg = suitability_res.terrain_assessment.get("slope_deg", 2.5)
 
     assessment = {
         "elevation_min": elev_min,
@@ -335,11 +321,14 @@ async def get_site_land_data(
         "weibull_a": wind["weibull_a"],
         "weibull_k": wind["weibull_k"],
         "air_density": wind["air_density_kgpm3"],
-        "dominant_lulc": "Agricultural / Semi-Arid Scrub" if slope_deg <= 8.0 else "Upland Ridge / Mountain Scrub",
-        "buildable_percent": 84.5 if slope_deg <= 8.0 else 72.0,
-        "restricted_percent": 10.5 if slope_deg <= 8.0 else 18.0,
-        "excluded_percent": 5.0 if slope_deg <= 8.0 else 10.0,
+        "dominant_lulc": suitability_res.landcover_assessment.get("dominant_class_name", "Cropland"),
+        "buildable_percent": suitability_res.buildable_percentage,
+        "restricted_percent": suitability_res.conditional_percentage,
+        "excluded_percent": suitability_res.excluded_percentage,
+        "unknown_percent": suitability_res.unknown_percentage,
+        "overall_status": suitability_res.overall_status,
         "elevation_samples": elevs,
+        "active_constraints_count": len(suitability_res.active_constraints),
     }
 
     # 3. Save to database
@@ -348,8 +337,62 @@ async def get_site_land_data(
     return {
         "cached": False,
         "data": assessment,
-        "source": "Real Copernicus DEM 30m / ERA5 Reanalysis Database",
+        "source": "Copernicus DEM 30m / NIWE 120m / ESA WorldCover 10m / OSM Overpass",
     }
+
+
+@router.post(
+    "/suitability/evaluate",
+    summary="Evaluate authoritative environmental suitability & compute buildable land mask",
+    description="Evaluates search envelope against Copernicus DEM, NIWE, ESA WorldCover, OSM Overpass, WDPA v4, and MNRE 2024 setbacks.",
+)
+async def evaluate_site_suitability_endpoint(
+    req: Dict[str, Any]
+):
+    from backend.app.gis.suitability_engine import suitability_engine
+    
+    geometry = req.get("geometry")
+    if not geometry and "boundary" in req:
+        # Convert [[lat, lon], ...] or [[lon, lat], ...] array to GeoJSON Polygon
+        raw_b = req["boundary"]
+        if raw_b and len(raw_b) >= 3:
+            first_pt = raw_b[0]
+            # Detect [lat, lon] vs [lon, lat]
+            is_lat_lon = (-10.0 <= first_pt[0] <= 40.0) and (55.0 <= first_pt[1] <= 100.0)
+            ring = [[p[1], p[0]] if is_lat_lon else [p[0], p[1]] for p in raw_b]
+            if ring[0] != ring[-1]:
+                ring.append(ring[0])
+            geometry = {"type": "Polygon", "coordinates": [ring]}
+
+    if not geometry:
+        # Generate search circle from center_lat/center_lon and radius_km
+        center_lat = req.get("center_lat", 14.6819)
+        center_lon = req.get("center_lon", 77.6006)
+        radius_km = req.get("radius_km", 3.0)
+        steps = 32
+        d_lat = radius_km / 111.0
+        cos_lat = max(0.1, math.cos(math.radians(center_lat)))
+        d_lon = radius_km / (111.0 * cos_lat)
+        ring = [
+            [
+                round(center_lon + d_lon * math.sin(i * 2 * math.pi / steps), 6),
+                round(center_lat + d_lat * math.cos(i * 2 * math.pi / steps), 6),
+            ]
+            for i in range(steps)
+        ]
+        ring.append(ring[0])
+        geometry = {"type": "Polygon", "coordinates": [ring]}
+
+    hub_height_m = float(req.get("hub_height_m", 120.0))
+    rotor_diameter_m = float(req.get("rotor_diameter_m", 120.0))
+
+    result = suitability_engine.evaluate_site_suitability(
+        search_envelope_geometry=geometry,
+        hub_height_m=hub_height_m,
+        rotor_diameter_m=rotor_diameter_m,
+    )
+    return result.model_dump()
+
 
 
 @router.get(
@@ -471,47 +514,76 @@ async def get_map_tile(layer: str, z: int, x: int, y: int) -> Response:
     if cache_path.exists() and cache_path.stat().st_size > 0:
         try:
             with open(cache_path, "rb") as f:
-                return Response(content=f.read(), media_type=media_type, headers={"Cache-Control": "public, max-age=2592000"})
+                return Response(
+                    content=f.read(),
+                    media_type=media_type,
+                    headers={"Cache-Control": "public, max-age=2592000", "Access-Control-Allow-Origin": "*"}
+                )
         except Exception:
             pass
 
-    # 2. Map upstream source URLs
+    # 2. Map upstream source URLs with multi-tier fallback
+    urls_to_try = []
+    sub = (x + y) % 4
     if layer == "satellite":
-        upstream_url = f"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+        urls_to_try = [
+            f"https://mt{sub}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
+            f"https://mt{sub}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
+            f"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        ]
     elif layer == "terrain":
-        upstream_url = f"https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}"
+        urls_to_try = [
+            f"https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
+            f"https://tile.opentopomap.org/{z}/{x}/{y}.png",
+        ]
     elif layer == "labels":
-        upstream_url = f"https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
+        urls_to_try = [
+            f"https://mt{sub}.google.com/vt/lyrs=h&x={x}&y={y}&z={z}",
+            f"https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+        ]
     elif layer == "osm":
-        upstream_url = f"https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+        urls_to_try = [
+            f"https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+        ]
     else:
         raise HTTPException(status_code=400, detail=f"Unknown tile layer '{layer}'")
 
-    try:
-        req = urllib.request.Request(
-            upstream_url,
-            headers={
-                "User-Agent": "AeroQuantum-Wind/2.4 (OpenGIS; Real-World Wind Engineering)",
-                "Accept": "image/webp,image/apng,image/*,*/*;q=0.8",
-            }
-        )
-        with urllib.request.urlopen(req, timeout=8.0) as resp:
-            content = resp.read()
-            # Save to disk cache
-            try:
-                with open(cache_path, "wb") as f:
-                    f.write(content)
-            except Exception:
-                pass
-            return Response(
-                content=content,
-                media_type=media_type,
-                headers={"Cache-Control": "public, max-age=2592000"}
+    import requests
+
+    for upstream_url in urls_to_try:
+        try:
+            r = requests.get(
+                upstream_url,
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Accept": "image/webp,image/apng,image/*,*/*;q=0.8",
+                },
+                timeout=6.0,
             )
-    except Exception as exc:
-        # Fallback 1x1 transparent or tinted tile on network failure
-        fallback_jpeg = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x01\x00H\x00H\x00\x00\xff\xdb\x00C\x00\x08\x06\x06\x07\x06\x05\x08\x07\x07\x07\t\t\x08\n\x0c\x14\r\x0c\x0b\x0b\x0c\x19\x12\x13\x0f\x14\x1d\x1a\x1f\x1e\x1d\x1a\x1c\x1c $.' \",#\x1c\x1c(7),01444\x1f'9=82<.342\xff\xc0\x00\x0b\x08\x00\x01\x00\x01\x01\x01\x11\x00\xff\xc4\x00\x1f\x00\x00\x01\x05\x01\x01\x01\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04\x05\x06\x07\x08\t\n\x0b\xff\xda\x00\x08\x01\x01\x00\x00?\x00\xbf\x00\xff\xd9"
-        return Response(content=fallback_jpeg, media_type="image/jpeg", status_code=200)
+            if r.status_code == 200 and len(r.content) > 500:
+                # Save to disk cache
+                try:
+                    with open(cache_path, "wb") as f:
+                        f.write(r.content)
+                except Exception:
+                    pass
+                return Response(
+                    content=r.content,
+                    media_type=media_type,
+                    headers={"Cache-Control": "public, max-age=2592000", "Access-Control-Allow-Origin": "*"}
+                )
+        except Exception:
+            continue
+
+    # Fallback 1x1 transparent tile on network failure (never paint opaque black over globe)
+    import base64
+    fallback_png = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=")
+    return Response(
+        content=fallback_png,
+        media_type="image/png",
+        status_code=200,
+        headers={"Access-Control-Allow-Origin": "*"}
+    )
 
 
 @router.get(
@@ -539,7 +611,7 @@ async def get_soil_telemetry(
 @router.get(
     "/village-boundary",
     summary="Real Village Administrative Borders & Cadastral Area",
-    description="Queries OpenStreetMap Nominatim and Overpass for official village polygons and geodesic areas in km².",
+    description="Queries authoritative Survey of India and OpenStreetMap advisory fallback for village boundary polygons.",
 )
 async def get_village_boundary(
     q: Optional[str] = Query(None, description="Village or settlement search query"),
@@ -547,14 +619,241 @@ async def get_village_boundary(
     lon: Optional[float] = Query(None, ge=-180.0, le=180.0, description="Longitude"),
 ) -> Dict[str, Any]:
     """Retrieves official village administrative polygon, area in km², and perimeter."""
-    try:
-        from backend.app.gis.village_boundary_client import village_boundary_client
-    except ImportError:
-        from app.gis.village_boundary_client import village_boundary_client
+    from backend.app.gis.boundary_service import boundary_service
 
-    boundary_data = village_boundary_client.get_village_boundary(query=q or "", lat=lat, lon=lon)
+    res = await boundary_service.resolve_boundary(
+        query=q,
+        latitude=lat,
+        longitude=lon,
+    )
+
+    if res.boundary.status in ("BOUNDARY_FOUND", "MANUAL_AREA") and res.boundary.geometry:
+        b = res.boundary
+        coords = b.geometry.get("coordinates", [])
+        rep_ring = coords[0] if b.geometry_type == "Polygon" else coords[0][0]
+        legacy_coords = [[round(p[1], 6), round(p[0], 6)] for p in rep_ring]
+
+        boundary_dict = {
+            "village_name": b.village_name or q or "Authoritative Concession",
+            "display_name": f"{b.village_name or q} ({b.authority})",
+            "latitude": lat if lat is not None else (res.location.latitude or 0.0),
+            "longitude": lon if lon is not None else (res.location.longitude or 0.0),
+            "boundary_type": f"official_{b.authority.lower().replace(' ', '_')}_{b.geometry_type.lower()}",
+            "coordinates": legacy_coords,
+            "boundary": legacy_coords,
+            "geojson": b.geometry,
+            "geometry_type": b.geometry_type,
+            "crs": b.crs,
+            "projected_crs": b.projected_crs,
+            "area_km2": b.area_km2 or 0.0,
+            "area_hectares": round((b.area_km2 or 0.0) * 100.0, 1),
+            "perimeter_km": b.perimeter_km or 0.0,
+            "authority": b.authority,
+            "engineering_status": b.engineering_status,
+            "source_provenance": f"{b.authority} ({b.engineering_status})",
+            "status": b.status,
+            "containment_verified": b.containment_verified,
+            "provenance": b.provenance,
+        }
+        return {
+            "status": "success",
+            "boundary": boundary_dict,
+        }
+    else:
+        # Boundary is unavailable or mismatch. No synthetic boundaries permitted.
+        return {
+            "status": res.boundary.status,
+            "boundary": None,
+            "authority": res.boundary.authority,
+            "diagnostic_detail": res.boundary.diagnostic_detail,
+            "candidates": [c.model_dump() for c in res.boundary.candidates],
+        }
+
+
+class LocationResolveRequest(BaseModel):
+    query: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    state: Optional[str] = None
+    district: Optional[str] = None
+    subdistrict: Optional[str] = None
+    village: Optional[str] = None
+    village_id: Optional[str] = None
+    manual_polygon: Optional[Dict[str, Any]] = None
+
+
+@router.post(
+    "/location/resolve",
+    summary="Unified Authoritative Location & Village Boundary Search Envelope Pipeline",
+    description="Resolves geographic/administrative identity and retrieves validated Survey of India / advisory search envelope.",
+)
+async def resolve_location_and_boundary(
+    req: LocationResolveRequest,
+):
+    from backend.app.gis.boundary_service import boundary_service
+
+    result = await boundary_service.resolve_boundary(
+        query=req.query,
+        latitude=req.latitude,
+        longitude=req.longitude,
+        state=req.state,
+        district=req.district,
+        subdistrict=req.subdistrict,
+        village=req.village,
+        village_id=req.village_id,
+        manual_polygon=req.manual_polygon,
+    )
+    return result.model_dump()
+
+
+class BoundaryIngestRequest(BaseModel):
+    dataset_content: Dict[str, Any]
+    format_type: str = "geojson"
+
+
+@router.post(
+    "/boundary/ingest",
+    summary="Ingest Official Survey of India Village Boundary Dataset",
+    description="Ingests Shapefile GeoJSON or GeoPackage FeatureCollection into authoritative boundary registry.",
+)
+async def ingest_boundary_dataset(req: BoundaryIngestRequest):
+    from backend.app.gis.boundary_service import boundary_service
+
+    result = boundary_service.ingest_survey_of_india_dataset(
+        dataset_content=req.dataset_content,
+        format_type=req.format_type,
+    )
+    return result
+
+
+@router.get(
+    "/site-imagery",
+    summary="High-Resolution Stitched Satellite Imagery for 3D Cesium Project Site",
+    description="Returns high-definition composite satellite terrain image centered at (lat, lon) covering the wind farm concession.",
+)
+async def get_site_imagery(
+    lat: float = Query(..., ge=-90.0, le=90.0),
+    lon: float = Query(..., ge=-180.0, le=180.0),
+    span_km: float = Query(4.0, ge=0.5, le=30.0),
+    zoom: int = Query(14, ge=10, le=18),
+    grid_radius: int = Query(2, ge=1, le=4),
+) -> Response:
+    """Stitches (2*grid_radius+1)^2 high-res satellite tiles around project site into a single crisp texture."""
+    import io
+    import math
+    import requests
+    from PIL import Image
+
+    r_lat = round(lat, 4)
+    r_lon = round(lon, 4)
+    cache_file = TILES_CACHE_DIR / f"site_sat_{r_lat}_{r_lon}_{zoom}_r{grid_radius}.jpg"
+
+    if cache_file.exists() and cache_file.stat().st_size > 5000:
+        try:
+            with open(cache_file, "rb") as f:
+                return Response(
+                    content=f.read(),
+                    media_type="image/jpeg",
+                    headers={"Cache-Control": "public, max-age=2592000", "Access-Control-Allow-Origin": "*"}
+                )
+        except Exception:
+            pass
+
+    n = 2.0 ** zoom
+    center_x = (r_lon + 180.0) / 360.0 * n
+    lat_rad = math.radians(r_lat)
+    center_y = (1.0 - math.asinh(math.tan(lat_rad)) / math.pi) / 2.0 * n
+
+    cx = int(center_x)
+    cy = int(center_y)
+
+    grid_size = 2 * grid_radius + 1
+    composite = Image.new("RGB", (grid_size * 256, grid_size * 256))
+
+    for dx in range(-grid_radius, grid_radius + 1):
+        for dy in range(-grid_radius, grid_radius + 1):
+            tx = cx + dx
+            ty = cy + dy
+            tile_path = TILES_CACHE_DIR / f"satellite_{zoom}_{tx}_{ty}.jpg"
+            img_bytes = None
+            if tile_path.exists() and tile_path.stat().st_size > 500:
+                try:
+                    with open(tile_path, "rb") as tf:
+                        img_bytes = tf.read()
+                except Exception:
+                    pass
+
+            if not img_bytes:
+                sub = (tx + ty) % 4
+                url = f"https://mt{sub}.google.com/vt/lyrs=y&x={tx}&y={ty}&z={zoom}"
+                try:
+                    r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=4.0)
+                    if r.status_code == 200 and len(r.content) > 500:
+                        img_bytes = r.content
+                        with open(tile_path, "wb") as tf:
+                            tf.write(img_bytes)
+                except Exception:
+                    pass
+
+            if img_bytes:
+                try:
+                    tile_img = Image.open(io.BytesIO(img_bytes))
+                    composite.paste(tile_img, ((dx + grid_radius) * 256, (dy + grid_radius) * 256))
+                except Exception:
+                    pass
+
+    buf = io.BytesIO()
+    composite.save(buf, format="JPEG", quality=90)
+    final_bytes = buf.getvalue()
+
+    try:
+        with open(cache_file, "wb") as f:
+            f.write(final_bytes)
+    except Exception:
+        pass
+
+    return Response(
+        content=final_bytes,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "public, max-age=2592000", "Access-Control-Allow-Origin": "*"}
+    )
+
+
+@router.get(
+    "/site-imagery-meta",
+    summary="Metadata & Geodetic Bounds for Site Satellite Texture",
+)
+async def get_site_imagery_meta(
+    lat: float = Query(..., ge=-90.0, le=90.0),
+    lon: float = Query(..., ge=-180.0, le=180.0),
+    zoom: int = Query(14, ge=10, le=18),
+    grid_radius: int = Query(2, ge=1, le=4),
+) -> Dict[str, Any]:
+    """Calculates exact geodetic bounding box [west, south, east, north] of the stitched composite."""
+    import math
+    r_lat = round(lat, 4)
+    r_lon = round(lon, 4)
+    n = 2.0 ** zoom
+    center_x = (r_lon + 180.0) / 360.0 * n
+    lat_rad = math.radians(r_lat)
+    center_y = (1.0 - math.asinh(math.tan(lat_rad)) / math.pi) / 2.0 * n
+    cx = int(center_x)
+    cy = int(center_y)
+
+    west = (cx - grid_radius) / n * 360.0 - 180.0
+    east = (cx + grid_radius + 1) / n * 360.0 - 180.0
+    north = math.degrees(math.atan(math.sinh(math.pi * (1.0 - 2.0 * (cy - grid_radius) / n))))
+    south = math.degrees(math.atan(math.sinh(math.pi * (1.0 - 2.0 * (cy + grid_radius + 1) / n))))
+
     return {
-        "status": "success",
-        "boundary": boundary_data,
+        "west": west,
+        "south": south,
+        "east": east,
+        "north": north,
+        "center_lat": r_lat,
+        "center_lon": r_lon,
+        "zoom": zoom,
+        "grid_radius": grid_radius,
+        "image_url": f"/api/geo/site-imagery?lat={r_lat}&lon={r_lon}&zoom={zoom}&grid_radius={grid_radius}",
     }
 

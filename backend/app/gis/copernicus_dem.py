@@ -49,15 +49,16 @@ class CopernicusDemClient:
     def __init__(self, timeout_sec: float = 2.5):
         self.timeout_sec = timeout_sec
 
-    def fetch_elevations(self, coords: List[Tuple[float, float]]) -> List[float]:
+    def fetch_elevations(self, coords: List[Tuple[float, float]]) -> List[Optional[float]]:
         """
         Fetches elevations (meters ASL) for a list of (lat, lon) coordinates.
         Checks in-memory cache, then SQLite database cache, then queries Copernicus DEM GLO-30 API.
+        Never manufactures fake elevation values via mathematical formulas when API is unreachable.
         """
         if not coords:
             return []
 
-        results: List[float] = [0.0] * len(coords)
+        results: List[Optional[float]] = [None] * len(coords)
         missing: List[Tuple[int, float, float]] = []
 
         # 1. In-memory cache
@@ -106,20 +107,21 @@ class CopernicusDemClient:
                         data = json.loads(resp.read().decode())
                         elevs = data.get("elevation", [])
                         for (idx, lat, lon), el in zip(batch, elevs):
-                            val = float(el) if el is not None else 50.0
-                            results[idx] = val
-                            _DEM_MEMORY_CACHE[(round(lat, 4), round(lon, 4))] = val
-                            cursor.execute(
-                                "INSERT OR REPLACE INTO dem_cache (lat_round, lon_round, elevation_m) VALUES (?, ?, ?)",
-                                (round(lat, 4), round(lon, 4), val),
-                            )
+                            if el is not None:
+                                val = float(el)
+                                results[idx] = val
+                                _DEM_MEMORY_CACHE[(round(lat, 4), round(lon, 4))] = val
+                                cursor.execute(
+                                    "INSERT OR REPLACE INTO dem_cache (lat_round, lon_round, elevation_m) VALUES (?, ?, ?)",
+                                    (round(lat, 4), round(lon, 4), val),
+                                )
+                            else:
+                                results[idx] = None
                 except Exception:
-                    # Deterministic terrain model fallback
+                    # Invariant: Never manufacture fake elevation values.
+                    # Mark as None so callers propagate UNKNOWN.
                     for idx, lat, lon in batch:
-                        base = 45.0 + 35.0 * math.sin(lat * 12.0) * math.cos(lon * 15.0)
-                        val = round(max(5.0, base), 1)
-                        results[idx] = val
-                        _DEM_MEMORY_CACHE[(round(lat, 4), round(lon, 4))] = val
+                        results[idx] = None
 
         conn.commit()
         conn.close()
@@ -127,10 +129,11 @@ class CopernicusDemClient:
 
     def compute_spatial_slope_aspect(
         self, lat: float, lon: float, step_meters: float = 30.0
-    ) -> Dict[str, float]:
+    ) -> Dict[str, Any]:
         """
         Computes the real 2D spatial elevation gradient, slope angle (deg), and aspect azimuth (deg)
         using Copernicus DEM 30m sample kernel around (lat, lon).
+        Raises RuntimeError if elevation data is unavailable so suitability engine marks UNKNOWN.
         """
         # 30m offset in degrees
         d_lat = step_meters / 111139.0
@@ -150,7 +153,11 @@ class CopernicusDemClient:
         ]
 
         elevs = self.fetch_elevations(kernel_coords)
-        e_c, e_n, e_s, e_e, e_w, e_ne, e_nw, e_se, e_sw = elevs
+        if any(e is None for e in elevs):
+            raise RuntimeError("Copernicus DEM elevation query failed or returned null for sample kernel.")
+
+        e_c, e_n, e_s, e_e, e_w, e_ne, e_nw, e_se, e_sw = [float(e) for e in elevs]  # type: ignore
+
 
         # Horn's algorithm for slope and aspect on a 3x3 grid
         dz_dx = ((e_ne + 2 * e_e + e_se) - (e_nw + 2 * e_w + e_sw)) / (8.0 * step_meters)
@@ -172,7 +179,10 @@ class CopernicusDemClient:
             "slope_deg": slope_deg,
             "aspect_deg": aspect_deg,
             "tri_ruggedness_m": tri,
-            "source": "Copernicus DEM GLO-30 (DSM 30m)",
+            "source": "Open-Meteo Elevation Service (Copernicus DEM GLO-30 / GLO-90 composite)",
+            "acquisition_path": "https://api.open-meteo.com/v1/elevation",
+            "nominal_resolution": "90m intermediary",
+            "crs": "EPSG:4326",
         }
 
 

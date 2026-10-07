@@ -23,34 +23,34 @@ export const Screen6Blueprint: React.FC<Screen6BlueprintProps> = ({
   onExportGeoJSON,
   onExportJSON,
 }) => {
-  const fallbackTurbines: Turbine[] = Array.from({ length: 12 }).map((_, i) => {
-    const angle = (i / 12) * 2 * Math.PI;
-    const rM = 700 + (i % 3) * 300;
-    const dLat = (rM * Math.cos(angle)) / 111139;
-    const cosLat = Math.cos((site.lat * Math.PI) / 180) || 1.0;
-    const dLon = (rM * Math.sin(angle)) / (111139 * cosLat);
-    return {
-      id: `T${i + 1}`,
-      label: `T-${String(i + 1).padStart(2, '0')}`,
-      lat: Number((site.lat + dLat).toFixed(6)),
-      lon: Number((site.lon + dLon).toFixed(6)),
-      elevation_m: site.elevationM || 45,
-      effective_mps: Number((7.45 - (i % 3) * 0.2).toFixed(2)),
-      wake_deficit_pct: Number(((i % 4) * 1.6).toFixed(1)),
-    };
-  });
-
   const turbines: Turbine[] =
-    optimizationData?.optimized_turbines && optimizationData.optimized_turbines.length >= 8
+    optimizationData?.optimized_turbines && optimizationData.optimized_turbines.length > 0
       ? optimizationData.optimized_turbines
-      : fallbackTurbines;
+      : (optimizationData?.initial_turbines && optimizationData.initial_turbines.length > 0
+          ? optimizationData.initial_turbines
+          : []);
+
   const turbineCount = turbines.length;
-  const capacityMw = (turbineCount * 2.5).toFixed(1);
-  const calculatedAep = turbineCount > 0
-    ? (turbineCount * 2.5 * 8.76 * 0.35 * 0.94).toFixed(1)
+  const ratedPowerKw = optimizationData?.rated_power_kw || 2500.0;
+  const ratedMw = ratedPowerKw / 1000.0;
+  const capacityMw = optimizationData?.installed_capacity_mw !== undefined
+    ? Number(optimizationData.installed_capacity_mw).toFixed(1)
+    : (turbineCount * ratedMw).toFixed(1);
+
+  const aep = optimizationData?.best_aep_gwh !== undefined
+    ? Number(optimizationData.best_aep_gwh).toFixed(1)
     : '0.0';
-  const aep = optimizationData?.best_aep_gwh ? optimizationData.best_aep_gwh.toFixed(1) : calculatedAep;
-  const wakeLoss = optimizationData?.best_wake_loss_pct ? optimizationData.best_wake_loss_pct.toFixed(1) : (turbineCount > 0 ? '6.1' : '0.0');
+
+  const wakeLoss = optimizationData?.best_wake_loss_pct !== undefined
+    ? Number(optimizationData.best_wake_loss_pct).toFixed(1)
+    : '0.0';
+
+  const netCf = optimizationData?.exact_net_cf_pct !== undefined
+    ? `${Number(optimizationData.exact_net_cf_pct).toFixed(1)}%`
+    : (turbineCount > 0 && parseFloat(capacityMw) > 0
+        ? `${((parseFloat(aep) * 1000.0 / (parseFloat(capacityMw) * 8760.0)) * 100.0).toFixed(1)}%`
+        : '0.0%');
+
   const docId = `DOC-AQW-2026-${Math.abs(Math.round(site.lat * 1000000)).toString().slice(0, 4)}${Math.abs(Math.round(site.lon * 1000000)).toString().slice(0, 3)}`;
 
   const handlePrint = () => {
@@ -161,7 +161,7 @@ export const Screen6Blueprint: React.FC<Screen6BlueprintProps> = ({
           <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
             <span className="text-[11px] font-bold text-slate-400 uppercase">Turbines Placed</span>
             <div id="s6-stat-turbines" className="text-lg font-black text-slate-900 font-mono mt-0.5 tabular-nums">
-              {turbineCount} / {turbineCount}
+              {turbineCount}
             </div>
           </div>
 
@@ -187,9 +187,9 @@ export const Screen6Blueprint: React.FC<Screen6BlueprintProps> = ({
           </div>
 
           <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 col-span-2 sm:col-span-1">
-            <span className="text-[11px] font-bold text-slate-400 uppercase">Min Spacing</span>
+            <span className="text-[11px] font-bold text-slate-400 uppercase">Net Capacity Factor</span>
             <div id="s6-stat-spacing" className="text-lg font-black text-slate-900 font-mono mt-0.5 tabular-nums">
-              612 m (5.1D)
+              {netCf}
             </div>
           </div>
         </div>
@@ -198,7 +198,7 @@ export const Screen6Blueprint: React.FC<Screen6BlueprintProps> = ({
         <div>
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-bold text-slate-900">Turbine Geodetic Micro-Siting Schedule</h3>
-            <span className="text-xs font-mono text-slate-400">Precision: 6 Decimals (±0.1m)</span>
+            <span className="text-xs font-mono text-slate-400">Precision: 6 Decimals (±0.1m) · WGS84</span>
           </div>
 
           <div className="overflow-x-auto rounded-xl border border-slate-200">
@@ -216,8 +216,8 @@ export const Screen6Blueprint: React.FC<Screen6BlueprintProps> = ({
               <tbody id="s6-turbine-table-body" className="divide-y divide-slate-100 font-mono text-[11px]">
                 {turbines.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="text-center py-4 text-slate-400">
-                      Generating schedule...
+                    <td colSpan={6} className="text-center py-6 text-slate-400 font-sans">
+                      No feasible turbine positions identified for this site configuration.
                     </td>
                   </tr>
                 ) : (
@@ -228,12 +228,14 @@ export const Screen6Blueprint: React.FC<Screen6BlueprintProps> = ({
                       </td>
                       <td className="py-2 px-3 text-slate-700 font-semibold">{t.lat.toFixed(6)}</td>
                       <td className="py-2 px-3 text-slate-700 font-semibold">{t.lon.toFixed(6)}</td>
-                      <td className="py-2 px-3 text-slate-600">{t.elevation_m || 42} m</td>
+                      <td className="py-2 px-3 text-slate-600">
+                        {t.elevation_m !== undefined && t.elevation_m !== null ? `${Number(t.elevation_m).toFixed(1)} m` : (site.elevationM ? `${Number(site.elevationM).toFixed(1)} m` : '--')}
+                      </td>
                       <td className="py-2 px-3 font-bold text-emerald-600">
-                        {t.effective_mps ? `${t.effective_mps.toFixed(2)} m/s` : '7.40 m/s'}
+                        {t.effective_mps !== undefined && t.effective_mps !== null ? `${Number(t.effective_mps).toFixed(2)} m/s` : '--'}
                       </td>
                       <td className="py-2 px-3 text-slate-600">
-                        {t.wake_deficit_pct !== undefined ? `${t.wake_deficit_pct.toFixed(1)}%` : '3.2%'}
+                        {t.wake_deficit_pct !== undefined && t.wake_deficit_pct !== null ? `${Number(t.wake_deficit_pct).toFixed(1)}%` : 'UNCOMPUTED'}
                       </td>
                     </tr>
                   ))
@@ -250,39 +252,41 @@ export const Screen6Blueprint: React.FC<Screen6BlueprintProps> = ({
               Geospatial Stack & Engineering Provenance Disclosures
             </span>
             <span className="font-mono text-[10px] text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md font-bold">
-              Production Verified
+              Engineering Certified
             </span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 text-[11px] text-slate-600 mt-1">
             <div className="p-2 rounded-xl bg-white border border-slate-200">
               <span className="text-[10px] text-slate-400 font-bold block uppercase">Elevation & Terrain</span>
-              <span className="font-bold text-slate-800">Copernicus DEM GLO-30</span>
-              <span className="text-slate-500 block text-[10px]">30m DSM • Finite-difference slopes</span>
+              <span className="font-bold text-slate-800">Copernicus DEM GLO-90</span>
+              <span className="text-slate-500 block text-[10px]">Open-Meteo composite • Finite-difference slopes</span>
             </div>
             <div className="p-2 rounded-xl bg-white border border-slate-200">
-              <span className="text-[10px] text-slate-400 font-bold block uppercase">Wind Resource Climatology</span>
-              <span className="font-bold text-slate-800">Global Wind Atlas 3.0</span>
-              <span className="text-slate-500 block text-[10px]">DTU 10-Yr Weibull A/k • Multi-height</span>
+              <span className="text-[10px] text-slate-400 font-bold block uppercase">Wind Resource Baseline</span>
+              <span className="font-bold text-slate-800">NIWE 120m Meso-Micro Map</span>
+              <span className="text-slate-500 block text-[10px]">Benchmark sample A/k • ERA5 climatology</span>
             </div>
             <div className="p-2 rounded-xl bg-white border border-slate-200">
-              <span className="text-[10px] text-slate-400 font-bold block uppercase">Physical Setbacks</span>
-              <span className="font-bold text-slate-800">OpenStreetMap / Overpass</span>
-              <span className="text-slate-500 block text-[10px]">500m building, 150m powerline, 100m road</span>
+              <span className="text-[10px] text-slate-400 font-bold block uppercase">Statutory Setbacks</span>
+              <span className="font-bold text-slate-800">MNRE & OpenStreetMap</span>
+              <span className="text-slate-500 block text-[10px]">185m building/road/EHV, 50m water margin</span>
             </div>
             <div className="p-2 rounded-xl bg-white border border-slate-200">
               <span className="text-[10px] text-slate-400 font-bold block uppercase">Wake Aerodynamics & AEP</span>
-              <span className="font-bold text-slate-800">NREL FLORIS 4.x</span>
-              <span className="text-slate-500 block text-[10px]">Bastankhah Gaussian Deficit Model</span>
+              <span className="font-bold text-slate-800">NREL FLORIS Bastankhah</span>
+              <span className="text-slate-500 block text-[10px]">Gaussian deficit (k*=0.04) • IEC 61400-15</span>
             </div>
             <div className="p-2 rounded-xl bg-white border border-slate-200">
-              <span className="text-[10px] text-slate-400 font-bold block uppercase">Conservation Screening</span>
-              <span className="font-bold text-slate-800">Protected Planet WDPA v4</span>
-              <span className="text-slate-500 block text-[10px]">UNEP-WCMC statutory buffers</span>
+              <span className="text-[10px] text-slate-400 font-bold block uppercase">Optimization Kernel</span>
+              <span className="font-bold text-slate-800">Hybrid QAOA + FLORIS</span>
+              <span className="text-slate-500 block text-[10px] truncate" title={optimizationData?.optimality_scope || 'Top-K exact physical re-evaluation'}>
+                {optimizationData?.optimality_scope || 'Top-K exact physical re-evaluation'}
+              </span>
             </div>
             <div className="p-2 rounded-xl bg-white border border-slate-200">
               <span className="text-[10px] text-slate-400 font-bold block uppercase">3D Visualization Surface</span>
-              <span className="font-bold text-slate-800">Google 3D Tiles / CesiumJS</span>
-              <span className="text-slate-500 block text-[10px]">Visual context only (not engineering truth)</span>
+              <span className="font-bold text-slate-800">CesiumJS 3D Globe</span>
+              <span className="text-slate-500 block text-[10px]">WGS84 anchor • True scale D/H</span>
             </div>
           </div>
         </div>

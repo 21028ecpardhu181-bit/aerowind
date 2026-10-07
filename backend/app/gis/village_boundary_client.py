@@ -30,31 +30,100 @@ class VillageBoundaryClient:
             "User-Agent": "AeroQuantum-WindTurbine-Engineering/3.0 (Administrative Boundary Cadastre; contact@aeroquantum.org)"
         })
 
-    def get_village_boundary(self, query: str = "", lat: Optional[float] = None, lon: Optional[float] = None) -> Dict[str, Any]:
+    def get_village_boundary(self, query: str = "", lat: Optional[float] = None, lon: Optional[float] = None) -> Optional[Dict[str, Any]]:
         """
         Retrieves real administrative village border and exact area.
-        Can query by name (e.g. 'Brahmanigaon', 'Bommuru') or by (lat, lon) coordinates.
+        Routes through the authoritative BoundaryService and NEVER synthesizes fake boundaries.
         """
         cache_key = f"{query.lower().strip()}_{round(lat or 0, 4)}_{round(lon or 0, 4)}"
         if cache_key in self._cache:
             return self._cache[cache_key]
 
-        data: Optional[Dict[str, Any]] = None
+        import asyncio
+        from backend.app.gis.boundary_service import boundary_service
 
-        if query.strip():
-            data = self._query_nominatim_search(query.strip())
+        try:
+            # Run async boundary_service synchronously
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    import concurrent.futures
+                    with concurrent.futures.ThreadPoolExecutor() as pool:
+                        res = pool.submit(
+                            asyncio.run,
+                            boundary_service.resolve_boundary(query=query, latitude=lat, longitude=lon)
+                        ).result(timeout=10.0)
+                else:
+                    res = loop.run_until_complete(
+                        boundary_service.resolve_boundary(query=query, latitude=lat, longitude=lon)
+                    )
+            except RuntimeError:
+                res = asyncio.run(boundary_service.resolve_boundary(query=query, latitude=lat, longitude=lon))
 
-        if not data and lat is not None and lon is not None:
-            data = self._query_nominatim_reverse(lat, lon)
+            if res.boundary.status in ("BOUNDARY_FOUND", "MANUAL_AREA") and res.boundary.geometry:
+                b = res.boundary
+                coords = b.geometry.get("coordinates", [])
+                rep_ring = coords[0] if b.geometry_type == "Polygon" else coords[0][0]
+                # Format coordinates as [lat, lon] for Leaflet/Cesium legacy compatibility
+                legacy_coords = [[round(p[1], 6), round(p[0], 6)] for p in rep_ring]
 
-        if not data:
-            # Fallback based on coordinates: engineering parcel boundary
-            center_lat = lat if lat is not None else 16.9676
-            center_lon = lon if lon is not None else 81.8138
-            data = self._create_engineering_concession(center_lat, center_lon, radius_km=3.5, name=query or "Engineering Wind Site")
+                data = {
+                    "village_name": b.village_name or query or "Authoritative Boundary",
+                    "display_name": f"{b.village_name or query} ({b.authority})",
+                    "latitude": lat or (res.location.latitude or 0.0),
+                    "longitude": lon or (res.location.longitude or 0.0),
+                    "boundary_type": f"official_{b.authority.lower().replace(' ', '_')}_{b.geometry_type.lower()}",
+                    "coordinates": legacy_coords,
+                    "boundary": legacy_coords,
+                    "geojson": b.geometry,
+                    "geometry_type": b.geometry_type,
+                    "area_km2": b.area_km2 or 0.0,
+                    "area_hectares": round((b.area_km2 or 0.0) * 100.0, 1),
+                    "perimeter_km": b.perimeter_km or 0.0,
+                    "authority": b.authority,
+                    "engineering_status": b.engineering_status,
+                    "source_provenance": f"{b.authority} ({b.engineering_status})",
+                    "status": b.status,
+                }
+                self._cache[cache_key] = data
+                return data
+            else:
+                # Boundary is unavailable; return None or explicit UNAVAILABLE structure.
+                # Under NO circumstances synthesize a fake harmonic oval or circle!
+                data = {
+                    "village_name": query or "Unknown Locality",
+                    "display_name": f"{query or 'Unknown'} (Boundary Unavailable)",
+                    "latitude": lat or 0.0,
+                    "longitude": lon or 0.0,
+                    "boundary_type": "UNAVAILABLE",
+                    "coordinates": None,
+                    "boundary": None,
+                    "geojson": None,
+                    "area_km2": 0.0,
+                    "perimeter_km": 0.0,
+                    "authority": "NONE",
+                    "engineering_status": "UNVERIFIED",
+                    "source_provenance": "None (No Authoritative or Advisory Boundary Found)",
+                    "status": res.boundary.status,
+                    "diagnostic_detail": res.boundary.diagnostic_detail,
+                }
+                self._cache[cache_key] = data
+                return data
 
-        self._cache[cache_key] = data
-        return data
+        except Exception as e:
+            data = {
+                "village_name": query or "Unknown Locality",
+                "display_name": f"{query or 'Unknown'} (Resolution Error)",
+                "latitude": lat or 0.0,
+                "longitude": lon or 0.0,
+                "boundary_type": "UNAVAILABLE",
+                "coordinates": None,
+                "boundary": None,
+                "area_km2": 0.0,
+                "status": "UNAVAILABLE",
+                "diagnostic_detail": f"Boundary resolution failed: {str(e)}",
+            }
+            return data
 
     def _query_nominatim_search(self, query: str) -> Optional[Dict[str, Any]]:
         """Searches Nominatim with polygon_geojson=1, resolving administrative polygons."""

@@ -188,6 +188,33 @@ def init_db() -> None:
             )
         """)
 
+        # Authoritative Survey of India & validated boundary cache
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS authoritative_boundary_cache (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                cache_key TEXT UNIQUE NOT NULL,
+                state TEXT,
+                district TEXT,
+                subdistrict TEXT,
+                village TEXT,
+                village_id TEXT,
+                authority TEXT NOT NULL,
+                source_status TEXT NOT NULL,
+                dataset TEXT,
+                version TEXT,
+                crs TEXT DEFAULT 'EPSG:4326',
+                projected_crs TEXT,
+                geometry_type TEXT NOT NULL,
+                geometry_json TEXT NOT NULL,
+                area_m2 REAL,
+                area_km2 REAL,
+                perimeter_km REAL,
+                geometry_repaired INTEGER DEFAULT 0,
+                retrieved_at TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
         conn.commit()
 
         # Seed initial projects if table is empty

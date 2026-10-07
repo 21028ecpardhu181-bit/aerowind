@@ -59,32 +59,59 @@ class ProtectedPlanetClient:
                 closest_designation = pa["designation"]
 
         is_inside = (min_distance_km <= 0.0)
-        is_in_buffer = (min_distance_km <= buffer_km)
+        is_in_esz_buffer = (min_distance_km <= buffer_km)
         
+        # Distinguish Conservation Data Fact from Legal Development Restriction Policy
+        # Fact: Conservation Designation & Distance
+        # Legal Rule: Wildlife (Protection) Act 1972 Section 35 (Prohibits commercial industrial projects inside)
+        # Legal Rule: Supreme Court 2022 ESZ Ruling (Recommends minimum 1.0 km ESZ around National Parks & Sanctuaries unless notified)
         if is_inside:
-            clearance_status = "PROHIBITED (Within Statutory Conservation Boundary)"
+            legal_status = "PROHIBITED"
+            legal_authority = "Ministry of Environment, Forest and Climate Change (MoEFCC) / NBWL"
+            legal_reference = "Wildlife (Protection) Act, 1972 (Section 35) — Commercial industrial development prohibited within National Park/Sanctuary boundaries."
             feasibility_status = "EXCLUDED"
-        elif is_in_buffer:
-            clearance_status = "RESTRICTED (Within 1.0km Eco-Sensitive Zone Buffer)"
+        elif is_in_esz_buffer:
+            legal_status = "RESTRICTED_ESZ"
+            legal_authority = "Supreme Court of India (W.P. 460/2004 Order dated 03.06.2022) / MoEFCC Guidelines"
+            legal_reference = "Eco-Sensitive Zone (ESZ) Directive — Mandatory default 1.0 km buffer around protected areas unless site-specific gazette notification specifies otherwise."
             feasibility_status = "RESTRICTED"
         elif min_distance_km <= 10.0:
-            clearance_status = "REQUIRES_NBWL (National Board for Wildlife Clearance Required)"
+            legal_status = "REQUIRES_NBWL_CLEARANCE"
+            legal_authority = "Standing Committee of National Board for Wildlife (SC-NBWL)"
+            legal_reference = "MoEFCC Office Memorandum on projects within 10 km of National Parks/Sanctuaries prior to finalized ESZ notification."
             feasibility_status = "BUILDABLE"
         else:
-            clearance_status = "CLEAR (Compliant with MoEFCC Guidelines)"
+            legal_status = "CLEAR"
+            legal_authority = "MoEFCC General Environmental Clearance"
+            legal_reference = "Beyond default 10 km wildlife advisory zone."
             feasibility_status = "PREFERRED"
 
         return {
             "source": "UNEP-WCMC / Protected Planet (WDPA v4 Dataset)",
+            "data_fact": {
+                "nearest_protected_area": closest_name or "None within 100km",
+                "designation": closest_designation or "N/A",
+                "measured_distance_km": round(min_distance_km, 1),
+                "is_inside_protected_area": is_inside,
+                "is_in_buffer_zone": is_in_esz_buffer,
+            },
+            "legal_policy": {
+                "statutory_authority": legal_authority,
+                "legal_reference": legal_reference,
+                "legal_status": legal_status,
+                "feasibility_status": feasibility_status,
+            },
+            # Compatibility accessors for legacy callers
             "is_inside_protected_area": is_inside,
-            "is_in_buffer_zone": is_in_buffer,
+            "is_in_buffer_zone": is_in_esz_buffer,
             "nearest_protected_area": closest_name or "None within 100km",
             "designation": closest_designation or "N/A",
             "distance_km": round(min_distance_km, 1),
-            "regulatory_clearance": clearance_status,
+            "regulatory_clearance": f"{legal_status} ({legal_reference})",
             "feasibility_status": feasibility_status,
         }
 
 
 # Singleton export
 protected_planet_client = ProtectedPlanetClient()
+

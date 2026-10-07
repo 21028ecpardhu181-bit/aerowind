@@ -429,7 +429,8 @@ class CandidateGenerationEngine:
                 d = math.hypot(x - b["x_m"], y - b["y_m"])
                 if d < min_building_d:
                     min_building_d = d
-                req_setback = float(b.get("setback_m", 500.0))
+                raw_sb = b.get("setback_m")
+                req_setback = float(raw_sb if raw_sb is not None else 185.0)
                 if d < req_setback and not building_violation:
                     building_violation = True
                     b_type = b.get("type", "residential settlement")

@@ -15,3 +15,6 @@ verification_shots/
 verification_shots_fix/
 .agents/
 briefs/.artifacts/
+hidden_files/
+frontend/test_*.html
+frontend/cesium_map_debug.html

@@ -114,7 +114,7 @@ class OverpassClient:
           way["waterway"]({bbox_str});
           way["natural"="water"]({bbox_str});
         );
-        out center qt 100;
+        out geom qt 150;
         """
 
         buildings: List[Dict[str, Any]] = []
@@ -140,58 +140,86 @@ class OverpassClient:
 
                     for el in elements:
                         tags = el.get("tags", {})
+                        geom_pts = el.get("geometry", [])
                         c_lat = el.get("center", {}).get("lat") or el.get("lat")
                         c_lon = el.get("center", {}).get("lon") or el.get("lon")
+                        if (not c_lat or not c_lon) and geom_pts:
+                            c_lat = sum(p["lat"] for p in geom_pts) / len(geom_pts)
+                            c_lon = sum(p["lon"] for p in geom_pts) / len(geom_pts)
+
                         if not c_lat or not c_lon:
                             continue
 
                         dx_m = (c_lon - center_lon) * 111139.0 * cos_lat
                         dy_m = (c_lat - center_lat) * 111139.0
 
+                        # Format geometry coordinates if present
+                        geom_coords = [[p["lon"], p["lat"]] for p in geom_pts] if geom_pts else []
+
                         if "place" in tags and tags["place"] in ("city", "town", "suburb", "village", "hamlet", "isolated_dwelling"):
-                            # Village or town core settlement cluster: 800m-1000m buffer
+                            # Notified village/town core settlement cluster: 500m MNRE 2024 habitation buffer
                             p_type = tags["place"]
                             p_name = tags.get("name", "Settlement")
-                            setback = 1000.0 if p_type in ("city", "town") else 800.0 if p_type in ("suburb", "village") else 600.0
                             buildings.append({
                                 "id": f"place_{el.get('id')}",
                                 "lat": c_lat,
                                 "lon": c_lon,
                                 "x_m": round(dx_m, 1),
                                 "y_m": round(dy_m, 1),
+                                "geometry": geom_coords,
                                 "type": f"settlement_{p_type}_{p_name}",
-                                "setback_m": setback,
+                                "is_settlement_core": True,
+                                "setback_m": 500.0,
                             })
                         elif "building" in tags:
+                            # Individual isolated permanent structure: Setback = H_hub + 0.5*D_rotor + 5m (handled in engine)
                             buildings.append({
                                 "id": el.get("id"),
                                 "lat": c_lat,
                                 "lon": c_lon,
                                 "x_m": round(dx_m, 1),
                                 "y_m": round(dy_m, 1),
+                                "geometry": geom_coords,
                                 "type": tags.get("building", "residential"),
-                                "setback_m": 500.0,
+                                "is_settlement_core": False,
+                                "setback_m": None,  # Engine applies statutory individual structure setback
                             })
                         elif "landuse" in tags and tags.get("landuse") in ("residential", "commercial", "industrial", "construction"):
-                            # Residential settlement polygon centroid: 600m buffer
+                            # Residential settlement polygon: 500m MNRE 2024 habitation buffer
                             buildings.append({
                                 "id": f"landuse_{el.get('id')}",
                                 "lat": c_lat,
                                 "lon": c_lon,
                                 "x_m": round(dx_m, 1),
                                 "y_m": round(dy_m, 1),
+                                "geometry": geom_coords,
                                 "type": f"settlement_{tags.get('landuse')}",
-                                "setback_m": 600.0,
+                                "is_settlement_core": True,
+                                "setback_m": 500.0,
                             })
                         elif "power" in tags:
+                            raw_v = tags.get("voltage")
+                            parsed_v = None
+                            if raw_v:
+                                try:
+                                    clean_v = str(raw_v).lower().replace("kv", "000").replace("v", "").strip()
+                                    parsed_v = float(clean_v)
+                                except Exception:
+                                    parsed_v = None
+
+                            is_ehv = (parsed_v is not None and parsed_v >= 66000)
                             powerlines.append({
                                 "id": el.get("id"),
                                 "lat": c_lat,
                                 "lon": c_lon,
                                 "x_m": round(dx_m, 1),
                                 "y_m": round(dy_m, 1),
-                                "voltage": tags.get("voltage", "110kV"),
-                                "setback_m": 150.0,
+                                "geometry": geom_coords,
+                                "voltage": raw_v,  # Genuine voltage tag or None (no synthetic 110kV default)
+                                "voltage_v": parsed_v,
+                                "is_ehv": is_ehv,
+                                "power_type": tags.get("power", "line"),
+                                "setback_m": 185.0 if is_ehv else 50.0,
                             })
                         elif "highway" in tags:
                             hw_type = tags.get("highway", "primary")
@@ -201,8 +229,9 @@ class OverpassClient:
                                 "lon": c_lon,
                                 "x_m": round(dx_m, 1),
                                 "y_m": round(dy_m, 1),
+                                "geometry": geom_coords,
                                 "class": hw_type,
-                                "setback_m": 150.0 if hw_type in ("motorway", "trunk", "primary") else 100.0,
+                                "setback_m": 185.0,  # Statutory MNRE 2024 road safety distance
                             })
                         elif "waterway" in tags or tags.get("natural") == "water":
                             waterways.append({
@@ -211,8 +240,10 @@ class OverpassClient:
                                 "lon": c_lon,
                                 "x_m": round(dx_m, 1),
                                 "y_m": round(dy_m, 1),
+                                "geometry": geom_coords,
                                 "name": tags.get("name", "Water Body"),
-                                "setback_m": 120.0,
+                                "water_type": tags.get("waterway") or tags.get("natural", "water"),
+                                "setback_m": 50.0,  # Statutory riparian wet margin (Wetlands Rules 2017)
                             })
 
                     query_success = True
@@ -220,55 +251,13 @@ class OverpassClient:
             except Exception:
                 continue
 
-        # 3. Always guarantee village core setback (minimum 800m from surveyed site center)
-        # Prevents turbine placement directly on village residential quarters
-        if not any(b.get("id", "").startswith("place_") for b in buildings):
-            buildings.append({
-                "id": f"osm_settlement_core_{round(center_lat, 4)}",
-                "lat": center_lat,
-                "lon": center_lon,
-                "x_m": 0.0,
-                "y_m": 0.0,
-                "type": "village_residential_settlement_core",
-                "setback_m": 800.0,
-            })
-
-        # 4. Live Nominatim Reverse-Geocode Fallback for Settlements if Overpass failed
-        if not query_success or (len(buildings) <= 1 and len(highways) == 0):
-            try:
-                nom_url = f"https://nominatim.openstreetmap.org/reverse?lat={center_lat}&lon={center_lon}&format=json&extratags=1"
-                nom_req = urllib.request.Request(nom_url, headers={"User-Agent": "AeroQuantumWind/2.4 (OSM-Settlement-Detector)"})
-                with urllib.request.urlopen(nom_req, timeout=4.0) as resp:
-                    nom_data = json.loads(resp.read().decode())
-                    nom_type = nom_data.get("type", "")
-                    nom_class = nom_data.get("class", "")
-                    addr = nom_data.get("address", {})
-
-                    settlement_name = addr.get("suburb") or addr.get("village") or addr.get("town") or "Village Zone"
-                    buildings.append({
-                        "id": f"osm_cadastral_{round(center_lat, 4)}",
-                        "lat": center_lat,
-                        "lon": center_lon,
-                        "x_m": 0.0,
-                        "y_m": 0.0,
-                        "type": f"residential_settlement_{settlement_name}",
-                        "setback_m": 800.0,
-                    })
-                    if nom_class == "highway":
-                        highways.append({
-                            "id": f"osm_nom_road_{round(center_lat, 4)}",
-                            "lat": center_lat,
-                            "lon": center_lon,
-                            "x_m": 0.0,
-                            "y_m": 0.0,
-                            "class": nom_type or "residential_road",
-                            "setback_m": 100.0,
-                        })
-            except Exception:
-                pass
+        # 3. Handle zero-infrastructure or rural coverage condition honestly
+        # Do NOT inject synthetic settlement cores or fake coordinates at center (x=0, y=0)
+        # Missing buildings in rural areas will be flagged as UNVERIFIED_RURAL_ZONE in suitability engine
 
         result = {
             "source": data_source,
+            "query_success": query_success,
             "center_lat": center_lat,
             "center_lon": center_lon,
             "radius_km": radius_km,

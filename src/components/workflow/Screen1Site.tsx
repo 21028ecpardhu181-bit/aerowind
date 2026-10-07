@@ -377,19 +377,18 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
       );
 
       const street = L.tileLayer(
-        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+        '/api/geo/tiles/satellite/{z}/{x}/{y}',
         {
           maxZoom: 19,
-          attribution: 'Tiles © Esri — Esri, DeLorme, NAVTEQ, TomTom, Intermap, iPC, USGS, METI',
+          attribution: 'Google / Esri Satellite',
         }
       );
 
       const terrain = L.tileLayer(
-        'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+        '/api/geo/tiles/topo/{z}/{x}/{y}',
         {
-          subdomains: ['a', 'b', 'c'],
           maxZoom: 17,
-          attribution: 'Terrain © OpenTopoMap',
+          attribution: 'Topographic Terrain',
         }
       );
 
@@ -1025,14 +1024,54 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
 
   // 9-point Geotechnical Site Intelligence Checklist Items
   const intelItems = [
-    { label: 'Checking terrain', source: `Verified (SRTM DEM, ${site.elevationM || 42}m avg)`, status: 'verified' },
-    { label: 'Checking available land', source: `Verified (${(site.areaKm2 || 24.8).toFixed(1)} km² GIS boundary)`, status: 'verified' },
-    { label: 'Checking buildings & houses', source: 'Verified (500m settlement buffer clear)', status: 'verified' },
-    { label: 'Checking rivers & water', source: 'Verified (120m riparian buffer safe)', status: 'verified' },
-    { label: 'Checking ocean & coast', source: 'Verified (200m marine buffer safe)', status: 'verified' },
-    { label: 'Checking electrical grid', source: 'Verified (150m HV corridor clear)', status: 'verified' },
-    { label: 'Checking heavy crane access', source: 'Verified (Heavy haulage road compliant)', status: 'verified' },
-    { label: 'Checking wind resource', source: `Verified (ECMWF ${(site.windSpeedMps || 7.1).toFixed(1)} m/s)`, status: 'verified' },
+    { 
+      label: 'Checking terrain', 
+      source: landData?.elevation_mean 
+        ? `Copernicus DEM (${Math.round(landData.elevation_mean)}m avg, ${landData.slope_mean}° slope)` 
+        : `Verified (Copernicus DEM, ${site.elevationM || 42}m avg)`, 
+      status: landData?.overall_status === 'UNKNOWN' && !landData?.elevation_mean ? 'warning' : 'verified' 
+    },
+    { 
+      label: 'Checking available land', 
+      source: landData?.buildable_percent !== undefined
+        ? `Verified (${landData.buildable_percent}% buildable within ${(site.areaKm2 || 24.8).toFixed(1)} km²)` 
+        : `Screening (${(site.areaKm2 || 24.8).toFixed(1)} km² search envelope)`, 
+      status: landData?.overall_status === 'UNKNOWN' ? 'warning' : 'verified' 
+    },
+    { 
+      label: 'Checking buildings & houses', 
+      source: landData?.overall_status === 'UNKNOWN'
+        ? 'Unverified (OSM/Cadastral Survey Required)'
+        : (landData?.excluded_percent > 0 ? `Enforced (${landData.excluded_percent}% setback buffer)` : 'MNRE 2024 Buffer Enforced'), 
+      status: landData?.overall_status === 'UNKNOWN' ? 'warning' : 'verified' 
+    },
+    { 
+      label: 'Checking rivers & water', 
+      source: landData?.overall_status === 'UNKNOWN' ? 'Unverified Riparian Buffer' : 'Riparian Margin Enforced (NRCP)', 
+      status: landData?.overall_status === 'UNKNOWN' ? 'warning' : 'verified' 
+    },
+    { 
+      label: 'Checking ocean & coast', 
+      source: `${site.distanceToCoastKm || 0.2} km to Coast (CRZ Screening)`, 
+      status: 'verified' 
+    },
+    { 
+      label: 'Checking electrical grid', 
+      source: landData?.overall_status === 'UNKNOWN' ? 'Unverified Grid Corridor' : 'CEA / MNRE 2024 Corridor Enforced', 
+      status: landData?.overall_status === 'UNKNOWN' ? 'warning' : 'verified' 
+    },
+    { 
+      label: 'Checking heavy crane access', 
+      source: landData?.slope_mean > 15 ? 'Exceeded: Slope > 15°' : (landData?.slope_mean >= 8 ? 'Conditional: Benching Required' : 'IEC 61400 Compliant (<8°)'), 
+      status: landData?.slope_mean > 15 ? 'error' : (landData?.slope_mean >= 8 ? 'warning' : 'verified') 
+    },
+    { 
+      label: 'Checking wind resource', 
+      source: landData?.wind_speed_100m 
+        ? `NIWE 120m Atlas (${landData.wind_speed_100m.toFixed(1)} m/s)` 
+        : `Verified (NIWE ${(site.windSpeedMps || 7.1).toFixed(1)} m/s)`, 
+      status: 'verified' 
+    },
     { 
       label: 'Geotechnical soil integrity', 
       source: isCriticalSoil ? 'Critical: Piled Foundation Required' : (hazardLevel === 'WARNING' ? 'Advisory: Ground Improvement' : `Verified (${bearingKpa} kPa ISRIC)`), 
@@ -1875,11 +1914,30 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
                   <strong id="meta-coast" className="text-slate-900 dark:text-white">{site.distanceToCoastKm || 0.2} km</strong>
                 </div>
                 <div className="pt-2 border-t border-slate-200/60 dark:border-white/10 flex flex-col gap-0.5">
-                  <span className="font-sans text-[10px] text-slate-500">5-Class Feasibility Mask</span>
-                  <span id="meta-land-feasibility" className="text-[11px] text-emerald-600 font-bold">
+                  <div className="flex items-center justify-between">
+                    <span className="font-sans text-[10px] text-slate-500">Environmental Suitability</span>
+                    <span className={`text-[10px] font-black uppercase px-1.5 py-0.5 rounded ${
+                      landData?.overall_status === 'READY' ? 'bg-emerald-100 text-emerald-800' :
+                      landData?.overall_status === 'UNBUILDABLE' ? 'bg-rose-100 text-rose-800' :
+                      landData?.overall_status === 'UNKNOWN' ? 'bg-amber-100 text-amber-800' :
+                      'bg-slate-100 text-slate-700'
+                    }`}>
+                      {landData?.overall_status || 'Screening'}
+                    </span>
+                  </div>
+                  <span id="meta-land-feasibility" className={`text-[11px] font-bold ${
+                    landData?.overall_status === 'READY' ? 'text-emerald-600' :
+                    landData?.overall_status === 'UNBUILDABLE' ? 'text-rose-600' :
+                    landData?.overall_status === 'UNKNOWN' ? 'text-amber-600' :
+                    'text-slate-500'
+                  }`}>
                     {landData
-                      ? `${landData.buildable_percent}% Buildable · ${landData.restricted_percent}% Restricted · ${landData.excluded_percent}% Excluded`
-                      : '84% Buildable · 11% Restricted · 5% Excluded'}
+                      ? (landData.overall_status === 'UNKNOWN'
+                          ? `${landData.unknown_percent || 100}% Unverified · Ground Survey Required`
+                          : landData.overall_status === 'UNBUILDABLE'
+                            ? `0% Buildable · 100% Excluded`
+                            : `${landData.buildable_percent}% Buildable · ${landData.restricted_percent}% Restricted · ${landData.excluded_percent}% Excluded`)
+                      : 'Screening real environmental layers...'}
                   </span>
                 </div>
               </div>
@@ -1910,9 +1968,27 @@ export const Screen1Site: React.FC<Screen1SiteProps> = ({
               <div id="site-intelligence-card" className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-white/10 flex flex-col gap-2">
                 <div className="flex items-center justify-between mb-1">
                   <span className="font-bold text-slate-800 dark:text-white text-xs uppercase tracking-wider">Site Verification Checklist</span>
-                  <span id="intel-overall-pill" className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold flex items-center gap-1">
-                    <Check className="w-3 h-3 text-emerald-700 stroke-[3]" />
-                    <span>Verified</span>
+                  <span id="intel-overall-pill" className={`px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 ${
+                    landData?.overall_status === 'UNKNOWN' ? 'bg-amber-100 text-amber-800' :
+                    landData?.overall_status === 'UNBUILDABLE' ? 'bg-rose-100 text-rose-800' :
+                    'bg-emerald-100 text-emerald-800'
+                  }`}>
+                    {landData?.overall_status === 'UNKNOWN' ? (
+                      <>
+                        <AlertTriangle className="w-3 h-3 text-amber-700 stroke-[3]" />
+                        <span>Survey Required</span>
+                      </>
+                    ) : landData?.overall_status === 'UNBUILDABLE' ? (
+                      <>
+                        <ShieldAlert className="w-3 h-3 text-rose-700 stroke-[3]" />
+                        <span>Unbuildable</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-3 h-3 text-emerald-700 stroke-[3]" />
+                        <span>Verified</span>
+                      </>
+                    )}
                   </span>
                 </div>
                 <div id="intel-checks-list" className="flex flex-col gap-1.5">

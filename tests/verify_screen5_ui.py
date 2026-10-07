@@ -56,7 +56,7 @@ def verify_screen5():
 
         # Screen 4: Wait for simulation to finish and click VIEW OPTIMIZED LAYOUT
         print("Screen 4: Waiting for QAOA simulation completion...")
-        page_m.wait_for_selector("#btn-screen4-view-optimized:not([disabled])", timeout=15000)
+        page_m.wait_for_selector("#btn-screen4-view-optimized:not([disabled])", timeout=45000)
         time.sleep(1.0)
 
         # Screen 4 -> Screen 5
@@ -187,12 +187,12 @@ def verify_screen5():
 
         page_d.goto("http://127.0.0.1:8000/app", wait_until="domcontentloaded")
         page_d.wait_for_timeout(1000)
-        if page_d.is_visible("#btn-project-new"):
-            page_d.click("#btn-project-new")
+        if page_d.locator("#btn-project-new:visible, #btn-desktop-nav-new:visible").count() > 0:
+            page_d.locator("#btn-project-new:visible, #btn-desktop-nav-new:visible").first.click()
             page_d.wait_for_timeout(1000)
 
         # Fast forward to Screen 2
-        page_d.locator("#btn-confirm-site-peek:visible, #btn-confirm-site:visible").first.click()
+        page_d.locator("#btn-confirm-site:visible, #btn-confirm-site-peek:visible").first.click()
         page_d.wait_for_selector("#screen-2-container", state="visible")
         page_d.locator("#btn-generate-layout").click()
         page_d.wait_for_selector("#screen-3-container", state="visible")
@@ -200,7 +200,7 @@ def verify_screen5():
 
         page_d.locator("#btn-screen3-optimize").click()
         page_d.wait_for_selector("#screen-4-container", state="visible")
-        page_d.wait_for_selector("#btn-screen4-view-optimized:not([disabled])", timeout=15000)
+        page_d.wait_for_selector("#btn-screen4-view-optimized:not([disabled])", timeout=45000)
         page_d.locator("#btn-screen4-view-optimized").click()
         page_d.wait_for_selector("#screen-5-container", state="visible")
         page_d.wait_for_selector("#screen5-map .leaflet-tile-loaded", timeout=10000)

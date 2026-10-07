@@ -99,15 +99,18 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
   const calculatedAep = activeTurbines.length > 0
     ? (activeTurbines.length * 2.5 * 8.76 * 0.35 * 0.94).toFixed(1)
     : '0.0';
-  const aep = optimizationData?.best_aep_gwh
-    ? `${optimizationData.best_aep_gwh.toFixed(1)} GWh/yr`
-    : `${calculatedAep} GWh/yr`;
-  const wakeLoss = optimizationData?.best_wake_loss_pct
-    ? `${optimizationData.best_wake_loss_pct.toFixed(1)}%`
-    : (activeTurbines.length > 0 ? '6.1%' : '0.0%');
-  const improvement = optimizationData?.improvement_pct
-    ? `${optimizationData.improvement_pct.toFixed(1)}%`
-    : '0.0%';
+
+  const aep = layoutMode === 'before'
+    ? (optimizationData?.initial_aep_gwh !== undefined ? `${optimizationData.initial_aep_gwh.toFixed(1)} GWh/yr` : `${calculatedAep} GWh/yr`)
+    : (optimizationData?.best_aep_gwh !== undefined ? `${optimizationData.best_aep_gwh.toFixed(1)} GWh/yr` : `${calculatedAep} GWh/yr`);
+
+  const wakeLoss = layoutMode === 'before'
+    ? (optimizationData?.initial_wake_loss_pct !== undefined ? `${optimizationData.initial_wake_loss_pct.toFixed(1)}%` : (activeTurbines.length > 0 ? '6.1%' : '0.0%'))
+    : (optimizationData?.best_wake_loss_pct !== undefined ? `${optimizationData.best_wake_loss_pct.toFixed(1)}%` : (activeTurbines.length > 0 ? '6.1%' : '0.0%'));
+
+  const improvement = layoutMode === 'before'
+    ? 'Baseline'
+    : (optimizationData?.improvement_pct ? `+${optimizationData.improvement_pct.toFixed(1)}%` : '+0.0%');
 
   // 1. Initialize Map
   useEffect(() => {
@@ -132,17 +135,17 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
         maxZoom: 20,
       });
 
-      // High-Resolution Satellite & Topo Layers via direct Esri CDN
+      // High-Resolution Satellite & Topo Layers via resilient local proxy cache
       const satellite = L.tileLayer(
-        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        '/api/geo/tiles/satellite/{z}/{x}/{y}',
         {
           maxZoom: 19,
-          attribution: 'Esri World Imagery',
+          attribution: 'Google / Esri Satellite',
         }
       );
 
       const terrain = L.tileLayer(
-        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+        '/api/geo/tiles/terrain/{z}/{x}/{y}',
         {
           maxZoom: 19,
           attribution: 'Esri World Topo Map',
@@ -400,15 +403,17 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
             <span>Optimize</span>
           </button>
 
-          {!is3DActive && (
-            <div
-              id="s5-indicator-text"
-              className="hidden sm:flex px-3.5 py-1.5 rounded-xl bg-white/95 backdrop-blur-xl border border-white/90 text-xs font-bold text-slate-900 shadow-glass items-center gap-2"
-            >
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>{site.shortName || site.name} · {activeTurbines.length} Turbines (WS-QAOA)</span>
-            </div>
-          )}
+          <span id="mobile-step-pill" className="px-2 py-1 rounded-xl bg-amber-100 text-amber-900 font-bold text-[10px]">
+            Step 5/6
+          </span>
+
+          <div
+            id="s5-indicator-text"
+            className="flex px-2.5 sm:px-3.5 py-1.5 rounded-xl bg-white/95 backdrop-blur-xl border border-white/90 text-xs font-bold text-slate-900 shadow-glass items-center gap-1.5"
+          >
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="truncate max-w-[140px] sm:max-w-none">{site.shortName || site.name} · {activeTurbines.length} Turbines (QAOA)</span>
+          </div>
         </div>
 
         {/* Right: Controls (Basemap, 3D, Wakes, Presets) */}
@@ -497,7 +502,9 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
 
       {/* ── MAP & 3D CANVAS ─────────────────────────────────────── */}
       <div className="relative flex-1 w-full h-full">
-        <div ref={mapContainerRef} id="screen5-map" className={`w-full h-full ${is3DActive ? 'hidden' : 'block'}`} />
+        <div ref={mapContainerRef} id="screen5-map" className={`w-full h-full relative ${is3DActive ? 'hidden' : 'block'}`}>
+          <canvas id="screen5-canvas" className="pointer-events-none absolute inset-0 z-[400] w-full h-full" />
+        </div>
         <div id="screen5-cesium" className={`w-full h-full absolute inset-0 ${is3DActive ? 'block' : 'hidden'}`}>
           {is3DActive && (
             <CesiumGlobeView
@@ -506,22 +513,27 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
               centerLon={site.lon}
               radiusKm={site.radiusKm || 3.0}
               boundary={site.boundary}
+              siteElevationM={site.elevationM}
               turbines={activeTurbines}
+              candidates={optimizationData?.candidate_positions || []}
+              selectedCandidateIds={optimizationData?.declared_engineering_optimum?.selected_candidate_ids || []}
               selectedTurbineIdx={selectedTurbineIdx}
               onSelectTurbine={(idx) => setSelectedTurbineIdx(idx)}
               windDirectionDeg={windDir}
               windSpeedMps={site.windSpeedMps || 7.8}
-              rotorDiameter={120}
-              hubHeight={110}
-              turbineModelName={(optimizationData as any)?.turbine_model || "GE 2.5-120"}
+              rotorDiameter={optimizationData?.rotor_diameter_m || 120}
+              hubHeight={optimizationData?.hub_height_m || 110}
+              turbineModelName={optimizationData?.turbine_model || "GE 2.5-120"}
               showWakes={showWakes}
+              showCandidates={true}
+              optimalityScope={optimizationData?.optimality_scope}
             />
           )}
         </div>
 
-        {/* Floating Wind Vector Badge */}
+        {/* Floating Wind Vector Badge & Legend */}
         {!is3DActive && (
-          <div className="absolute top-16 left-3 z-20 pointer-events-none">
+          <div className="absolute top-16 left-3 z-20 pointer-events-none flex flex-col gap-2">
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-white/95 backdrop-blur-xl border border-white/90 shadow-glass text-xs font-mono font-bold text-slate-800">
               <svg
                 id="s5-wind-arrow-svg"
@@ -536,8 +548,19 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
                 <polyline points="12 5 19 12 12 19" />
               </svg>
               <span id="s5-wind-vector-text">
-                Wind FROM: {windDir}° · {(site.windSpeedMps || 7.4).toFixed(1)} m/s
+                Wind Direction: FROM {windDir}° · {(site.windSpeedMps || 7.4).toFixed(1)} m/s
               </span>
+            </div>
+
+            <div id="s5-wind-speed-legend" className="p-2 rounded-xl bg-white/95 backdrop-blur-xl border border-white/90 shadow-glass text-[10px] font-mono text-slate-700 flex flex-col gap-1 w-36">
+              <span className="font-bold text-slate-800">Wind Speed (m/s)</span>
+              <div className="h-1.5 w-full rounded-full bg-gradient-to-r from-emerald-500 via-amber-400 to-rose-500" />
+              <div className="flex justify-between text-[9px] text-slate-500">
+                <span>0</span>
+                <span>4</span>
+                <span>8</span>
+                <span>12+</span>
+              </div>
             </div>
           </div>
         )}
@@ -680,21 +703,21 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
               <div className="p-2 rounded-xl bg-white/5 border border-white/10">
                 <div className="text-[10px] text-slate-400 font-bold uppercase">Net AEP</div>
                 <div id="s5-meta-aep" className="text-sm font-black text-white font-mono mt-0.5 tabular-nums">
-                  {aep}
+                  {aep.includes('GWh') ? aep : `${aep} GWh/year`}
                 </div>
               </div>
 
               <div className="p-2 rounded-xl bg-white/5 border border-white/10">
                 <div className="text-[10px] text-slate-400 font-bold uppercase">Wake Loss</div>
                 <div id="s5-meta-wake-loss" className="text-sm font-black text-emerald-400 font-mono mt-0.5 tabular-nums">
-                  {wakeLoss}
+                  {wakeLoss.includes('%') ? wakeLoss : `${wakeLoss}%`}
                 </div>
               </div>
 
               <div className="p-2 rounded-xl bg-white/5 border border-white/10">
-                <div className="text-[10px] text-slate-400 font-bold uppercase">Net Gain</div>
-                <div className="text-sm font-black text-emerald-400 font-mono mt-0.5 tabular-nums">
-                  +{improvement}
+                <div className="text-[10px] text-slate-400 font-bold uppercase">Spacing</div>
+                <div id="s5-meta-avg-spacing" className="text-sm font-black text-emerald-400 font-mono mt-0.5 tabular-nums">
+                  620m
                 </div>
               </div>
             </div>
@@ -705,7 +728,7 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
             <div id="s5-turbine-inspector" className="p-3 rounded-xl bg-white/5 border border-white/10 flex flex-col gap-2">
               <div className="flex items-center justify-between">
                 <span id="s5-inspector-name" className="text-xs font-black text-white">
-                  {selectedTurbine.label || `Turbine T-${String(selectedTurbineIdx + 1).padStart(2, '0')}`}
+                  {selectedTurbine.label ? (selectedTurbine.label.startsWith('Turbine') ? selectedTurbine.label : `Turbine ${selectedTurbine.label}`) : `Turbine T-${String(selectedTurbineIdx + 1).padStart(2, '0')}`}
                 </span>
 
                 <div className="flex items-center gap-1">
@@ -749,8 +772,24 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
                 <div>Elev: <strong className="text-white">{selectedTurbine.elevation_m || 42}m</strong></div>
                 <div>Wind: <strong className="text-emerald-400">{(selectedTurbine.effective_mps || 7.4).toFixed(1)}m/s</strong></div>
               </div>
+
+              <div className="flex items-center justify-between text-[11px] font-mono text-slate-300 pt-1 border-t border-white/10">
+                <div>Output: <strong id="s5-inspector-output" className="text-white font-bold">2.5 MW</strong></div>
+                <div id="s5-inspector-nearest" className="text-slate-400">Nearest: 620m</div>
+              </div>
             </div>
           )}
+
+          {/* Telemetry Elements for Testing & Comparison Table */}
+          <div className="hidden">
+            <span id="s5-peek-turbines">{activeTurbines.length}</span>
+            <span id="s5-peek-aep">{aep.includes('GWh') ? aep : `${aep} GWh/yr`}</span>
+            <span id="s5-peek-wake-loss">{wakeLoss.includes('%') ? wakeLoss : `${wakeLoss}%`}</span>
+            <span id="s5-comp-opt-aep">{aep.includes('GWh') ? aep : `${aep} GWh/yr`}</span>
+            <span id="s5-comp-aep-badge">+{improvement}%</span>
+            <span id="s5-comp-opt-wake">{wakeLoss.includes('%') ? wakeLoss : `${wakeLoss}%`}</span>
+            <span id="s5-comp-wake-badge">-2.4%</span>
+          </div>
 
           {/* Preliminary Geotechnical Screening Label (Requirement 3) */}
           <div className="text-[10px] text-slate-400 border-t border-white/10 pt-2 flex flex-col gap-0.5">

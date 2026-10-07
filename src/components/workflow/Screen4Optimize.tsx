@@ -14,21 +14,22 @@ export const Screen4Optimize: React.FC<Screen4OptimizeProps> = ({
   onViewOptimized,
 }) => {
   const [iteration, setIteration] = useState<number>(0);
-  const isDone = iteration >= 100;
+  const isDone = iteration >= 100 && Boolean(optimizationData);
 
   useEffect(() => {
+    if (optimizationData) {
+      setIteration(100);
+      return;
+    }
     const timer = setInterval(() => {
       setIteration((prev) => {
-        if (prev >= 100) {
-          clearInterval(timer);
-          return 100;
-        }
+        if (prev >= 90) return 90;
         return prev + 10;
       });
     }, 150);
 
     return () => clearInterval(timer);
-  }, []);
+  }, [optimizationData]);
 
   const bestAep = optimizationData?.best_aep_gwh ? optimizationData.best_aep_gwh.toFixed(1) : (isDone ? '0.0' : '--');
   const currAep = optimizationData?.initial_aep_gwh ? optimizationData.initial_aep_gwh.toFixed(1) : '--';

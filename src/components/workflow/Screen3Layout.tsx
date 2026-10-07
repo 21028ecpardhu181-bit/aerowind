@@ -94,12 +94,12 @@ export const Screen3Layout: React.FC<Screen3LayoutProps> = ({
         maxZoom: 20,
       });
 
-      // High-Resolution Satellite Tiles via direct Esri CDN
+      // High-Resolution Satellite Tiles via local proxy cache
       L.tileLayer(
-        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        '/api/geo/tiles/satellite/{z}/{x}/{y}',
         {
           maxZoom: 19,
-          attribution: 'Esri World Imagery',
+          attribution: 'Google / Esri Satellite',
         }
       ).addTo(map);
 
@@ -131,13 +131,16 @@ export const Screen3Layout: React.FC<Screen3LayoutProps> = ({
 
       // Render Candidate Grid Dots
       candidates.forEach((c: any) => {
+        const cLat = c.lat ?? c.latitude;
+        const cLon = c.lon ?? c.longitude;
+        if (cLat === undefined || cLon === undefined) return;
         const dotIcon = L.divIcon({
           className: 'candidate-dot-wrapper',
           html: '<div class="candidate-grid-dot"></div>',
           iconSize: [10, 10],
           iconAnchor: [5, 5],
         });
-        const m = L.marker([c.lat, c.lon], { icon: dotIcon, interactive: false }).addTo(map);
+        const m = L.marker([cLat, cLon], { icon: dotIcon, interactive: false }).addTo(map);
         candidateMarkersRef.current.push(m);
       });
 

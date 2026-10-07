@@ -140,6 +140,25 @@ export async function fetchFeasibility(payload: {
   return res.json();
 }
 
+export async function evaluateSuitability(payload: {
+  geometry?: any;
+  boundary?: number[][];
+  center_lat?: number;
+  center_lon?: number;
+  radius_km?: number;
+  hub_height_m?: number;
+  rotor_diameter_m?: number;
+}): Promise<any> {
+  const res = await fetch(`${API_BASE}/geo/suitability/evaluate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(`Suitability evaluation error: ${res.statusText}`);
+  return res.json();
+}
+
+
 export async function fetchProvenance(): Promise<any> {
   const res = await fetch(`${API_BASE}/geo/provenance`);
   if (!res.ok) throw new Error('Failed to fetch data provenance');
@@ -312,14 +331,33 @@ export async function fetchVillageBoundary(query: string, lat?: number, lon?: nu
             boundary: normalizedCoords,
             coordinates: normalizedCoords,
             center: [bData.latitude ?? lat, bData.longitude ?? lon],
-            boundary_type: bData.boundary_type || 'cadastral_polygon',
-            source_provenance: bData.source_provenance || 'OpenStreetMap Nominatim',
+            boundary_type: bData.boundary_type || 'official_administrative_polygon',
+            source_provenance: bData.source_provenance || 'Survey of India / OpenStreetMap',
+            status: bData.status || 'BOUNDARY_FOUND',
           };
         }
+      } else if (raw.status && raw.status !== 'success') {
+        // Truthful backend status (e.g. UNAVAILABLE, LOCATION_BOUNDARY_MISMATCH, AMBIGUOUS_LOCATION)
+        return {
+          village_name: query || 'Unknown Locality',
+          display_name: `${query || 'Locality'} (${raw.status})`,
+          latitude: lat ?? 0,
+          longitude: lon ?? 0,
+          area_km2: null,
+          perimeter_km: null,
+          boundary: null,
+          coordinates: null,
+          center: [lat ?? 0, lon ?? 0],
+          boundary_type: raw.status,
+          status: raw.status,
+          authority: raw.authority || 'UNKNOWN',
+          diagnostic_detail: raw.diagnostic_detail,
+          source_provenance: `Authoritative Engine (${raw.status})`,
+        };
       }
     }
   } catch (e) {
-    console.warn('Backend village boundary fetch failed, falling back to authoritative cadastre client:', e);
+    console.warn('Backend village boundary fetch failed:', e);
   }
 
   // 2. Hierarchical OpenStreetMap Nominatim resolution (real administrative MultiPolygons & Polygons)
@@ -448,25 +486,20 @@ export async function fetchVillageBoundary(query: string, lat?: number, lon?: nu
     console.warn('Direct OSM lookup failed:', osmErr);
   }
 
-  // 3. Topographic Engineering Concession Boundary Fallback
-  const fallbackLat = lat ?? 16.9676;
-  const fallbackLon = lon ?? 81.8138;
-  const engineeringBoundary = generateEngineeringConcessionBoundary(fallbackLat, fallbackLon, 3.2);
-  const fallbackArea = calculateGeodeticAreaKm2(engineeringBoundary);
-  const fallbackPerim = calculateGeodeticPerimeterKm(engineeringBoundary);
-
+  // 3. Truthful fallback: No synthetic boundaries permitted in official path
   return {
-    village_name: query || 'Engineering Wind Concession',
-    display_name: `${query || 'Engineering Site'} (${fallbackArea.toFixed(1)} km² Wind Concession)`,
-    latitude: fallbackLat,
-    longitude: fallbackLon,
-    area_km2: fallbackArea,
-    perimeter_km: fallbackPerim,
-    boundary: engineeringBoundary,
-    coordinates: engineeringBoundary,
-    center: [fallbackLat, fallbackLon],
-    boundary_type: 'engineering_concession_envelope',
-    source_provenance: 'Topographic Geodesic Concession',
+    village_name: query || 'Unknown Locality',
+    display_name: `${query || 'Locality'} (Boundary Unavailable)`,
+    latitude: lat ?? 0,
+    longitude: lon ?? 0,
+    area_km2: null,
+    perimeter_km: null,
+    boundary: null,
+    coordinates: null,
+    center: [lat ?? 0, lon ?? 0],
+    boundary_type: 'UNAVAILABLE',
+    status: 'UNAVAILABLE',
+    source_provenance: 'None (Boundary Unavailable in Authoritative Registry)',
   };
 }
 
@@ -477,6 +510,129 @@ export async function generateInitialLayout(payload: any): Promise<any> {
     body: JSON.stringify(payload),
   });
   if (!res.ok) throw new Error(`Initial layout failed: ${res.statusText}`);
+  return res.json();
+}
+
+// ── Phase 4: Engineering Turbines & Feasible Candidate APIs ─────────────
+export async function fetchTurbineCatalog(): Promise<any[]> {
+  const res = await fetch(`${API_BASE}/engineering/turbines`);
+  if (!res.ok) throw new Error(`Failed to fetch turbine catalog: ${res.statusText}`);
+  return res.json();
+}
+
+export async function fetchTurbineSpec(turbineId: string): Promise<any> {
+  const res = await fetch(`${API_BASE}/engineering/turbines/${encodeURIComponent(turbineId)}`);
+  if (!res.ok) throw new Error(`Failed to fetch turbine spec for ${turbineId}: ${res.statusText}`);
+  return res.json();
+}
+
+export async function generateEngineeringCandidates(payload: {
+  search_envelope_geometry: any;
+  turbine_model_id?: string;
+  min_spacing_diameters?: number;
+  max_candidates?: number;
+  wind_direction_from_deg?: number;
+}): Promise<any> {
+  const res = await fetch(`${API_BASE}/engineering/candidates/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(`Candidate generation error: ${res.statusText}`);
+  return res.json();
+}
+
+export async function validateEngineeringCandidates(payload: {
+  search_envelope_geometry: any;
+  proposed_coordinates: any[];
+  turbine_model_id?: string;
+  min_spacing_diameters?: number;
+  wind_direction_from_deg?: number;
+}): Promise<any> {
+  const res = await fetch(`${API_BASE}/engineering/candidates/validate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(`Candidate validation error: ${res.statusText}`);
+  return res.json();
+}
+
+export async function fetchGeometryConventions(): Promise<any> {
+  const res = await fetch(`${API_BASE}/engineering/conventions`);
+  if (!res.ok) throw new Error(`Failed to fetch geometry conventions: ${res.statusText}`);
+  return res.json();
+}
+
+// ── Phase 5: Wind Resource, Wake & Preliminary AEP APIs ──────────────────
+export async function fetchWindClimatology(
+  lat: number,
+  lon: number,
+  hubHeightM: number = 110.0,
+  groundElevationM: number = 0.0
+): Promise<any> {
+  const res = await fetch(
+    `${API_BASE}/engineering/wind/climatology?lat=${lat}&lon=${lon}&hub_height_m=${hubHeightM}&ground_elevation_m=${groundElevationM}`
+  );
+  if (!res.ok) throw new Error(`Wind climatology fetch error: ${res.statusText}`);
+  return res.json();
+}
+
+export async function fetchTurbinePowerCurve(
+  turbineModelId: string = 'ge_25_120',
+  airDensityKgM3: number = 1.225
+): Promise<any> {
+  const res = await fetch(`${API_BASE}/engineering/turbines/power-curve`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ turbine_model_id: turbineModelId, air_density_kgm3: airDensityKgM3 }),
+  });
+  if (!res.ok) throw new Error(`Power curve evaluation error: ${res.statusText}`);
+  return res.json();
+}
+
+export async function simulateWakeField(payload: {
+  positions: any[];
+  turbine_model_id?: string;
+  wind_speed_mps?: number;
+  wind_direction_from_deg?: number;
+  air_density_kgm3?: number;
+}): Promise<any> {
+  const res = await fetch(`${API_BASE}/engineering/wake/simulate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(`Wake simulation error: ${res.statusText}`);
+  return res.json();
+}
+
+export async function evaluatePreliminaryAep(payload: {
+  candidate_positions: any[];
+  turbine_model_id?: string;
+  site_elevation_m?: number;
+  custom_losses?: Record<string, number>;
+}): Promise<any> {
+  const res = await fetch(`${API_BASE}/engineering/aep/evaluate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(`AEP evaluation error: ${res.statusText}`);
+  return res.json();
+}
+
+export async function fetchPhase6Contract(payload: {
+  candidate_positions: any[];
+  turbine_model_id?: string;
+  site_elevation_m?: number;
+}): Promise<any> {
+  const res = await fetch(`${API_BASE}/engineering/aep/phase6-contract`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(`Phase 6 contract error: ${res.statusText}`);
   return res.json();
 }
 
@@ -574,3 +730,110 @@ export async function authLogout(token: string): Promise<any> {
   });
   return res.ok;
 }
+
+// ── Phase 6 Optimization Service ──────────────────────────────────────────────
+
+export interface QuboFormulationPayload {
+  candidates: any[];
+  turbine_model_id?: string;
+  target_turbines?: number;
+  min_spacing_multiplier?: number;
+  site_elevation_m?: number;
+  penalty_capacity?: number;
+  penalty_spacing?: number;
+}
+
+export interface ClassicalOptimizationPayload {
+  candidates: any[];
+  turbine_model_id?: string;
+  target_turbines?: number;
+  min_spacing_multiplier?: number;
+  site_elevation_m?: number;
+  top_k?: number;
+}
+
+export interface QaoaOptimizationPayload {
+  candidates: any[];
+  turbine_model_id?: string;
+  target_turbines?: number;
+  min_spacing_multiplier?: number;
+  site_elevation_m?: number;
+  p_layers?: number;
+  shots?: number;
+  max_classical_iterations?: number;
+  top_k_physical_reeval?: number;
+  backend_type?: 'simulator' | 'aer_simulator' | 'ibm_hardware';
+  ibm_token?: string;
+  ibm_backend_name?: string;
+  random_seed?: number;
+}
+
+export async function fetchOptimizationHardwareStatus(): Promise<any> {
+  const res = await fetch(`${API_BASE}/engineering/optimization/hardware-status`);
+  if (!res.ok) throw new Error(`Failed to query hardware status: ${res.statusText}`);
+  return res.json();
+}
+
+export async function generateQuboFormulation(payload: QuboFormulationPayload): Promise<any> {
+  const res = await fetch(`${API_BASE}/engineering/optimization/qubo-formulation`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `QUBO formulation failed: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function runClassicalOptimization(payload: ClassicalOptimizationPayload): Promise<any> {
+  const res = await fetch(`${API_BASE}/engineering/optimization/classical`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Classical optimization failed: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function runQaoaOptimization(payload: QaoaOptimizationPayload): Promise<any> {
+  const res = await fetch(`${API_BASE}/engineering/optimization/qaoa`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `QAOA optimization failed: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function runQaoaQualityAudit(payload: {
+  candidates: any[];
+  turbine_model_id?: string;
+  target_turbines?: number;
+  min_spacing_multiplier?: number;
+  site_elevation_m?: number;
+  p_layers?: number;
+  shots?: number;
+  repetitions?: number;
+  seeds?: number[];
+}): Promise<any> {
+  const res = await fetch(`${API_BASE}/engineering/optimization/qaoa-quality-audit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `QAOA quality audit failed: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+

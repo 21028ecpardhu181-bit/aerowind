@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { 
   Compass, 
   RotateCcw, 
@@ -18,8 +18,11 @@ interface CesiumGlobeViewProps {
   centerLat: number;
   centerLon: number;
   radiusKm?: number;
-  boundary?: number[][];
+  boundary?: number[][] | any;
+  siteElevationM?: number;
   turbines?: Turbine[];
+  candidates?: any[];
+  selectedCandidateIds?: string[];
   selectedTurbineIdx?: number;
   onSelectTurbine?: (index: number) => void;
   windDirectionDeg?: number;
@@ -28,7 +31,99 @@ interface CesiumGlobeViewProps {
   hubHeight?: number;
   turbineModelName?: string;
   showWakes?: boolean;
+  showCandidates?: boolean;
+  optimalityScope?: string;
   className?: string;
+}
+
+interface BoundaryPolygonData {
+  exterior: number[];
+  holes: number[][];
+}
+
+function parseBoundaryPolygons(boundaryInput: any): BoundaryPolygonData[] {
+  if (!boundaryInput) return [];
+
+  if (boundaryInput.type === 'FeatureCollection' && Array.isArray(boundaryInput.features)) {
+    const list: BoundaryPolygonData[] = [];
+    for (const f of boundaryInput.features) {
+      list.push(...parseBoundaryPolygons(f.geometry || f));
+    }
+    return list;
+  }
+
+  if (boundaryInput.type === 'Feature' && boundaryInput.geometry) {
+    return parseBoundaryPolygons(boundaryInput.geometry);
+  }
+
+  if (boundaryInput.type === 'Polygon' && Array.isArray(boundaryInput.coordinates)) {
+    const rings = boundaryInput.coordinates;
+    if (rings.length === 0) return [];
+    const exterior = rings[0].flatMap(([lon, lat]: [number, number]) => [Number(lon), Number(lat)]);
+    const holes = rings.slice(1).map((ring: [number, number][]) =>
+      ring.flatMap(([lon, lat]: [number, number]) => [Number(lon), Number(lat)])
+    );
+    return [{ exterior, holes }];
+  }
+
+  if (boundaryInput.type === 'MultiPolygon' && Array.isArray(boundaryInput.coordinates)) {
+    const list: BoundaryPolygonData[] = [];
+    for (const polyRings of boundaryInput.coordinates) {
+      if (polyRings.length === 0) continue;
+      const exterior = polyRings[0].flatMap(([lon, lat]: [number, number]) => [Number(lon), Number(lat)]);
+      const holes = polyRings.slice(1).map((ring: [number, number][]) =>
+        ring.flatMap(([lon, lat]: [number, number]) => [Number(lon), Number(lat)])
+      );
+      list.push({ exterior, holes });
+    }
+    return list;
+  }
+
+  if (Array.isArray(boundaryInput) && boundaryInput.length >= 3) {
+    const exterior: number[] = [];
+    for (const pt of boundaryInput) {
+      if (Array.isArray(pt) && pt.length >= 2) {
+        const p0 = Number(pt[0]);
+        const p1 = Number(pt[1]);
+        let lat = p0;
+        let lon = p1;
+        if (Math.abs(p0) > 45 && Math.abs(p1) <= 45) {
+          lon = p0;
+          lat = p1;
+        }
+        exterior.push(lon, lat);
+      }
+    }
+    if (exterior.length >= 6) {
+      return [{ exterior, holes: [] }];
+    }
+  }
+
+  return [];
+}
+
+function computeSiteSatelliteBounds(lat: number, lon: number, zoom: number = 14, gridRadius: number = 2) {
+  const rLat = Number(lat.toFixed(4));
+  const rLon = Number(lon.toFixed(4));
+  const n = Math.pow(2, zoom);
+  const centerX = ((rLon + 180.0) / 360.0) * n;
+  const latRad = (rLat * Math.PI) / 180.0;
+  const centerY = ((1.0 - Math.asinh(Math.tan(latRad)) / Math.PI) / 2.0) * n;
+  const cx = Math.floor(centerX);
+  const cy = Math.floor(centerY);
+
+  const west = ((cx - gridRadius) / n) * 360.0 - 180.0;
+  const east = ((cx + gridRadius + 1) / n) * 360.0 - 180.0;
+  const north = (Math.atan(Math.sinh(Math.PI * (1.0 - (2.0 * (cy - gridRadius)) / n))) * 180.0) / Math.PI;
+  const south = (Math.atan(Math.sinh(Math.PI * (1.0 - (2.0 * (cy + gridRadius + 1)) / n))) * 180.0) / Math.PI;
+
+  return {
+    west,
+    south,
+    east,
+    north,
+    imageUrl: `/api/geo/site-imagery?lat=${rLat}&lon=${rLon}&zoom=${zoom}&grid_radius=${gridRadius}`,
+  };
 }
 
 export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
@@ -37,7 +132,10 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
   centerLon,
   radiusKm = 3.0,
   boundary,
+  siteElevationM,
   turbines = [],
+  candidates = [],
+  selectedCandidateIds = [],
   selectedTurbineIdx = 0,
   onSelectTurbine,
   windDirectionDeg = 270,
@@ -46,33 +144,67 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
   hubHeight = 110,
   turbineModelName = 'GE 2.5-120',
   showWakes = true,
+  showCandidates = true,
+  optimalityScope,
   className = '',
 }) => {
   const viewerRef = useRef<any>(null);
   const clickHandlerRef = useRef<any>(null);
+  const siteImageryLayerRef = useRef<any>(null);
   const entitiesRef = useRef<{
     turbines: any[];
+    candidates: any[];
     wakes: any[];
     streamlines: any[];
     telemetryLines: any[];
-    boundary: any | null;
+    boundaryEntities: any[];
+    siteSatelliteDrape: any | null;
   }>({
     turbines: [],
+    candidates: [],
     wakes: [],
     streamlines: [],
     telemetryLines: [],
-    boundary: null,
+    boundaryEntities: [],
+    siteSatelliteDrape: null,
   });
 
+  const [viewerInstance, setViewerInstance] = useState<any>(null);
   const [activeCameraPreset, setActiveCameraPreset] = useState<string>('OBLIQUE');
   const [isTerrainReady, setIsTerrainReady] = useState<boolean>(false);
   const [isGoogleTilesActive, setIsGoogleTilesActive] = useState<boolean>(false);
   const [showFlowStreamlines, setShowFlowStreamlines] = useState<boolean>(true);
   const [localShowWakes, setLocalShowWakes] = useState<boolean>(showWakes);
+  const [localShowCandidates, setLocalShowCandidates] = useState<boolean>(showCandidates);
 
   useEffect(() => {
     setLocalShowWakes(showWakes);
   }, [showWakes]);
+
+  useEffect(() => {
+    setLocalShowCandidates(showCandidates);
+  }, [showCandidates]);
+
+  // Dynamically calculate actual turbine cluster centroid to center camera and satellite texture
+  const effectiveCenterLat = useMemo(() => {
+    if (turbines && turbines.length > 0) {
+      const valid = turbines.filter((t) => t.lat !== undefined && t.lat !== null && !isNaN(Number(t.lat)));
+      if (valid.length > 0) {
+        return valid.reduce((sum, t) => sum + Number(t.lat), 0) / valid.length;
+      }
+    }
+    return centerLat;
+  }, [turbines, centerLat]);
+
+  const effectiveCenterLon = useMemo(() => {
+    if (turbines && turbines.length > 0) {
+      const valid = turbines.filter((t) => t.lon !== undefined && t.lon !== null && !isNaN(Number(t.lon)));
+      if (valid.length > 0) {
+        return valid.reduce((sum, t) => sum + Number(t.lon), 0) / valid.length;
+      }
+    }
+    return centerLon;
+  }, [turbines, centerLon]);
 
   // 1. Initialize Cesium 3D Viewer
   useEffect(() => {
@@ -94,12 +226,10 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
     }
 
     try {
-      // High-Resolution Satellite Base Layer via direct Esri World Imagery CDN
-      const satelliteProvider = new Cesium.UrlTemplateImageryProvider({
-        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-        maximumLevel: 19,
-        credit: 'Esri World Imagery',
-      });
+      // Ensure Cesium never attempts background Ion API calls with default invalid tokens
+      if (Cesium.Ion) {
+        Cesium.Ion.defaultAccessToken = '';
+      }
 
       const viewer = new Cesium.Viewer(containerId, {
         animation: false,
@@ -112,9 +242,8 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
         infoBox: false,
         selectionIndicator: false,
         creditContainer: document.createElement('div'), // Hidden credits container
-        baseLayer: new Cesium.ImageryLayer(satelliteProvider),
-        shadows: true,
-        terrainShadows: Cesium.ShadowMode.ENABLED,
+        baseLayer: false,
+        shadows: false,
         contextOptions: {
           webgl: {
             alpha: false,
@@ -126,41 +255,19 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
         },
       });
 
-      // Superimpose High-Resolution Road Network & Place Labels
-      const referenceLabelsProvider = new Cesium.UrlTemplateImageryProvider({
-        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
-        maximumLevel: 19,
-      });
-      viewer.imageryLayers.addImageryProvider(referenceLabelsProvider);
+      // Expose globally for telemetry and UI verification inspection
+      (window as any).viewer = viewer;
+      (window as any).cesiumViewer = viewer;
 
       const scene = viewer.scene;
-      scene.globe.depthTestAgainstTerrain = true;
-      scene.globe.enableLighting = true;
-      if (scene.shadowMap) {
-        scene.shadowMap.enabled = true;
-        scene.shadowMap.softShadows = true;
-      }
+      scene.globe.baseColor = Cesium.Color.fromCssColorString('#1e293b');
+      scene.globe.depthTestAgainstTerrain = false;
+      scene.globe.enableLighting = false; // Always bright, crisp daylight satellite rendering
+      scene.globe.showGroundAtmosphere = true;
       if (scene.skyAtmosphere) scene.skyAtmosphere.show = true;
       if (scene.fog) {
         scene.fog.enabled = true;
-        scene.fog.density = 0.00012;
-      }
-
-      // Load Real 3D World Terrain
-      if (typeof Cesium.createWorldTerrainAsync === 'function') {
-        Cesium.createWorldTerrainAsync({
-          requestVertexNormals: true,
-          requestWaterMask: true,
-        })
-          .then((provider: any) => {
-            if (viewer && !viewer.isDestroyed()) {
-              viewer.terrainProvider = provider;
-              setIsTerrainReady(true);
-            }
-          })
-          .catch((err: any) => {
-            console.warn('[CesiumGlobeView] World terrain fallback:', err);
-          });
+        scene.fog.density = 0.00008;
       }
 
       // Load Google Photorealistic 3D Tiles if API key is provided
@@ -205,9 +312,10 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
 
       clickHandlerRef.current = handler;
       viewerRef.current = viewer;
+      setViewerInstance(viewer);
 
-      // Initial Camera Fly to Site
-      flyToProjectSite(viewer, centerLat, centerLon, radiusKm, 'OBLIQUE', 1.5);
+      // Initial Camera Set View to Site (immediate positioning centered on wind turbines)
+      flyToProjectSite(viewer, effectiveCenterLat, effectiveCenterLon, radiusKm, 'OBLIQUE', 0.0);
     } catch (e) {
       console.error('[CesiumGlobeView] Initialization error:', e);
     }
@@ -225,6 +333,7 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
         } catch (_) {}
         viewerRef.current = null;
       }
+      setViewerInstance(null);
     };
   }, [containerId]);
 
@@ -240,124 +349,178 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
     const Cesium = (window as any).Cesium;
     if (!viewer || viewer.isDestroyed() || !Cesium) return;
 
-    const spanM = Math.max(1200.0, rKm * 2000.0);
-    const altitude = Math.max(700.0, spanM * 1.35);
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+    const target = Cesium.Cartesian3.fromDegrees(lon, lat, 0);
+    const rangeMeters = isMobile
+      ? Math.max(3800.0, rKm * 1000.0 * 1.25)
+      : Math.max(5200.0, rKm * 1000.0 * 1.45);
 
-    let heading = 0.0;
-    let pitch = -42.0;
-    let latOffset = (altitude * 0.42) / 111000.0;
-    let lonOffset = 0.0;
+    let headingDeg = 35.0;
+    let pitchDeg = -42.0;
 
     switch (preset) {
       case 'TOP':
-        heading = 0.0;
-        pitch = -89.0;
-        latOffset = 0.0;
+        headingDeg = 0.0;
+        pitchDeg = -89.0;
         break;
       case 'NORTH':
-        heading = 0.0;
-        pitch = -38.0;
-        latOffset = (altitude * 0.45) / 111000.0;
+        headingDeg = 0.0;
+        pitchDeg = -40.0;
         break;
       case 'SOUTH':
-        heading = 180.0;
-        pitch = -38.0;
-        latOffset = -(altitude * 0.45) / 111000.0;
+        headingDeg = 180.0;
+        pitchDeg = -40.0;
         break;
       case 'WIND_ALIGN':
-        heading = (windDirectionDeg + 180) % 360;
-        pitch = -35.0;
-        const windRad = Cesium.Math.toRadians(heading);
-        latOffset = ((altitude * 0.4) * Math.cos(windRad)) / 111000.0;
-        lonOffset = ((altitude * 0.4) * Math.sin(windRad)) / (111000.0 * Math.cos(lat * Math.PI / 180.0));
+        headingDeg = (windDirectionDeg + 180) % 360;
+        pitchDeg = -40.0;
         break;
       case 'OBLIQUE':
       default:
-        heading = 35.0;
-        pitch = -40.0;
-        latOffset = (altitude * 0.40) / 111000.0;
+        headingDeg = 35.0;
+        pitchDeg = -42.0;
         break;
     }
 
-    viewer.camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(lon - lonOffset, lat - latOffset, altitude),
-      orientation: {
-        heading: Cesium.Math.toRadians(heading),
-        pitch: Cesium.Math.toRadians(pitch),
-        roll: 0.0,
-      },
-      duration,
-    });
+    const headingRad = Cesium.Math.toRadians(headingDeg);
+    const pitchRad = Cesium.Math.toRadians(pitchDeg);
+
+    viewer.camera.lookAt(target, new Cesium.HeadingPitchRange(headingRad, pitchRad, rangeMeters));
+    viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
   }, [windDirectionDeg]);
 
   // Synchronize Camera When Coordinates Change
   useEffect(() => {
     if (viewerRef.current && !viewerRef.current.isDestroyed()) {
-      flyToProjectSite(viewerRef.current, centerLat, centerLon, radiusKm, activeCameraPreset, 1.2);
+      flyToProjectSite(viewerRef.current, effectiveCenterLat, effectiveCenterLon, radiusKm, activeCameraPreset, 1.2);
     }
-  }, [centerLat, centerLon, radiusKm, activeCameraPreset, flyToProjectSite]);
+  }, [effectiveCenterLat, effectiveCenterLon, radiusKm, activeCameraPreset, flyToProjectSite]);
 
-  // Render Site Boundary Polygon
+  // Render Site Boundary Polygon & Satellite Surface
+  // Synchronously compute bounds and drape high-definition satellite terrain
   useEffect(() => {
-    const viewer = viewerRef.current;
+    const viewer = viewerInstance || viewerRef.current;
     const Cesium = (window as any).Cesium;
     if (!viewer || viewer.isDestroyed() || !Cesium) return;
 
-    if (entitiesRef.current.boundary) {
-      viewer.entities.remove(entitiesRef.current.boundary);
-      entitiesRef.current.boundary = null;
+    const bounds = computeSiteSatelliteBounds(effectiveCenterLat, effectiveCenterLon, 14, 2);
+    const rectCoords = Cesium.Rectangle.fromDegrees(bounds.west, bounds.south, bounds.east, bounds.north);
+
+    if (entitiesRef.current.siteSatelliteDrape) {
+      try {
+        viewer.entities.remove(entitiesRef.current.siteSatelliteDrape);
+      } catch (_) {}
+      entitiesRef.current.siteSatelliteDrape = null;
     }
 
-    let flatCoords: number[] = [];
+    const drape = viewer.entities.add({
+      name: 'Site High-Resolution Satellite Map',
+      rectangle: {
+        coordinates: rectCoords,
+        material: bounds.imageUrl,
+      },
+    });
+    entitiesRef.current.siteSatelliteDrape = drape;
 
-    if (boundary && boundary.length >= 3) {
-      boundary.forEach(([lat, lon]) => {
-        flatCoords.push(lon, lat);
-      });
-    } else {
-      // 32-point circular boundary
-      const pts = 32;
-      const rDeg = (radiusKm * 1000.0) / 111000.0;
-      for (let i = 0; i < pts; i++) {
-        const theta = (i / pts) * 2 * Math.PI;
-        const bLat = centerLat + rDeg * Math.cos(theta);
-        const bLon = centerLon + (rDeg * Math.sin(theta)) / Math.cos(centerLat * Math.PI / 180.0);
-        flatCoords.push(bLon, bLat);
+    return () => {
+      if (viewerRef.current && !viewerRef.current.isDestroyed() && entitiesRef.current.siteSatelliteDrape) {
+        try {
+          viewerRef.current.entities.remove(entitiesRef.current.siteSatelliteDrape);
+        } catch (_) {}
+        entitiesRef.current.siteSatelliteDrape = null;
       }
+    };
+  }, [viewerInstance, effectiveCenterLat, effectiveCenterLon]);
+
+  // Render Authoritative Site Boundary & Exclusion Holes
+  useEffect(() => {
+    const viewer = viewerInstance || viewerRef.current;
+    const Cesium = (window as any).Cesium;
+    if (!viewer || viewer.isDestroyed() || !Cesium) return;
+
+    // Clear previous boundary entities
+    if (entitiesRef.current.boundaryEntities) {
+      entitiesRef.current.boundaryEntities.forEach((e) => viewer.entities.remove(e));
+      entitiesRef.current.boundaryEntities = [];
     }
 
-    if (flatCoords.length >= 6) {
+    const polygons = parseBoundaryPolygons(boundary);
+    if (polygons.length === 0) return; // Truthful: never manufacture synthetic circles if boundary is absent
+
+    polygons.forEach((poly, polyIdx) => {
+      if (poly.exterior.length < 6) return;
+
+      const exteriorPositions = Cesium.Cartesian3.fromDegreesArray(poly.exterior);
+      const holeHierarchies = poly.holes
+        .filter((h) => h.length >= 6)
+        .map((h) => new Cesium.PolygonHierarchy(Cesium.Cartesian3.fromDegreesArray(h)));
+
+      const hierarchy = new Cesium.PolygonHierarchy(exteriorPositions, holeHierarchies);
+
+      // 1. Concession area filled polygon with interior exclusion holes
       const boundaryEntity = viewer.entities.add({
-        name: 'Concession Area Boundary',
+        name: `Concession Area Boundary ${polyIdx + 1}`,
         polygon: {
-          hierarchy: Cesium.Cartesian3.fromDegreesArray(flatCoords),
+          hierarchy: hierarchy,
           material: Cesium.Color.fromCssColorString('rgba(255, 210, 31, 0.12)'),
-          outline: true,
-          outlineColor: Cesium.Color.fromCssColorString('#FFD21F'),
-          outlineWidth: 3,
+          outline: false,
         },
+      });
+
+      // 2. Exterior ring dashed polyline
+      const exteriorWithClose = [...poly.exterior, poly.exterior[0], poly.exterior[1]];
+      const exteriorLine = viewer.entities.add({
+        name: `Concession Perimeter ${polyIdx + 1}`,
         polyline: {
-          positions: Cesium.Cartesian3.fromDegreesArray([...flatCoords, flatCoords[0], flatCoords[1]]),
-          width: 3,
+          positions: Cesium.Cartesian3.fromDegreesArray(exteriorWithClose),
+          width: 3.0,
           material: new Cesium.PolylineDashMaterialProperty({
             color: Cesium.Color.fromCssColorString('#FFD21F'),
             dashLength: 16.0,
           }),
+          clampToGround: true,
         },
       });
-      entitiesRef.current.boundary = boundaryEntity;
-    }
-  }, [centerLat, centerLon, radiusKm, boundary]);
 
-  // Render 3D Industrial Wind Turbines, Ground Wake Plumes, & Data Flow Network
+      entitiesRef.current.boundaryEntities.push(boundaryEntity, exteriorLine);
+
+      // 3. Render interior exclusion holes with crimson warning outlines
+      poly.holes.forEach((holeCoords, hIdx) => {
+        if (holeCoords.length < 6) return;
+        const holeWithClose = [...holeCoords, holeCoords[0], holeCoords[1]];
+        const holeEntity = viewer.entities.add({
+          name: `Statutory Exclusion Zone ${polyIdx + 1}-${hIdx + 1}`,
+          polygon: {
+            hierarchy: Cesium.Cartesian3.fromDegreesArray(holeCoords),
+            material: Cesium.Color.fromCssColorString('rgba(239, 68, 68, 0.22)'),
+            outline: false,
+          },
+          polyline: {
+            positions: Cesium.Cartesian3.fromDegreesArray(holeWithClose),
+            width: 2.5,
+            material: new Cesium.PolylineDashMaterialProperty({
+              color: Cesium.Color.fromCssColorString('#EF4444'),
+              dashLength: 10.0,
+            }),
+            clampToGround: true,
+          },
+        });
+        entitiesRef.current.boundaryEntities.push(holeEntity);
+      });
+    });
+  }, [viewerInstance, boundary]);
+
+  // Render 3D Industrial Wind Turbines, Candidate Locations, Ground Wake Plumes, & Data Flow Network
   useEffect(() => {
-    const viewer = viewerRef.current;
+    const viewer = viewerInstance || viewerRef.current;
     const Cesium = (window as any).Cesium;
     if (!viewer || viewer.isDestroyed() || !Cesium) return;
 
     // Clear previous entities
     entitiesRef.current.turbines.forEach((e) => viewer.entities.remove(e));
     entitiesRef.current.turbines = [];
+    entitiesRef.current.candidates.forEach((e) => viewer.entities.remove(e));
+    entitiesRef.current.candidates = [];
     entitiesRef.current.wakes.forEach((e) => viewer.entities.remove(e));
     entitiesRef.current.wakes = [];
     entitiesRef.current.streamlines.forEach((e) => viewer.entities.remove(e));
@@ -365,13 +528,11 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
     entitiesRef.current.telemetryLines.forEach((e) => viewer.entities.remove(e));
     entitiesRef.current.telemetryLines = [];
 
-    if (!turbines || turbines.length === 0) return;
-
     // Canonical upwind HAWT alignment: GlTF model axis correction maps glTF Z (rotor facing) to Cesium East (+X, 90 deg clockwise from North).
-    // To face strictly UPWIND directly into the oncoming meteorological wind vector (windDirectionDeg):
+    // To face strictly UPWIND directly into oncoming meteorological wind vector (windDirectionDeg):
     const gltfHeadingDeg = (windDirectionDeg - 90 + 360) % 360;
     const turbineHeadingRad = Cesium.Math.toRadians(gltfHeadingDeg);
-    const modelScale = Math.max(0.8, Math.min(1.8, rotorDiameter / 120.0));
+    const modelScale = Math.max(0.8, Math.min(2.0, rotorDiameter / 120.0));
 
     // Downwind vector
     const downwindDeg = (windDirectionDeg + 180) % 360;
@@ -382,19 +543,122 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
     const crossDx = -downwindDy;
     const crossDy = downwindDx;
 
+    // 1. Render Candidate Locations (Phase 4 Feasible & Unselected Candidates)
+    if (localShowCandidates && candidates && candidates.length > 0) {
+      const selectedIds = new Set(
+        selectedCandidateIds && selectedCandidateIds.length > 0
+          ? selectedCandidateIds.map(String)
+          : turbines.map((t) => String(t.id || t.label))
+      );
+
+      candidates.forEach((c: any, cIdx: number) => {
+        const cId = String(c.candidate_id || c.id || `C-${String(cIdx + 1).padStart(2, '0')}`);
+        const isSelected = selectedIds.has(cId);
+        if (isSelected) {
+          // Already rendered as full industrial wind turbine
+          return;
+        }
+
+        const cLat = Number(c.latitude ?? c.lat);
+        const cLon = Number(c.longitude ?? c.lon);
+        if (isNaN(cLat) || isNaN(cLon)) return;
+
+        const cElev = c.elevation_m !== undefined && c.elevation_m !== null
+          ? Number(c.elevation_m)
+          : (siteElevationM ?? 0.0);
+
+        const isFeasible = c.is_feasible !== false && !['EXCLUDED', 'HARD_EXCLUDED', 'INVALID'].includes(String(c.feasibility_status || c.status || '').toUpperCase());
+
+        if (isFeasible) {
+          // Feasible but Unselected Candidate Position
+          const candGround = Cesium.Cartesian3.fromDegrees(cLon, cLat, cElev + 0.3);
+          const candPad = viewer.entities.add({
+            name: `Candidate ${cId} (Unselected)`,
+            position: candGround,
+            cylinder: {
+              length: 0.6,
+              topRadius: rotorDiameter * 0.10,
+              bottomRadius: rotorDiameter * 0.10,
+              material: Cesium.Color.fromCssColorString('rgba(148, 163, 184, 0.45)'),
+              outline: true,
+              outlineColor: Cesium.Color.fromCssColorString('#94A3B8'),
+              outlineWidth: 1.5,
+              heightReference: Cesium.HeightReference.NONE,
+            },
+          });
+
+          const candLabel = viewer.entities.add({
+            position: Cesium.Cartesian3.fromDegrees(cLon, cLat, cElev + 16.0),
+            label: {
+              text: `${cId} · Feasible Candidate`,
+              font: 'bold 9px JetBrains Mono, monospace',
+              fillColor: Cesium.Color.fromCssColorString('#94A3B8'),
+              backgroundColor: Cesium.Color.fromCssColorString('rgba(15, 23, 42, 0.85)'),
+              showBackground: true,
+              backgroundPadding: new Cesium.Cartesian2(5, 3),
+              disableDepthTestDistance: Number.POSITIVE_INFINITY,
+              scale: 0.85,
+            },
+          });
+
+          entitiesRef.current.candidates.push(candPad, candLabel);
+        } else {
+          // Rejected / Excluded Candidate Location
+          const candGround = Cesium.Cartesian3.fromDegrees(cLon, cLat, cElev + 0.3);
+          const candPad = viewer.entities.add({
+            name: `Excluded Candidate ${cId}`,
+            position: candGround,
+            cylinder: {
+              length: 0.6,
+              topRadius: rotorDiameter * 0.08,
+              bottomRadius: rotorDiameter * 0.08,
+              material: Cesium.Color.fromCssColorString('rgba(239, 68, 68, 0.35)'),
+              outline: true,
+              outlineColor: Cesium.Color.fromCssColorString('#EF4444'),
+              outlineWidth: 1.5,
+              heightReference: Cesium.HeightReference.NONE,
+            },
+          });
+
+          const exclusionReason = c.exclusion_reason || 'Setback / Constraint';
+          const candLabel = viewer.entities.add({
+            position: Cesium.Cartesian3.fromDegrees(cLon, cLat, cElev + 14.0),
+            label: {
+              text: `${cId} · EXCLUDED: ${exclusionReason}`,
+              font: 'bold 9px JetBrains Mono, monospace',
+              fillColor: Cesium.Color.fromCssColorString('#EF4444'),
+              backgroundColor: Cesium.Color.fromCssColorString('rgba(15, 23, 42, 0.90)'),
+              showBackground: true,
+              backgroundPadding: new Cesium.Cartesian2(5, 3),
+              disableDepthTestDistance: Number.POSITIVE_INFINITY,
+              scale: 0.85,
+            },
+          });
+
+          entitiesRef.current.candidates.push(candPad, candLabel);
+        }
+      });
+    }
+
+    if (!turbines || turbines.length === 0) return;
+
     turbines.forEach((t, idx) => {
       const isSelected = idx === selectedTurbineIdx;
-      const surfaceElev = (isTerrainReady || isGoogleTilesActive)
-        ? ((t.elevation_m !== undefined && t.elevation_m !== null) ? Number(t.elevation_m) : 40.0)
-        : 0.0;
+      // Authentic elevation from Copernicus DEM GLO-90 composite metadata
+      const surfaceElev = (t.elevation_m !== undefined && t.elevation_m !== null)
+        ? Number(t.elevation_m)
+        : (siteElevationM !== undefined && siteElevationM !== null ? Number(siteElevationM) : 0.0);
+
       const groundPos = Cesium.Cartesian3.fromDegrees(t.lon, t.lat, surfaceElev);
       const hpr = new Cesium.HeadingPitchRoll(turbineHeadingRad, 0, 0);
       const orientation = Cesium.Transforms.headingPitchRollQuaternion(groundPos, hpr);
 
       const labelText = t.label || `T-${String(idx + 1).padStart(2, '0')}`;
-      const speedText = t.effective_mps ? `${t.effective_mps.toFixed(1)}m/s` : `${windSpeedMps.toFixed(1)}m/s`;
+      const speedText = t.effective_mps !== undefined && t.effective_mps !== null
+        ? `${Number(t.effective_mps).toFixed(1)} m/s`
+        : `${windSpeedMps.toFixed(1)} m/s`;
 
-      // 1. Certified Industrial 3D Wind Turbine Model with True 1:1 Metric Scale & Minimum Pixel Size
+      // 1. Certified Industrial 3D Wind Turbine Model with True 1:1 Metric Scale
       const turbineEntity = viewer.entities.add({
         turbineIndex: idx,
         name: `Turbine ${labelText}`,
@@ -407,55 +671,72 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
           maximumScale: 10.0,
           runAnimations: true,
           clampAnimations: false,
-          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-          shadows: Cesium.ShadowMode.ENABLED,
+          heightReference: isTerrainReady ? Cesium.HeightReference.CLAMP_TO_GROUND : Cesium.HeightReference.NONE,
+          shadows: Cesium.ShadowMode.DISABLED,
           color: isSelected ? Cesium.Color.fromCssColorString('#FFD21F') : Cesium.Color.WHITE,
           colorBlendMode: isSelected ? Cesium.ColorBlendMode.MIX : Cesium.ColorBlendMode.HIGHLIGHT,
           colorBlendAmount: 0.35,
         },
       });
 
-      // 1b. Structural Monopile Tower (Ensures 3D mast is visible at any zoom)
+      // 1b. Structural Monopile Tower with Authentic Metric Dimensions (H = hubHeight)
       const mastEntity = viewer.entities.add({
         turbineIndex: idx,
         name: `Mast ${labelText}`,
         position: Cesium.Cartesian3.fromDegrees(t.lon, t.lat, surfaceElev + hubHeight / 2.0),
         cylinder: {
           length: hubHeight,
-          topRadius: 1.8,
-          bottomRadius: 3.4,
+          topRadius: rotorDiameter * 0.015,
+          bottomRadius: rotorDiameter * 0.028,
           material: isSelected
             ? Cesium.Color.fromCssColorString('#FFD21F')
             : Cesium.Color.WHITE.withAlpha(0.96),
           outline: true,
           outlineColor: Cesium.Color.fromCssColorString('rgba(100, 116, 139, 0.4)'),
           outlineWidth: 1.0,
-          shadows: Cesium.ShadowMode.ENABLED,
+          shadows: Cesium.ShadowMode.DISABLED,
           heightReference: Cesium.HeightReference.NONE,
         },
       });
 
-      // 2. Heavy Structural Concrete Foundation Pad (R=16m)
-      const groundRing = viewer.entities.add({
+      // 1c. Industrial Nacelle Housing
+      const nacelleEntity = viewer.entities.add({
         turbineIndex: idx,
-        position: Cesium.Cartesian3.fromDegrees(t.lon, t.lat, surfaceElev + 0.5),
-        ellipse: {
-          semiMajorAxis: isSelected ? 22.0 : 16.0,
-          semiMinorAxis: isSelected ? 22.0 : 16.0,
-          material: Cesium.Color.fromCssColorString(isSelected ? 'rgba(255, 210, 31, 0.7)' : 'rgba(30, 41, 59, 0.6)'),
-          outline: true,
-          outlineColor: Cesium.Color.fromCssColorString(isSelected ? '#FFD21F' : 'rgba(100, 116, 139, 0.7)'),
-          outlineWidth: isSelected ? 3 : 1.5,
-          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+        name: `Nacelle ${labelText}`,
+        position: Cesium.Cartesian3.fromDegrees(t.lon, t.lat, surfaceElev + hubHeight),
+        orientation: orientation,
+        box: {
+          dimensions: new Cesium.Cartesian3(rotorDiameter * 0.10, rotorDiameter * 0.035, rotorDiameter * 0.035),
+          material: isSelected
+            ? Cesium.Color.fromCssColorString('#FFD21F')
+            : Cesium.Color.WHITE.withAlpha(0.96),
         },
       });
 
-      // 3. Floating Engineering Telemetry Tag (Anchored atop the hub)
+      // 2. Heavy Structural Concrete Foundation Pad
+      const groundRing = viewer.entities.add({
+        turbineIndex: idx,
+        name: `Foundation ${labelText}`,
+        position: Cesium.Cartesian3.fromDegrees(t.lon, t.lat, surfaceElev + 0.5),
+        cylinder: {
+          length: 1.0,
+          topRadius: isSelected ? rotorDiameter * 0.18 : rotorDiameter * 0.13,
+          bottomRadius: isSelected ? rotorDiameter * 0.18 : rotorDiameter * 0.13,
+          material: Cesium.Color.fromCssColorString(isSelected ? '#FFD21F' : '#64748B'),
+          shadows: Cesium.ShadowMode.DISABLED,
+          heightReference: Cesium.HeightReference.NONE,
+        },
+      });
+
+      // 3. Floating Engineering Telemetry Tag (Anchored atop the rotor swept area)
+      const deficitTag = t.wake_deficit_pct !== undefined && t.wake_deficit_pct !== null
+        ? ` · ${Number(t.wake_deficit_pct).toFixed(1)}% def`
+        : '';
       const label = viewer.entities.add({
         turbineIndex: idx,
-        position: Cesium.Cartesian3.fromDegrees(t.lon, t.lat, surfaceElev + hubHeight + rotorDiameter / 2.0 + 16.0),
+        position: Cesium.Cartesian3.fromDegrees(t.lon, t.lat, surfaceElev + hubHeight + rotorDiameter / 2.0 + 14.0),
         label: {
-          text: `${labelText} · ${speedText}`,
+          text: `${labelText} · ${speedText}${deficitTag}`,
           font: 'bold 11px JetBrains Mono, monospace',
           fillColor: isSelected ? Cesium.Color.fromCssColorString('#0f172a') : Cesium.Color.WHITE,
           backgroundColor: isSelected ? Cesium.Color.fromCssColorString('#FFD21F') : Cesium.Color.fromCssColorString('rgba(15, 23, 42, 0.92)'),
@@ -466,17 +747,18 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
         },
       });
 
-      entitiesRef.current.turbines.push(turbineEntity, mastEntity, groundRing, label);
+      entitiesRef.current.turbines.push(turbineEntity, mastEntity, nacelleEntity, groundRing, label);
 
       // 4. Downwind Horizontal Aerodynamic Wake Plume Footprint (Draped on Terrain)
-      // Physically derived Jensen expanding wake corridor (8.5D length, k=0.05 decay)
+      // Physically derived Jensen expanding wake corridor with FLORIS k* = 0.04
       if (localShowWakes) {
+        const kStar = 0.04; // FLORIS Bastankhah Gaussian expansion parameter
         const coneLengthM = Math.min(1200.0, Math.max(750.0, rotorDiameter * 8.5));
         const latMPerDeg = 110540.0;
-        const lonMPerDeg = 111320.0 * Math.cos(t.lat * Math.PI / 180.0);
+        const lonMPerDeg = 111320.0 * Math.cos((t.lat * Math.PI) / 180.0);
 
         const r0 = rotorDiameter * 0.5;
-        const r1 = r0 + 0.05 * coneLengthM;
+        const r1 = r0 + kStar * coneLengthM;
 
         const endLat = t.lat + (downwindDy * coneLengthM) / latMPerDeg;
         const endLon = t.lon + (downwindDx * coneLengthM) / lonMPerDeg;
@@ -491,8 +773,26 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
         const endLeftLat = endLat - (crossDy * r1) / latMPerDeg;
         const endLeftLon = endLon - (crossDx * r1) / lonMPerDeg;
 
-        const deficit = t.wake_deficit_pct || (idx % 3 === 0 ? 9.5 : 3.8);
-        const isHighLoss = deficit > 6.0;
+        const hasDeficit = t.wake_deficit_pct !== undefined && t.wake_deficit_pct !== null;
+        const deficitVal = hasDeficit ? Number(t.wake_deficit_pct) : null;
+        const isHighLoss = deficitVal !== null && deficitVal > 10.0;
+        const isModerateLoss = deficitVal !== null && deficitVal >= 5.0 && deficitVal <= 10.0;
+
+        const wakeFill = deficitVal === null
+          ? 'rgba(100, 116, 139, 0.12)'
+          : isHighLoss
+          ? 'rgba(239, 68, 68, 0.22)'
+          : isModerateLoss
+          ? 'rgba(245, 158, 11, 0.20)'
+          : 'rgba(14, 165, 233, 0.16)';
+
+        const wakeOutline = deficitVal === null
+          ? 'rgba(148, 163, 184, 0.40)'
+          : isHighLoss
+          ? 'rgba(239, 68, 68, 0.65)'
+          : isModerateLoss
+          ? 'rgba(245, 158, 11, 0.60)'
+          : 'rgba(14, 165, 233, 0.50)';
 
         const wakePolygon = viewer.entities.add({
           name: `Wake Footprint ${labelText}`,
@@ -503,10 +803,8 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
               endRightLon, endRightLat,
               endLeftLon, endLeftLat,
             ]),
-            material: Cesium.Color.fromCssColorString(
-              isHighLoss ? 'rgba(239, 68, 68, 0.20)' : 'rgba(14, 165, 233, 0.16)'
-            ),
-            heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+            material: Cesium.Color.fromCssColorString(wakeFill),
+            heightReference: isTerrainReady ? Cesium.HeightReference.CLAMP_TO_GROUND : Cesium.HeightReference.NONE,
           },
           polyline: {
             positions: Cesium.Cartesian3.fromDegreesArray([
@@ -517,10 +815,8 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
               rootLeftLon, rootLeftLat,
             ]),
             width: 1.5,
-            material: Cesium.Color.fromCssColorString(
-              isHighLoss ? 'rgba(239, 68, 68, 0.55)' : 'rgba(14, 165, 233, 0.45)'
-            ),
-            clampToGround: true,
+            material: Cesium.Color.fromCssColorString(wakeOutline),
+            clampToGround: isTerrainReady,
           },
         });
 
@@ -536,7 +832,13 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
             material: new Cesium.PolylineGlowMaterialProperty({
               glowPower: 0.22,
               taperPower: 0.65,
-              color: isHighLoss ? Cesium.Color.fromCssColorString('#f59e0b') : Cesium.Color.fromCssColorString('#0ea5e9'),
+              color: deficitVal === null
+                ? Cesium.Color.fromCssColorString('#94A3B8')
+                : isHighLoss
+                ? Cesium.Color.fromCssColorString('#EF4444')
+                : isModerateLoss
+                ? Cesium.Color.fromCssColorString('#F59E0B')
+                : Cesium.Color.fromCssColorString('#0EA5E9'),
             }),
           },
         });
@@ -631,7 +933,7 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
         }
       });
     }
-  }, [turbines, selectedTurbineIdx, windDirectionDeg, windSpeedMps, rotorDiameter, hubHeight, localShowWakes, showFlowStreamlines, centerLat, centerLon, radiusKm]);
+  }, [viewerInstance, turbines, selectedTurbineIdx, windDirectionDeg, windSpeedMps, rotorDiameter, hubHeight, localShowWakes, showFlowStreamlines, effectiveCenterLat, effectiveCenterLon, radiusKm]);
 
   // Camera preset handler
   const handlePresetClick = (preset: string, e: React.MouseEvent) => {
@@ -639,7 +941,7 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
     e.preventDefault();
     setActiveCameraPreset(preset);
     if (viewerRef.current && !viewerRef.current.isDestroyed()) {
-      flyToProjectSite(viewerRef.current, centerLat, centerLon, radiusKm, preset, 1.2);
+      flyToProjectSite(viewerRef.current, effectiveCenterLat, effectiveCenterLon, radiusKm, preset, 1.2);
     }
   };
 
@@ -785,6 +1087,26 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
           <span className="hidden sm:inline">Flow</span>
         </button>
 
+        {/* Candidates Toggle */}
+        {candidates && candidates.length > 0 && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setLocalShowCandidates(!localShowCandidates);
+            }}
+            className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-xl text-xs font-bold transition-all active:scale-95 ${
+              localShowCandidates
+                ? 'bg-slate-700 text-white shadow-xs font-black'
+                : 'bg-white/10 text-slate-300 hover:bg-white/20'
+            }`}
+            title="Toggle Evaluated Candidate Markers"
+          >
+            <Crosshair className="w-3 h-3 text-slate-300" />
+            <span className="hidden sm:inline">Candidates</span>
+          </button>
+        )}
+
         {/* Wake Plumes Toggle */}
         <button
           type="button"
@@ -817,15 +1139,29 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
       </div>
 
       {/* Floating 3D Geodetic Telemetry Badge (Bottom-Left) */}
-      <div className="absolute bottom-3 left-3 z-20 hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-2xl border border-white/50 dark:border-white/10 shadow-lg text-slate-700 dark:text-slate-200 font-mono text-[11px] pointer-events-auto">
-        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-        <span className="font-bold text-slate-900 dark:text-white">
-          {isGoogleTilesActive ? 'Google Photorealistic 3D Tiles' : 'Copernicus DEM GLO-30'}
-        </span>
-        <span className="text-slate-400">•</span>
-        <span>{turbineModelName}</span>
-        <span className="text-slate-400">•</span>
-        <span className="text-amber-600 dark:text-amber-400 font-bold">{turbines.length} Turbines</span>
+      <div 
+        id="cesium-geodetic-telemetry-badge"
+        className="absolute bottom-3 left-3 z-20 hidden sm:flex flex-col gap-1 px-3 py-2 rounded-xl bg-slate-900/90 backdrop-blur-2xl border border-white/10 shadow-lg text-slate-200 font-mono text-[11px] pointer-events-auto max-w-sm"
+      >
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <span className="font-bold text-white">
+            {isGoogleTilesActive ? 'Google Photorealistic 3D Tiles' : 'Copernicus DEM GLO-90 composite'}
+          </span>
+          <span className="text-slate-400">•</span>
+          <span>{turbineModelName} (D={rotorDiameter}m, H={hubHeight}m)</span>
+        </div>
+        <div className="flex items-center gap-2 text-[10px] text-slate-400">
+          <span className="text-amber-400 font-bold">{turbines.length} Turbines</span>
+          {candidates && candidates.length > 0 && (
+            <>
+              <span>•</span>
+              <span>{candidates.length} Candidates</span>
+            </>
+          )}
+          <span>•</span>
+          <span className="text-emerald-400 truncate">{optimalityScope || 'FLORIS Exact Re-evaluated Layout'}</span>
+        </div>
       </div>
     </div>
   );

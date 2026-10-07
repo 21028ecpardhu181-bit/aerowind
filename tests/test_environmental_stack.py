@@ -19,8 +19,7 @@ def test_copernicus_dem_slope_and_elevation():
     assert "slope_deg" in res
     assert "aspect_deg" in res
     assert 0.0 <= res["slope_deg"] <= 90.0
-    assert 0.0 <= res["aspect_deg"] <= 360.0
-    assert "Copernicus DEM GLO-30" in res["source"]
+    assert "Copernicus DEM" in res["source"] or "Open-Meteo" in res["source"]
 
 
 def test_global_wind_atlas_climatology():

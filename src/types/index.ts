@@ -221,6 +221,26 @@ export interface OptimizationData {
     wake_loss: number;
     best_aep: number;
   }>;
+  optimality_scope?: string;
+  declared_engineering_optimum?: any;
+  physical_reevaluation?: any;
+  qubo_problem?: any;
+  candidate_positions?: any[];
+  initial_turbines?: Turbine[];
+  turbine_model?: string;
+  rotor_diameter_m?: number;
+  hub_height_m?: number;
+  rated_power_kw?: number;
+  exact_net_cf_pct?: number;
+  installed_capacity_mw?: number;
+  provenance?: {
+    solver?: string;
+    quantum_layer?: string;
+    physical_layer?: string;
+    loss_accounting?: string;
+    source_status?: string;
+    engineering_suitability?: string;
+  };
 }
 
 export interface TelemetryData {
