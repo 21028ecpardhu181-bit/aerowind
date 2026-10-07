@@ -80,6 +80,29 @@ class QuboProblem:
         if len(wake_penalty_matrix_mwh) != n or any(len(r) != n for r in wake_penalty_matrix_mwh):
             raise ValueError(f"wake_penalty_matrix_mwh must be of dimension {n}x{n}.")
 
+        # Adversarial guard: target_turbines must be within [1, n]
+        target_k = int(target_turbines)
+        if target_k < 1 or target_k > n:
+            raise ValueError(
+                f"target_turbines ({target_turbines}) must be an integer between 1 and n_candidates ({n})."
+            )
+
+        # Adversarial guard: unique candidate IDs
+        if len(set(candidate_ids)) != n:
+            raise ValueError(f"candidate_ids contains duplicate IDs: {candidate_ids}")
+
+        # Adversarial guard: wake matrix symmetry and zero diagonal
+        for i in range(n):
+            if abs(wake_penalty_matrix_mwh[i][i]) > 1e-4:
+                raise ValueError(
+                    f"Self-wake penalty on matrix diagonal M[{i}][{i}] must be 0.0, found {wake_penalty_matrix_mwh[i][i]}."
+                )
+            for j in range(i + 1, n):
+                if abs(wake_penalty_matrix_mwh[i][j] - wake_penalty_matrix_mwh[j][i]) > 1e-4:
+                    raise ValueError(
+                        f"wake_penalty_matrix_mwh must be symmetric. M[{i}][{j}] ({wake_penalty_matrix_mwh[i][j]}) != M[{j}][{i}] ({wake_penalty_matrix_mwh[j][i]})."
+                    )
+
         self.n_candidates = n
         self.candidate_ids = list(candidate_ids)
         self.positions_metric = list(positions_metric)
@@ -87,7 +110,7 @@ class QuboProblem:
         self.wake_penalty_matrix_mwh = [
             [float(val) for val in row] for row in wake_penalty_matrix_mwh
         ]
-        self.target_turbines = int(target_turbines)
+        self.target_turbines = target_k
         self.min_spacing_m = float(min_spacing_m)
         self.bop_derate_factor = float(bop_derate_factor)
         self.turbine_model_id = str(turbine_model_id)

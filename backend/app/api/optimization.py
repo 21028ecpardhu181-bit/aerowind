@@ -157,14 +157,26 @@ def _validate_and_build_qubo(
         site_elevation_m=site_elevation_m,
     )
 
+    if target_turbines is not None and int(target_turbines) > len(valid_candidates):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Target turbine count ({target_turbines}) exceeds available feasible candidates "
+                f"({len(valid_candidates)}). Non-feasible candidates were excluded."
+            ),
+        )
+
     # Build QuboProblem
-    qubo = build_qubo_from_phase6_contract(
-        contract=contract,
-        target_turbines=target_turbines,
-        min_spacing_multiplier=min_spacing_multiplier,
-        penalty_capacity=penalty_capacity,
-        penalty_spacing=penalty_spacing,
-    )
+    try:
+        qubo = build_qubo_from_phase6_contract(
+            contract=contract,
+            target_turbines=target_turbines,
+            min_spacing_multiplier=min_spacing_multiplier,
+            penalty_capacity=penalty_capacity,
+            penalty_spacing=penalty_spacing,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
     return contract, qubo, metadata_lookup
 
