@@ -118,7 +118,6 @@ class IBMQuantumHardwareBackend(BaseQuantumBackend):
         instance: Optional[str] = None,
         backend_name: Optional[str] = None,
     ):
-        self.token = token or os.environ.get("IBM_QUANTUM_TOKEN") or os.environ.get("QISKIT_IBM_TOKEN")
         self.instance = instance
         self.target_backend_name = backend_name
         self._service = None
@@ -126,10 +125,35 @@ class IBMQuantumHardwareBackend(BaseQuantumBackend):
         self._status = "HARDWARE_UNAVAILABLE"
         self._error_reason = "No IBM Quantum credentials configured (IBM_QUANTUM_TOKEN unset)."
 
+        # When token is explicitly passed as False or empty string "", treat as deliberately unauthenticated
+        explicit_empty = (token == "")
+        if token:
+            self.token = token
+        elif not explicit_empty:
+            self.token = os.environ.get("IBM_QUANTUM_TOKEN") or os.environ.get("QISKIT_IBM_TOKEN")
+            if not self.token and os.path.exists(".env.ibm"):
+                try:
+                    with open(".env.ibm") as f:
+                        for line in f:
+                            if line.startswith("IBM_QUANTUM_TOKEN="):
+                                self.token = line.split("=", 1)[1].strip().strip("\"'")
+                            elif line.startswith("IBM_QUANTUM_CRN=") and not self.instance:
+                                self.instance = line.split("=", 1)[1].strip().strip("\"'")
+                except Exception:
+                    pass
+        else:
+            self.token = None
+
         if self.token:
             try:
                 from qiskit_ibm_runtime import QiskitRuntimeService
-                self._service = QiskitRuntimeService(channel="ibm_quantum", token=self.token, instance=self.instance)
+                # IBM Quantum Platform uses open-instance or auto-selection
+                try:
+                    self._service = QiskitRuntimeService(channel="ibm_quantum_platform", token=self.token)
+                except Exception:
+                    # Fallback to ibm_cloud if crn is provided
+                    self._service = QiskitRuntimeService(channel="ibm_cloud", token=self.token, instance=self.instance)
+                
                 if self.target_backend_name:
                     self._backend = self._service.backend(self.target_backend_name)
                 else:
@@ -152,7 +176,7 @@ class IBMQuantumHardwareBackend(BaseQuantumBackend):
 
         try:
             from qiskit_ibm_runtime import SamplerV2
-            sampler = SamplerV2(backend=self._backend)
+            sampler = SamplerV2(mode=self._backend)
             transpiled = transpile(circuit, self._backend)
             job = sampler.run([transpiled], shots=shots)
             result = job.result()
@@ -349,9 +373,15 @@ class QAOALayoutOptimizer:
                 }
 
         # 4. Classical parameter optimization loop (COBYLA)
+        # To avoid multiple queue delays on physical quantum hardware, parameter optimization
+        # evaluates expectation value on high-performance Aer statevector simulator, then
+        # executes final sampling and verification directly on the genuine IBM Quantum processor.
         ising = qubo.to_ising()
         scale = ising["scale_factor"]
         iteration_counter = {"count": 0}
+
+        # Optimizer backend: use Aer simulator for classical parameter tuning loop
+        tuning_backend = AerSimulatorBackend(seed=self.random_seed, max_qubits=24)
 
         def cost_expectation(params: np.ndarray) -> float:
             iteration_counter["count"] += 1
@@ -360,7 +390,7 @@ class QAOALayoutOptimizer:
 
             qc = build_qaoa_circuit(qubo, gamma, beta)
             opt_shots = min(256, self.shots)
-            counts = self.backend.run_circuit(qc, shots=opt_shots)
+            counts = tuning_backend.run_circuit(qc, shots=opt_shots)
 
             total_cost = 0.0
             total_shots = sum(counts.values())
