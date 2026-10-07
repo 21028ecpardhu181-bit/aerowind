@@ -13,10 +13,10 @@ import {
   ChevronUp,
   Layers
 } from 'lucide-react';
-import { LayoutAnalysisData, SiteInfo, Turbine } from '../../types';
+import { LayoutAnalysisData, SiteInfo, Turbine, OptimizationEngineType } from '../../types';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
-
+import { fetchOptimizationHardwareStatus } from '../../services/api';
 import { ensureTurbinesInsideBoundary } from '../../utils/geometry';
 
 interface Screen3LayoutProps {
@@ -24,6 +24,8 @@ interface Screen3LayoutProps {
   layoutData: LayoutAnalysisData;
   onLaunchOptimize: () => void;
   onBack: () => void;
+  solverEngine?: OptimizationEngineType;
+  onSelectSolverEngine?: (engine: OptimizationEngineType) => void;
 }
 
 declare global {
@@ -37,9 +39,36 @@ export const Screen3Layout: React.FC<Screen3LayoutProps> = ({
   layoutData,
   onLaunchOptimize,
   onBack,
+  solverEngine = 'aer_qaoa',
+  onSelectSolverEngine,
 }) => {
   const [showWakes, setShowWakes] = useState(true);
   const [isSheetCollapsed, setIsSheetCollapsed] = useState(false);
+  const [hardwareStatus, setHardwareStatus] = useState<{
+    available: boolean;
+    backend_name?: string;
+    status?: string;
+  }>({ available: false });
+
+  useEffect(() => {
+    let isMounted = true;
+    fetchOptimizationHardwareStatus()
+      .then((res) => {
+        if (isMounted && res) {
+          const isAvail = Boolean(res.ibm_quantum_available || res.status === 'AVAILABLE' || res.backend_details?.is_available);
+          const backendName = res.backend_details?.backend_name || res.backend_name || 'ibm_fez';
+          setHardwareStatus({
+            available: isAvail,
+            backend_name: backendName,
+            status: res.status,
+          });
+        }
+      })
+      .catch(() => {
+        if (isMounted) setHardwareStatus({ available: false });
+      });
+    return () => { isMounted = false; };
+  }, []);
 
   const mapRef = useRef<any>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -566,6 +595,84 @@ export const Screen3Layout: React.FC<Screen3LayoutProps> = ({
             <span className="text-[9px] text-slate-400">Detailed geotechnical investigation required before construction.</span>
           </div>
 
+          {/* Optimization Engine Selector (Phase 8C) */}
+          <div className="flex flex-col gap-1.5 border-t border-slate-100 pt-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-slate-800">Optimization Engine</span>
+              <div id="ibm-hardware-status-badge" className="text-[10px] font-mono">
+                {hardwareStatus.available ? (
+                  <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                    IBM Quantum · {hardwareStatus.backend_name || 'ibm_fez'} · Ready
+                  </span>
+                ) : (
+                  <span className="text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
+                    IBM Quantum · Unavailable
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-1 bg-slate-100 p-1 rounded-xl">
+              <button
+                id="btn-solver-classical"
+                type="button"
+                onClick={() => onSelectSolverEngine?.('classical')}
+                className={`py-1.5 px-2 rounded-lg text-[11px] font-bold transition-all ${
+                  solverEngine === 'classical'
+                    ? 'bg-white text-slate-950 shadow-xs border border-slate-200/80 font-black'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Classical
+              </button>
+              <button
+                id="btn-solver-aer"
+                type="button"
+                onClick={() => onSelectSolverEngine?.('aer_qaoa')}
+                className={`py-1.5 px-2 rounded-lg text-[11px] font-bold transition-all ${
+                  solverEngine === 'aer_qaoa'
+                    ? 'bg-[#FFD21F] text-slate-950 shadow-xs font-black'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Aer QAOA
+              </button>
+              <button
+                id="btn-solver-ibm"
+                type="button"
+                onClick={() => onSelectSolverEngine?.('ibm_quantum')}
+                className={`py-1.5 px-2 rounded-lg text-[11px] font-bold transition-all ${
+                  solverEngine === 'ibm_quantum'
+                    ? 'bg-[#FFD21F] text-slate-950 shadow-xs font-black'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                IBM Quantum
+              </button>
+            </div>
+
+            {/* Hardware Unavailable Warning & Fallback */}
+            {solverEngine === 'ibm_quantum' && !hardwareStatus.available && (
+              <div id="ibm-hardware-warning" className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-950 flex flex-col gap-1.5">
+                <div className="flex items-center gap-1.5 font-bold text-amber-900">
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+                  <span>IBM Quantum hardware unavailable</span>
+                </div>
+                <p className="text-[10px] text-slate-600 leading-normal">
+                  No valid IBM credentials or active quantum processor detected. Select Aer Simulator to run continuous statevector QAOA.
+                </p>
+                <button
+                  id="btn-fallback-aer"
+                  type="button"
+                  onClick={() => onSelectSolverEngine?.('aer_qaoa')}
+                  className="self-start text-[10px] font-black text-amber-900 underline hover:text-amber-950"
+                >
+                  Use Aer Simulator
+                </button>
+              </div>
+            )}
+          </div>
+
           {/* Primary Action Button */}
           <Button
             id="btn-screen3-optimize"
@@ -574,7 +681,15 @@ export const Screen3Layout: React.FC<Screen3LayoutProps> = ({
             onClick={isSiteUnsuitable ? onBack : onLaunchOptimize}
             className="w-full bg-[#FFD21F] hover:bg-[#F2C50F] text-slate-950 font-black py-3 mt-1 shadow-md text-xs"
           >
-            <span>{isSiteUnsuitable ? 'Select Feasible Rural Site' : 'Proceed to Quantum WS-QAOA Optimization'}</span>
+            <span>
+              {isSiteUnsuitable
+                ? 'Select Feasible Rural Site'
+                : solverEngine === 'classical'
+                ? 'Run Classical QUBO Optimization'
+                : solverEngine === 'ibm_quantum'
+                ? 'Run on IBM Quantum Hardware'
+                : 'Optimize Layout'}
+            </span>
             <ArrowRight className="w-4 h-4 stroke-[2.5]" />
           </Button>
         </Card>

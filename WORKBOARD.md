@@ -2,17 +2,45 @@
 
 ## Assigned Agent: Antigravity
 
-### Status: Completed (Sprint 5 — IBM Hardware Result Reconciliation & UI Animation Safety)
-- **Branch**: `feature/sprint-5-ibm-reconciliation-animation-safety`
+### Status: Completed (Phase 8C — Interactive Optimization UI Controls)
+- **Branch**: `feature/phase-8c-interactive-optimization-controls`
 - **Files Owned**:
   - `WORKBOARD.md`
-  - `backend/app/api/optimization.py`
-  - `backend/app/engineering/qaoa_engine.py`
-  - `src/components/workflow/Screen4Optimize.tsx`
   - `src/types/index.ts`
+  - `src/components/workflow/Screen3Layout.tsx`
   - `src/App.tsx`
-  - `tests/test_sprint5_reconciliation.py`
+  - `src/components/workflow/Screen4Optimize.tsx`
+  - `src/components/workflow/Screen5Inspect.tsx`
+  - `tests/test_phase8c_interactive_ui.py`
   - `tests/verify_screen4_ui.py`
+
+### Phase 8C Completed Objectives:
+1. Interactive Optimization Engine Selector:
+   - Added minimal Apple Liquid Glass solver segmented control to Screen 3 (`Screen3Layout.tsx`): `[ Classical ] [ Aer QAOA ] [ IBM Quantum ]` with default to `Aer QAOA`.
+   - Primary action button `#btn-screen3-optimize` dynamically labeled with selected engine.
+2. Hardware Status Integration:
+   - Screen 3 polls `GET /api/engineering/optimization/hardware-status` on mount.
+   - Truthfully displays status pill: `IBM Quantum · [backend_name] · Ready` or `IBM Quantum · Unavailable`.
+   - Fallback safeguard: If IBM Quantum is selected when unavailable, displays honest alert and `#btn-fallback-aer` ("Use Aer Simulator") button.
+3. Authentic Backend Dispatch:
+   - Classical: Calls `runClassicalOptimization()` (`POST /api/engineering/optimization/classical`), re-evaluating top solutions with exact FLORIS aerodynamics labeled "Classical QUBO".
+   - Aer QAOA: Calls `runQaoaOptimization()` with `backend_type: "aer_simulator"` labeled "Qiskit Aer QAOA".
+   - IBM Quantum: Calls `runQaoaOptimization()` with `backend_type: "ibm_hardware"` (1024 shots) labeled "IBM Quantum · [backend_name]".
+4. Single Source of Truth & Elevation Consistency:
+   - Removed arbitrary `40.0m` elevation override; if omitted/0, backend dynamically computes `effective_elevation_m` from candidate ground heights (450.0m at Anantapur), eliminating surrogate discrepancies.
+   - All displayed metrics (`exact_net_aep_gwh`, `gross_aep_gwh`, `exact_wake_loss_pct`, `coordinates`) strictly sourced from `declared_engineering_optimum`.
+5. Dynamic Pipeline & Provenance Visualization:
+   - Screen 4 adapts its multi-stage pipeline and descriptions based on the chosen solver.
+   - Screen 5 displays minimal provenance badge in the top header (`[Site] · [N] Turbines ([Solver])`).
+6. Full Verification & Zero Emoji Compliance:
+   - `pytest tests/test_phase8c_interactive_ui.py`: 4/4 passed (including real IBM Quantum execution).
+   - `pytest tests/test_sprint5_reconciliation.py tests/test_phase8_adversarial_qa.py`: 26/26 passed.
+   - TypeScript compilation (`npx tsc --noEmit`): clean with 0 errors.
+   - Frontend production build (`npm run build`): passed cleanly with 0 errors.
+   - Playwright verification (`verify_screen4_ui.py`): passed on mobile (390x844) and desktop (1280x800).
+   - Zero emojis verified across all modified files and tests.
+
+### Status: Completed (Sprint 5 — IBM Hardware Result Reconciliation & UI Animation Safety)
 
 ### Sprint 5 Completed Objectives:
 1. Traced and resolved numerical discrepancy between Tier 4 exact physical re-evaluation (18.370 GWh/yr, 1.30% wake loss) and API response (18.88 GWh/yr, 1.24% wake loss):

@@ -196,6 +196,8 @@ export interface LayoutAnalysisData {
   status_description?: string;
 }
 
+export type OptimizationEngineType = 'classical' | 'aer_qaoa' | 'ibm_quantum';
+
 export interface OptimizationData {
   problem_name: string;
   variables_count: number;
@@ -239,6 +241,8 @@ export interface OptimizationData {
   selected_candidate_ids?: string[];
   pipeline_provenance?: any;
   hardware_execution?: any;
+  solver_mode?: OptimizationEngineType;
+  solver_label?: string;
   provenance?: {
     solver?: string;
     quantum_layer?: string;

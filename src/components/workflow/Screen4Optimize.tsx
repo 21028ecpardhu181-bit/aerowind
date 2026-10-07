@@ -73,10 +73,12 @@ export const Screen4Optimize: React.FC<Screen4OptimizeProps> = ({
       : (isDone ? '1.30' : '--'));
 
   const siteName = site?.shortName || site?.name || optimizationData?.problem_name || 'Kanyakumari';
-  const statusHeadline = isDone ? 'Best feasible layout identified' : 'Quantum WS-QAOA Optimization Active';
+  const solverMode = optimizationData?.solver_mode || 'aer_qaoa';
+  const solverLabel = optimizationData?.solver_label || (solverMode === 'classical' ? 'Classical QUBO' : (solverMode === 'ibm_quantum' ? 'IBM Quantum Hardware' : 'Qiskit Aer QAOA'));
+  const statusHeadline = isDone ? 'Best feasible layout identified' : `${solverLabel} Active`;
   const hardwareBackendName = hw?.backend_name || 'ibm_fez';
   const hardwareJobId = hw?.job_id || 'db3785b9kq9s73ata090';
-  const hardwareShots = hw?.total_shots || 1024;
+  const hardwareShots = hw?.total_shots || hw?.shots || (solverMode === 'ibm_quantum' ? 1024 : 256);
   const winningBitstring = winner?.bitstring || '1001';
   const winningCandidateIds = winner?.selected_candidate_ids?.join(', ') || 'WTG-01, WTG-04';
 
@@ -235,19 +237,35 @@ export const Screen4Optimize: React.FC<Screen4OptimizeProps> = ({
                   <div className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-[11px] ${activeStage > 3 ? 'bg-emerald-100 text-emerald-700' : (activeStage === 3 ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-500')}`}>
                     3
                   </div>
-                  <span className="font-bold text-slate-800">Stage 3: IBM Quantum Hardware Execution</span>
+                  <span className="font-bold text-slate-800">
+                    {solverMode === 'classical'
+                      ? 'Stage 3: Classical Combinatorial Search'
+                      : (solverMode === 'ibm_quantum'
+                        ? 'Stage 3: IBM Quantum Hardware Execution'
+                        : 'Stage 3: Aer QAOA Sampling & Evaluation')}
+                  </span>
                 </div>
                 {activeStage > 3 ? (
                   <span className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1">
                     <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Executed on {hardwareBackendName}</span>
+                    <span>
+                      {solverMode === 'classical'
+                        ? 'Search Completed'
+                        : (solverMode === 'ibm_quantum'
+                          ? `Executed on ${hardwareBackendName}`
+                          : 'Sampled on Aer Simulator')}
+                    </span>
                   </span>
                 ) : (
-                  <span className="text-[11px] font-mono text-amber-600">{activeStage === 3 ? 'Executing Job' : 'Pending'}</span>
+                  <span className="text-[11px] font-mono text-amber-600">{activeStage === 3 ? 'Executing' : 'Pending'}</span>
                 )}
               </div>
               <p className="text-[11px] text-slate-500 mt-1 pl-8">
-                Execution on {hardwareBackendName} (Heron r2, 156 qubits) | Job: {hardwareJobId} | {hardwareShots} shots sampled.
+                {solverMode === 'classical'
+                  ? 'Certified branch-and-bound combinatorial evaluation across all feasible combinations of K turbines.'
+                  : (solverMode === 'ibm_quantum'
+                    ? `Execution on ${hardwareBackendName} (Heron r2, 156 qubits) | Job: ${hardwareJobId} | ${hardwareShots} shots sampled.`
+                    : `Sampling ${hardwareShots} shots on Qiskit Aer statevector simulator across optimal QAOA circuit ansatz.`)}
               </p>
 
               {/* Real Hardware Sample Distribution */}

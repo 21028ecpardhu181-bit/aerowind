@@ -412,7 +412,9 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
             className="flex px-2.5 sm:px-3.5 py-1.5 rounded-xl bg-white/95 backdrop-blur-xl border border-white/90 text-xs font-bold text-slate-900 shadow-glass items-center gap-1.5"
           >
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="truncate max-w-[140px] sm:max-w-none">{site.shortName || site.name} · {activeTurbines.length} Turbines (QAOA)</span>
+            <span className="truncate max-w-[140px] sm:max-w-none">
+              {site.shortName || site.name} · {activeTurbines.length} Turbines ({optimizationData?.solver_label || 'QAOA'})
+            </span>
           </div>
         </div>
 

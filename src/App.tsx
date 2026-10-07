@@ -8,6 +8,7 @@ import {
   TelemetryData,
   LayoutAnalysisData,
   OptimizationData,
+  OptimizationEngineType,
   Turbine,
   AuthUser,
   isDraftProject
@@ -20,6 +21,7 @@ import {
   fetchTelemetry,
   generateInitialLayout,
   runOptimization,
+  runClassicalOptimization,
   runQaoaOptimization,
   geocodeLocation,
   fetchVillageBoundary
@@ -289,6 +291,7 @@ export function App() {
   });
 
   const [optimizationData, setOptimizationData] = useState<OptimizationData | null>(null);
+  const [solverEngine, setSolverEngine] = useState<OptimizationEngineType>('aer_qaoa');
 
   // 1. Initial Load of Projects & Telemetry
   useEffect(() => {
@@ -891,36 +894,66 @@ export function App() {
       let bestWakeLoss = 0;
       let improvementPct = 0;
       let optimalityScope = 'Certified WS-QAOA quantum circuit with exact FLORIS physics re-evaluation';
-      let qaoaResult: any = null;
+      let optResult: any = null;
+      let solverMode: OptimizationEngineType = solverEngine;
+      let solverLabel = solverEngine === 'classical' 
+        ? 'Classical QUBO' 
+        : (solverEngine === 'ibm_quantum' ? 'IBM Quantum Hardware' : 'Qiskit Aer QAOA');
 
       try {
         const activePool = candidatePool.slice(0, 8);
-        const qaoaPayload = {
-          candidates: activePool.map((c: any, idx: number) => ({
-            id: c.candidate_id || c.id || `C-${String(idx + 1).padStart(2, '0')}`,
-            candidate_id: c.candidate_id || c.id || `C-${String(idx + 1).padStart(2, '0')}`,
-            latitude: Number(c.lat ?? c.latitude),
-            longitude: Number(c.lon ?? c.longitude),
-            lat: Number(c.lat ?? c.latitude),
-            lon: Number(c.lon ?? c.longitude),
-            elevation_m: c.elevation_m !== undefined ? Number(c.elevation_m) : (site.elevationM || 40.0),
-            is_feasible: c.is_feasible !== false,
-            feasibility_status: c.feasibility_status || c.status || 'FEASIBLE',
-          })),
-          turbine_model_id: config.model || 'ge_25_120',
-          target_turbines: Math.max(1, Math.min(activePool.length, Math.min(config.turbineCount, 6))),
-          min_spacing_multiplier: config.spacingMultiplierD || 4.0,
-          p_layers: 1,
-          shots: 256,
-          max_classical_iterations: 4,
-          top_k_physical_reeval: 3,
-          backend_type: 'aer_simulator' as const,
-          random_seed: 42,
-          site_elevation_m: site.elevationM || 40.0,
-        };
+        const candidatePayload = activePool.map((c: any, idx: number) => ({
+          id: c.candidate_id || c.id || `C-${String(idx + 1).padStart(2, '0')}`,
+          candidate_id: c.candidate_id || c.id || `C-${String(idx + 1).padStart(2, '0')}`,
+          latitude: Number(c.lat ?? c.latitude),
+          longitude: Number(c.lon ?? c.longitude),
+          lat: Number(c.lat ?? c.latitude),
+          lon: Number(c.lon ?? c.longitude),
+          elevation_m: c.elevation_m !== undefined ? Number(c.elevation_m) : (site.elevationM ? Number(site.elevationM) : 0.0),
+          is_feasible: c.is_feasible !== false,
+          feasibility_status: c.feasibility_status || c.status || 'FEASIBLE',
+        }));
+        const targetTurbines = Math.max(1, Math.min(activePool.length, Math.min(config.turbineCount, 6)));
+        const elevationPayload = site.elevationM ? Number(site.elevationM) : 0.0;
 
-        qaoaResult = await runQaoaOptimization(qaoaPayload);
-        const winner = qaoaResult?.declared_engineering_optimum;
+        if (solverEngine === 'classical') {
+          const classicalPayload = {
+            candidates: candidatePayload,
+            turbine_model_id: config.model || 'ge_25_120',
+            target_turbines: targetTurbines,
+            min_spacing_multiplier: config.spacingMultiplierD || 4.0,
+            site_elevation_m: elevationPayload,
+            top_k: 3,
+          };
+          optResult = await runClassicalOptimization(classicalPayload);
+          optimalityScope = 'Certified classical combinatorial optimum with exact FLORIS physics re-evaluation';
+          solverLabel = 'Classical QUBO';
+        } else {
+          const qaoaPayload = {
+            candidates: candidatePayload,
+            turbine_model_id: config.model || 'ge_25_120',
+            target_turbines: targetTurbines,
+            min_spacing_multiplier: config.spacingMultiplierD || 4.0,
+            p_layers: 1,
+            shots: solverEngine === 'ibm_quantum' ? 1024 : 256,
+            max_classical_iterations: 4,
+            top_k_physical_reeval: 3,
+            backend_type: (solverEngine === 'ibm_quantum' ? 'ibm_hardware' : 'aer_simulator') as any,
+            random_seed: 42,
+            site_elevation_m: elevationPayload,
+          };
+          optResult = await runQaoaOptimization(qaoaPayload);
+          if (solverEngine === 'ibm_quantum') {
+            const hwBackend = optResult?.hardware_execution?.backend_name || optResult?.quantum_circuit?.backend?.backend_name || 'ibm_fez';
+            solverLabel = `IBM Quantum · ${hwBackend}`;
+            optimalityScope = `IBM Quantum (${hwBackend}) hardware QAOA with exact FLORIS physics re-evaluation`;
+          } else {
+            solverLabel = 'Qiskit Aer QAOA';
+            optimalityScope = 'Certified Aer simulator QAOA with exact FLORIS physics re-evaluation';
+          }
+        }
+
+        const winner = optResult?.declared_engineering_optimum;
 
         if (winner && winner.coordinates && winner.coordinates.length > 0) {
           const rawTurbs = winner.coordinates.map((c: any, i: number) => ({
@@ -939,11 +972,11 @@ export function App() {
           improvementPct = Math.max(0, Number((((bestAep - initialAep) / initialAep) * 100).toFixed(1)));
           optimalityScope = winner.optimality_scope || optimalityScope;
         }
-      } catch (qErr) {
-        console.warn('QAOA optimization returned fallback, trying baseline runner:', qErr);
+      } catch (optErr) {
+        console.warn('Selected optimization returned error, trying fallback runner:', optErr);
       }
 
-      // If QAOA did not produce optTurbs, fallback gracefully to runOptimization
+      // If optimization did not produce optTurbs, fallback gracefully to runOptimization
       if (optTurbs.length === 0) {
         const payload = {
           sites: candidatePool.map((c: any, idx: number) => ({
@@ -1000,26 +1033,28 @@ export function App() {
         optimized_turbines: optTurbs,
         initial_turbines: layoutData.turbines,
         candidate_positions: layoutData.candidate_positions || layoutData.candidates || [],
-        declared_engineering_optimum: qaoaResult?.declared_engineering_optimum,
-        physical_reevaluation: qaoaResult?.physical_reevaluation,
-        qubo_problem: qaoaResult?.qubo_problem,
+        declared_engineering_optimum: optResult?.declared_engineering_optimum,
+        physical_reevaluation: optResult?.physical_reevaluation,
+        qubo_problem: optResult?.qubo_problem,
         optimality_scope: optimalityScope,
         turbine_model: config.modelName,
         rotor_diameter_m: config.rotorDiameter,
         hub_height_m: config.hubHeight,
         rated_power_kw: config.ratedPowerKw,
-        installed_capacity_mw: qaoaResult?.declared_engineering_optimum?.installed_capacity_mw || (optTurbs.length * (config.ratedPowerKw / 1000)),
-        exact_net_cf_pct: qaoaResult?.declared_engineering_optimum?.exact_net_cf_pct,
-        exact_net_aep_gwh: qaoaResult?.declared_engineering_optimum?.exact_net_aep_gwh ?? bestAep,
-        gross_aep_gwh: qaoaResult?.declared_engineering_optimum?.exact_gross_aep_gwh,
-        exact_wake_loss_pct: qaoaResult?.declared_engineering_optimum?.exact_wake_loss_pct ?? bestWakeLoss,
-        selected_candidate_ids: qaoaResult?.declared_engineering_optimum?.selected_candidate_ids,
-        pipeline_provenance: qaoaResult?.pipeline_provenance,
-        hardware_execution: qaoaResult?.quantum_circuit?.backend,
-        provenance: qaoaResult?.provenance,
+        installed_capacity_mw: optResult?.declared_engineering_optimum?.installed_capacity_mw || (optTurbs.length * (config.ratedPowerKw / 1000)),
+        exact_net_cf_pct: optResult?.declared_engineering_optimum?.exact_net_cf_pct,
+        exact_net_aep_gwh: optResult?.declared_engineering_optimum?.exact_net_aep_gwh ?? bestAep,
+        gross_aep_gwh: optResult?.declared_engineering_optimum?.exact_gross_aep_gwh,
+        exact_wake_loss_pct: optResult?.declared_engineering_optimum?.exact_wake_loss_pct ?? bestWakeLoss,
+        selected_candidate_ids: optResult?.declared_engineering_optimum?.selected_candidate_ids,
+        pipeline_provenance: optResult?.pipeline_provenance,
+        hardware_execution: optResult?.quantum_circuit?.backend || optResult?.hardware_execution,
+        provenance: optResult?.provenance,
+        solver_mode: solverMode,
+        solver_label: solverLabel,
         status_headline: headline,
         status_description: optTurbs.length > 0
-          ? 'Quantum WS-QAOA optimization certified on feasible candidate coordinates.'
+          ? `${solverLabel} optimization certified on feasible candidate coordinates.`
           : 'Hard exclusions preclude viable turbine placement.',
       });
 
@@ -1260,6 +1295,8 @@ export function App() {
               layoutData={layoutData}
               onLaunchOptimize={handleLaunchOptimize}
               onBack={handleGoBack}
+              solverEngine={solverEngine}
+              onSelectSolverEngine={setSolverEngine}
             />
           )}
 
