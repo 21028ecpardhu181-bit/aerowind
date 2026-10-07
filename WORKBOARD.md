@@ -2,14 +2,39 @@
 
 ## Assigned Agent: Antigravity
 
-### Status: Completed (Phase 8B — Real IBM Quantum Hardware Execution & Multi-Tier Optimization Comparison)
-- **Branch**: `feature/phase-8b-ibm-quantum-hardware-integration`
+### Status: Completed (Sprint 5 — IBM Hardware Result Reconciliation & UI Animation Safety)
+- **Branch**: `feature/sprint-5-ibm-reconciliation-animation-safety`
 - **Files Owned**:
   - `WORKBOARD.md`
-  - `backend/app/engineering/qaoa_engine.py`
   - `backend/app/api/optimization.py`
-  - `tests/test_phase8_adversarial_qa.py`
-  - `docs/PHASE8_PRODUCTION_READINESS_AUDIT_REPORT.md`
+  - `backend/app/engineering/qaoa_engine.py`
+  - `src/components/workflow/Screen4Optimize.tsx`
+  - `src/types/index.ts`
+  - `src/App.tsx`
+  - `tests/test_sprint5_reconciliation.py`
+  - `tests/verify_screen4_ui.py`
+
+### Sprint 5 Completed Objectives:
+1. Traced and resolved numerical discrepancy between Tier 4 exact physical re-evaluation (18.370 GWh/yr, 1.30% wake loss) and API response (18.88 GWh/yr, 1.24% wake loss):
+   - Root Cause: API previously defaulted site_elevation_m to 0.0m (sea level barometric density rho = 1.225 kg/m3), whereas Tier 4 evaluated at actual Anantapur candidate ground height 450.0m (rho = 1.161 kg/m3).
+   - Fix: Bound effective_elevation_m dynamically from candidate ground heights for both QUBO formulation and exact post-hoc FLORIS re-evaluation, guaranteeing identical density and power curve scaling.
+2. Single Source of Truth:
+   - exact_net_aep_gwh (18.37 GWh/yr), gross_aep_gwh (20.59 GWh/yr), wake_loss_pct (1.30%), and exact_net_cf_pct (41.9%) are strictly populated from Tier 4 FLORIS physical finalization (declared_engineering_optimum).
+   - Zero frontend calculation overrides or surrogate substitutions.
+3. Provenance Architecture:
+   - Exposes comprehensive 4-stage metadata in pipeline_provenance: Stage 1 Classical QUBO Formulation, Stage 2 Aer Simulator Parameter Tuning (gamma*, beta* via COBYLA), Stage 3 IBM Quantum Hardware Execution, Stage 4 FLORIS Aerodynamic Wake Deficit Re-evaluation.
+4. Hardware Result Semantics & Claim Safeguards:
+   - Real IBM Quantum hardware job executed on ibm_fez (Heron r2, 156 qubits, job db3785b9kq9s73ata090, 1024 shots, winning bitstring 1001 sampled 35 times).
+   - Enforced strict prohibition of forbidden claims ("quantum advantage", "quantum supremacy", "exponential speedup", "optimal layout guaranteed by quantum physics") via automated lint tests.
+5. Restrained Engineering Animation:
+   - Upgraded Screen 4 with disciplined 5-stage sequential pipeline visualization communicating hybrid execution without sci-fi neon or decorative particles.
+   - Real hardware metadata and NISQ compliance notice clearly displayed.
+6. Full Verification & Zero Emoji Policy:
+   - tests/test_sprint5_reconciliation.py: 5/5 passed.
+   - tests/test_phase8_adversarial_qa.py: 21/21 passed.
+   - tests/verify_screen4_ui.py: passed on both mobile (390x844) and desktop (1280x800).
+   - npm run build: passed cleanly with 0 errors.
+   - Zero emojis confirmed across all code, tests, UI, and documentation.
 
 ### Phase 8B Completed Objectives:
 1. Integrated real IBM Quantum credentials securely via non-committed `.env.ibm` configuration.

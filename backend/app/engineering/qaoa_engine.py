@@ -125,6 +125,10 @@ class IBMQuantumHardwareBackend(BaseQuantumBackend):
         self._status = "HARDWARE_UNAVAILABLE"
         self._error_reason = "No IBM Quantum credentials configured (IBM_QUANTUM_TOKEN unset)."
 
+        self._last_job_id: Optional[str] = None
+        self._last_job_status: Optional[str] = None
+        self._last_execution_spans: Optional[str] = None
+
         # When token is explicitly passed as False or empty string "", treat as deliberately unauthenticated
         explicit_empty = (token == "")
         if token:
@@ -179,7 +183,12 @@ class IBMQuantumHardwareBackend(BaseQuantumBackend):
             sampler = SamplerV2(mode=self._backend)
             transpiled = transpile(circuit, self._backend)
             job = sampler.run([transpiled], shots=shots)
+            self._last_job_id = job.job_id()
+            self._last_job_status = str(job.status())
             result = job.result()
+            self._last_job_status = "DONE"
+            if hasattr(result, "metadata") and result.metadata:
+                self._last_execution_spans = str(result.metadata.get("execution", {}))
             # Extract bitstring counts from SamplerV2 pub result
             pub_result = result[0]
             data_bin = pub_result.data
@@ -206,6 +215,8 @@ class IBMQuantumHardwareBackend(BaseQuantumBackend):
             "error_reason": self._error_reason,
             "is_available": self.is_available(),
             "num_qubits": num_q,
+            "job_id": self._last_job_id,
+            "job_status": self._last_job_status,
         }
 
 
@@ -630,6 +641,43 @@ class QAOALayoutOptimizer:
             },
             "declared_engineering_optimum": engineering_winner.model_dump() if engineering_winner else None,
             "execution_duration_seconds": duration,
+            "pipeline_provenance": {
+                "stage_1_classical_qubo": {
+                    "stage_name": "Classical QUBO Formulation",
+                    "best_bitstring": best_qubo_feasible.bitstring,
+                    "surrogate_net_aep_mwh": best_qubo_feasible.surrogate_net_energy_mwh,
+                    "qubo_cost": best_qubo_feasible.qubo_cost,
+                    "target_turbines": qubo.target_turbines,
+                },
+                "stage_2_aer_simulator": {
+                    "stage_name": "Qiskit Aer Simulator QAOA",
+                    "optimal_gamma": optimal_gamma,
+                    "optimal_beta": optimal_beta,
+                    "ansatz_layers": p,
+                    "circuit_depth": circuit_depth,
+                    "cx_gate_count": cx_count,
+                },
+                "stage_3_hardware_or_sampling": {
+                    "stage_name": "IBM Quantum Hardware Execution" if self.backend.get_info().get("is_hardware") else "Aer Quantum Circuit Sampling",
+                    "backend_name": self.backend.get_info().get("backend_name"),
+                    "backend_type": self.backend.get_info().get("backend_type"),
+                    "total_shots": total_shots,
+                    "job_id": self.backend.get_info().get("job_id"),
+                    "job_status": self.backend.get_info().get("job_status"),
+                    "winning_bitstring_counts": counts.get(engineering_winner.bitstring, 0) if engineering_winner else 0,
+                    "winning_bitstring_frequency_pct": round(100.0 * counts.get(engineering_winner.bitstring, 0) / max(1, total_shots), 2) if engineering_winner else 0.0,
+                },
+                "stage_4_physical_reevaluation": {
+                    "stage_name": "Exact Physical FLORIS Aerodynamic Evaluation",
+                    "wake_model": "NREL FLORIS Bastankhah Gaussian Model",
+                    "loss_framework": "IEC 61400-15-1:2025 Framework",
+                    "exact_gross_aep_gwh": engineering_winner.exact_gross_aep_gwh if engineering_winner else None,
+                    "exact_net_aep_gwh": engineering_winner.exact_net_aep_gwh if engineering_winner else None,
+                    "exact_wake_loss_pct": engineering_winner.exact_wake_loss_pct if engineering_winner else None,
+                    "exact_net_cf_pct": engineering_winner.exact_net_cf_pct if engineering_winner else None,
+                    "authoritative_source": "EXACT_PHYSICAL_FLORIS_AEP",
+                },
+            },
             "provenance": {
                 "quantum_layer": "Qiskit 2.5+ QAOA Ansatz",
                 "physical_layer": "NREL FLORIS Bastankhah Gaussian Model",

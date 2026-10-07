@@ -1010,6 +1010,12 @@ export function App() {
         rated_power_kw: config.ratedPowerKw,
         installed_capacity_mw: qaoaResult?.declared_engineering_optimum?.installed_capacity_mw || (optTurbs.length * (config.ratedPowerKw / 1000)),
         exact_net_cf_pct: qaoaResult?.declared_engineering_optimum?.exact_net_cf_pct,
+        exact_net_aep_gwh: qaoaResult?.declared_engineering_optimum?.exact_net_aep_gwh ?? bestAep,
+        gross_aep_gwh: qaoaResult?.declared_engineering_optimum?.exact_gross_aep_gwh,
+        exact_wake_loss_pct: qaoaResult?.declared_engineering_optimum?.exact_wake_loss_pct ?? bestWakeLoss,
+        selected_candidate_ids: qaoaResult?.declared_engineering_optimum?.selected_candidate_ids,
+        pipeline_provenance: qaoaResult?.pipeline_provenance,
+        hardware_execution: qaoaResult?.quantum_circuit?.backend,
         provenance: qaoaResult?.provenance,
         status_headline: headline,
         status_description: optTurbs.length > 0
@@ -1260,6 +1266,7 @@ export function App() {
           {/* 6. SCREEN 4: Quantum WS-QAOA Optimization */}
           {currentScreen === 's4_optimize' && (
             <Screen4Optimize
+              site={site}
               optimizationData={optimizationData}
               onViewOptimized={handleViewOptimized}
             />

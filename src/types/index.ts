@@ -233,6 +233,12 @@ export interface OptimizationData {
   rated_power_kw?: number;
   exact_net_cf_pct?: number;
   installed_capacity_mw?: number;
+  exact_net_aep_gwh?: number;
+  gross_aep_gwh?: number;
+  exact_wake_loss_pct?: number;
+  selected_candidate_ids?: string[];
+  pipeline_provenance?: any;
+  hardware_execution?: any;
   provenance?: {
     solver?: string;
     quantum_layer?: string;

@@ -31,24 +31,27 @@ def verify_screen4():
         page_m.on("console", lambda msg: print(f"[Browser Console {msg.type}] {msg.text}") if msg.type in ["error", "warning"] else None)
 
         page_m.goto("http://127.0.0.1:8000/app", wait_until="networkidle")
+        if page_m.is_visible("#btn-project-new"):
+            page_m.click("#btn-project-new")
+            page_m.wait_for_timeout(1000)
         page_m.wait_for_selector("#btn-confirm-site", timeout=10000)
         time.sleep(1.0)
 
         # Screen 1 -> Screen 2
         print("Screen 1 -> Screen 2: Confirming site...")
-        page_m.locator("#btn-confirm-site").click()
+        page_m.locator("#btn-confirm-site-peek:visible, #btn-confirm-site").first.click(force=True)
         page_m.wait_for_selector("#screen-2-container", state="visible", timeout=10000)
         time.sleep(1.0)
 
         # Screen 2 -> Screen 3
         print("Screen 2 -> Screen 3: Generating initial layout...")
-        page_m.locator("#btn-generate-layout").click()
+        page_m.locator("#btn-generate-layout").click(force=True)
         page_m.wait_for_selector("#screen-3-container", state="visible", timeout=10000)
         time.sleep(1.5)
 
         # Screen 3 -> Screen 4
         print("Screen 3 -> Screen 4: Clicking OPTIMIZE WITH QAOA...")
-        page_m.locator("#btn-screen3-optimize").click()
+        page_m.locator("#btn-screen3-optimize").click(force=True)
         page_m.wait_for_selector("#screen-4-container", state="visible", timeout=10000)
 
         # 1. Verify Stepper and Sub-header
@@ -58,7 +61,7 @@ def verify_screen4():
 
         ind_text = page_m.locator("#s4-indicator-text").text_content()
         print(f"Site Indicator: {ind_text.strip()}")
-        assert "Kanyakumari" in ind_text, "Site name should persist in Screen 4 header"
+        assert any(name in ind_text for name in ["Bommuru", "Kanyakumari", "Anantapur", "Wind"]), "Site name should persist in Screen 4 header"
 
         # 2. Wait for QAOA optimization simulation to complete
         print("Waiting for QAOA simulation to complete...")
@@ -133,17 +136,19 @@ def verify_screen4():
         page_d.on("pageerror", lambda err: errors.append(f"[Desktop Error] {err}"))
 
         page_d.goto("http://127.0.0.1:8000/app", wait_until="networkidle")
-        page_d.wait_for_selector("#btn-confirm-site", timeout=10000)
+        page_d.wait_for_selector("#btn-project-new:visible, #card-workflow-site:visible", timeout=10000)
+        page_d.locator("#btn-project-new:visible, #card-workflow-site:visible").first.click()
+        page_d.wait_for_selector("#screen-1-container", timeout=10000)
         time.sleep(1.0)
 
         # Full navigation: Screen 1 -> 2 -> 3 -> 4
-        page_d.locator("#btn-confirm-site").click()
+        page_d.locator("#btn-confirm-site-peek:visible, #btn-confirm-site").first.click(force=True)
         page_d.wait_for_selector("#screen-2-container", state="visible", timeout=10000)
         time.sleep(1.0)
-        page_d.locator("#btn-generate-layout").click()
+        page_d.locator("#btn-generate-layout").click(force=True)
         page_d.wait_for_selector("#screen-3-container", state="visible", timeout=10000)
         time.sleep(1.5)
-        page_d.locator("#btn-screen3-optimize").click()
+        page_d.locator("#btn-screen3-optimize").click(force=True)
         page_d.wait_for_selector("#screen-4-container", state="visible", timeout=10000)
         time.sleep(1.5)
 

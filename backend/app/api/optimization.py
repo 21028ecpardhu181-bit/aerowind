@@ -150,11 +150,23 @@ def _validate_and_build_qubo(
         cid = str(c.get("candidate_id") or c.get("id") or f"cand_{idx:02d}")
         metadata_lookup[cid] = c
 
+    # Single Source of Truth for site elevation:
+    # If site_elevation_m was omitted or 0.0, derive authoritative elevation from candidate elevations
+    effective_elevation_m = float(site_elevation_m)
+    if effective_elevation_m <= 0.0:
+        cand_elevs = [
+            float(c.get("elevation_m") or c.get("terrain_elevation") or 0.0)
+            for c in valid_candidates
+            if (c.get("elevation_m") is not None or c.get("terrain_elevation") is not None)
+        ]
+        if cand_elevs:
+            effective_elevation_m = round(float(sum(cand_elevs) / len(cand_elevs)), 2)
+
     # Build Phase 5 performance contract
     contract = aep_calculation_engine.build_phase6_performance_contract(
         candidate_positions=valid_candidates,
         turbine_model_id=turbine_model_id,
-        site_elevation_m=site_elevation_m,
+        site_elevation_m=effective_elevation_m,
     )
 
     if target_turbines is not None and int(target_turbines) > len(valid_candidates):
@@ -178,7 +190,7 @@ def _validate_and_build_qubo(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
-    return contract, qubo, metadata_lookup
+    return contract, qubo, metadata_lookup, effective_elevation_m
 
 
 # ── ROUTE IMPLEMENTATIONS ─────────────────────────────────────────────────────
@@ -188,7 +200,7 @@ async def generate_qubo_formulation(req: QuboFormulationRequest) -> Dict[str, An
     """
     Constructs the verified QUBO problem formulation and normalized Ising spin Hamiltonian.
     """
-    contract, qubo, _ = _validate_and_build_qubo(
+    contract, qubo, _, _ = _validate_and_build_qubo(
         candidates=req.candidates,
         turbine_model_id=req.turbine_model_id,
         target_turbines=req.target_turbines,
@@ -231,7 +243,7 @@ async def run_classical_optimization(req: ClassicalOptimizationRequest) -> Dict[
     Executes certified exhaustive classical search over combinations of target turbines,
     re-evaluating top solutions with exact FLORIS multi-turbine physics.
     """
-    contract, qubo, meta_lookup = _validate_and_build_qubo(
+    contract, qubo, meta_lookup, effective_elev = _validate_and_build_qubo(
         candidates=req.candidates,
         turbine_model_id=req.turbine_model_id,
         target_turbines=req.target_turbines,
@@ -271,7 +283,7 @@ async def run_classical_optimization(req: ClassicalOptimizationRequest) -> Dict[
                 lon = float(meta.get("longitude") if meta.get("longitude") is not None else (meta.get("lon") or 0.0))
                 e_m = meta.get("utm_easting_m") if meta.get("utm_easting_m") is not None else (meta.get("east_m") if meta.get("east_m") is not None else pos_m[0])
                 n_m = meta.get("utm_northing_m") if meta.get("utm_northing_m") is not None else (meta.get("north_m") if meta.get("north_m") is not None else pos_m[1])
-                elev = float(meta.get("elevation_m") if meta.get("elevation_m") is not None else req.site_elevation_m)
+                elev = float(meta.get("elevation_m") if meta.get("elevation_m") is not None else effective_elev)
                 pos_entry = {
                     "id": cid,
                     "latitude": lat,
@@ -289,7 +301,7 @@ async def run_classical_optimization(req: ClassicalOptimizationRequest) -> Dict[
                     "id": cid,
                     "utm_easting_m": pos_m[0],
                     "utm_northing_m": pos_m[1],
-                    "elevation_m": req.site_elevation_m,
+                    "elevation_m": effective_elev,
                 }
                 positions_for_floris.append(pos_entry)
                 coords_meta.append(pos_entry)
@@ -297,7 +309,7 @@ async def run_classical_optimization(req: ClassicalOptimizationRequest) -> Dict[
         exact_aep = aep_calculation_engine.evaluate_layout_aep(
             candidate_positions=positions_for_floris,
             turbine_model_id=qubo.turbine_model_id,
-            site_elevation_m=req.site_elevation_m,
+            site_elevation_m=effective_elev,
         )
 
         exact_net_mwh = exact_aep.net_aep_gwh * 1000.0
@@ -366,7 +378,7 @@ async def run_qaoa_optimization(req: QaoaOptimizationRequest) -> Dict[str, Any]:
     Executes genuine QAOA quantum circuit optimization with AerSimulator or IBM Quantum hardware,
     followed by Top-K exact physical multi-turbine re-evaluation.
     """
-    contract, qubo, meta_lookup = _validate_and_build_qubo(
+    contract, qubo, meta_lookup, effective_elevation_m = _validate_and_build_qubo(
         candidates=req.candidates,
         turbine_model_id=req.turbine_model_id,
         target_turbines=req.target_turbines,
@@ -412,7 +424,7 @@ async def run_qaoa_optimization(req: QaoaOptimizationRequest) -> Dict[str, Any]:
     result = optimizer.optimize_layout(
         qubo=qubo,
         candidate_metadata_lookup=meta_lookup,
-        site_elevation_m=req.site_elevation_m,
+        site_elevation_m=effective_elevation_m,
     )
 
     return result
@@ -425,7 +437,7 @@ async def run_qaoa_quality_audit(req: QaoaQualityAuditRequest) -> Dict[str, Any]
     reporting approximation ratio, optimality gap, probability of sampling the exact optimum,
     and top-K coverage against the certified classical optimum.
     """
-    contract, qubo, meta_lookup = _validate_and_build_qubo(
+    contract, qubo, meta_lookup, effective_elevation_m = _validate_and_build_qubo(
         candidates=req.candidates,
         turbine_model_id=req.turbine_model_id,
         target_turbines=req.target_turbines,
@@ -445,7 +457,7 @@ async def run_qaoa_quality_audit(req: QaoaQualityAuditRequest) -> Dict[str, Any]
     audit_res = optimizer.audit_qaoa_solution_quality(
         qubo=qubo,
         candidate_metadata_lookup=meta_lookup,
-        site_elevation_m=req.site_elevation_m,
+        site_elevation_m=effective_elevation_m,
         repetitions=req.repetitions,
         seeds=req.seeds,
     )
