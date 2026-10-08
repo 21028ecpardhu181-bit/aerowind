@@ -709,11 +709,17 @@ export async function authRegister(data: { username: string; email: string; pass
   return res.json();
 }
 
-export async function authLogin(data: { username: string; password: string }): Promise<any> {
+export async function authLogin(data: { username?: string; username_or_email?: string; email?: string; password: string }): Promise<any> {
+  const payload = {
+    username_or_email: data.username_or_email || data.username || data.email,
+    username: data.username || data.username_or_email,
+    email: data.email,
+    password: data.password,
+  };
   const res = await fetch(`${API_BASE}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
+    body: JSON.stringify(payload),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));

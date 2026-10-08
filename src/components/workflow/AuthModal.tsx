@@ -91,7 +91,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
       if (isLoginMode) {
         // 1. Try local / Supabase authentication
-        const res = await authLogin({ username, password });
+        const identity = username.trim() || email.trim();
+        const res = await authLogin({
+          username_or_email: identity,
+          username: identity,
+          email: email.trim(),
+          password,
+        });
         authToken = res.token || res.access_token;
         userProfile = {
           username: res.user?.username || res.username || username,
@@ -219,10 +225,44 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
         {/* Form Body */}
         <div className="p-6 pt-3">
+          {/* Mode Switcher Tabs */}
+          <div className="flex p-1 bg-slate-100 rounded-2xl mb-3.5 border border-slate-200/60">
+            <button
+              type="button"
+              id="tab-auth-login"
+              onClick={() => {
+                setIsLoginMode(true);
+                setErrorMsg('');
+              }}
+              className={`flex-1 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                isLoginMode
+                  ? 'bg-white text-slate-950 shadow-xs border border-white'
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              id="tab-auth-register"
+              onClick={() => {
+                setIsLoginMode(false);
+                setErrorMsg('');
+              }}
+              className={`flex-1 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                !isLoginMode
+                  ? 'bg-white text-slate-950 shadow-xs border border-white'
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              Create Account
+            </button>
+          </div>
+
           <h2 id="auth-form-title" className="text-lg font-black text-slate-900 tracking-tight text-center mb-0.5">
             {isLoginMode ? 'Sign In to AeroQuantum' : 'Create Engineer Account'}
           </h2>
-          <p className="text-xs text-slate-500 text-center mb-4">
+          <p className="text-xs text-slate-500 text-center mb-3">
             {isLoginMode
               ? 'Enter credentials & IBM Quantum token to access certified solvers'
               : 'Join AeroQuantum-Wind and link your IBM Quantum workspace'}
@@ -371,10 +411,24 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             {errorMsg && (
               <div
                 id="auth-error-msg"
-                className="p-2.5 rounded-xl bg-red-50 text-red-700 text-xs font-medium border border-red-200 flex items-center gap-1.5"
+                className="p-3 rounded-xl bg-red-50 text-red-700 text-xs font-medium border border-red-200 flex flex-col gap-1.5"
               >
-                <X className="w-4 h-4 shrink-0 text-red-600" />
-                <span>{errorMsg}</span>
+                <div className="flex items-center gap-1.5">
+                  <X className="w-4 h-4 shrink-0 text-red-600" />
+                  <span>{errorMsg}</span>
+                </div>
+                {isLoginMode && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsLoginMode(false);
+                      setErrorMsg('');
+                    }}
+                    className="self-start text-[11px] font-bold text-amber-800 hover:text-amber-900 underline mt-0.5 cursor-pointer"
+                  >
+                    Account not created yet? Click here to switch to Create Account
+                  </button>
+                )}
               </div>
             )}
 
