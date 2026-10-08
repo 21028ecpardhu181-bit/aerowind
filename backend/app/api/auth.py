@@ -160,14 +160,66 @@ def login(req: LoginRequest):
         cursor.execute("""
             SELECT id, username, email, password_hash, created_at
             FROM users
-            WHERE username = ? OR email = ?
-        """, (identity, identity.lower()))
+            WHERE LOWER(username) = ? OR LOWER(email) = ?
+        """, (identity.lower(), identity.lower()))
         user_row = cursor.fetchone()
 
-        if not user_row or not verify_password(req.password, user_row["password_hash"]):
-            raise HTTPException(status_code=401, detail="Invalid username/email or password")
+        user_id = None
+        user_data = None
 
-        user_id = user_row["id"]
+        if user_row and verify_password(req.password, user_row["password_hash"]):
+            user_id = user_row["id"]
+            user_data = {
+                "id": user_row["id"],
+                "username": user_row["username"],
+                "email": user_row["email"],
+                "created_at": user_row["created_at"],
+            }
+        else:
+            # Fallback: check Supabase Auth GoTrue API
+            import os
+            import json
+            import urllib.request
+            supabase_url = os.environ.get("SUPABASE_URL") or "https://avtkzutofgsjzldkimro.supabase.co"
+            anon_key = os.environ.get("SUPABASE_ANON_KEY")
+            sb_user = None
+            if supabase_url and anon_key:
+                try:
+                    auth_url = f"{supabase_url.rstrip('/')}/auth/v1/token?grant_type=password"
+                    payload = json.dumps({"email": identity, "password": req.password}).encode()
+                    sb_req = urllib.request.Request(
+                        auth_url,
+                        data=payload,
+                        headers={"apikey": anon_key, "Content-Type": "application/json"}
+                    )
+                    with urllib.request.urlopen(sb_req, timeout=3) as resp:
+                        if resp.status == 200:
+                            sb_data = json.loads(resp.read().decode())
+                            sb_user = sb_data.get("user")
+                except Exception:
+                    pass
+
+            if not sb_user:
+                raise HTTPException(status_code=401, detail="Invalid username/email or password")
+
+            # Provision / sync local user record from Supabase
+            sb_email = sb_user.get("email", identity)
+            sb_uname = sb_user.get("user_metadata", {}).get("username") or sb_email.split("@")[0]
+            pwd_hash = hash_password(req.password)
+            if user_row:
+                cursor.execute("UPDATE users SET password_hash = ? WHERE id = ?", (pwd_hash, user_row["id"]))
+                user_id = user_row["id"]
+                cursor.execute("SELECT id, username, email, created_at FROM users WHERE id = ?", (user_id,))
+                user_data = dict(cursor.fetchone())
+            else:
+                cursor.execute("""
+                    INSERT INTO users (username, email, password_hash)
+                    VALUES (?, ?, ?)
+                """, (sb_uname, sb_email, pwd_hash))
+                user_id = cursor.lastrowid
+                cursor.execute("SELECT id, username, email, created_at FROM users WHERE id = ?", (user_id,))
+                user_data = dict(cursor.fetchone())
+
         token = secrets.token_urlsafe(32)
         expires_at = time.time() + SESSION_TTL_SECONDS
         cursor.execute("""
@@ -175,13 +227,6 @@ def login(req: LoginRequest):
             VALUES (?, ?, ?)
         """, (token, user_id, expires_at))
         conn.commit()
-
-        user_data = {
-            "id": user_row["id"],
-            "username": user_row["username"],
-            "email": user_row["email"],
-            "created_at": user_row["created_at"],
-        }
 
     return AuthResponse(token=token, user=UserResponse(**user_data))
 
