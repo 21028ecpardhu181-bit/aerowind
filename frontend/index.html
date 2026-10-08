@@ -1,0 +1,2112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>AeroQuantum-Wind — Engineering Wind Farm Optimization</title>
+
+    <!-- Leaflet CSS (local vendor with CDN fallback) -->
+    <link rel="stylesheet" href="/assets/vendor/leaflet.css" onerror="this.onerror=null;this.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';">
+    <link rel="stylesheet" href="assets/vendor/leaflet.css" onerror="this.onerror=null;this.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';">
+
+    <!-- Google Fonts for High-Tech Engineering Typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+
+    <!-- CesiumJS 3D Engine Stylesheet (local vendor with CDN fallback) -->
+    <link rel="stylesheet" href="/assets/vendor/cesium/widgets.css" onerror="this.onerror=null;this.href='https://cdn.jsdelivr.net/npm/cesium@1.118/Build/Cesium/Widgets/widgets.css';">
+    <link rel="stylesheet" href="assets/vendor/cesium/widgets.css" onerror="this.onerror=null;this.href='https://cdn.jsdelivr.net/npm/cesium@1.118/Build/Cesium/Widgets/widgets.css';">
+
+    <!-- Design System Stylesheet -->
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="/map/css/style.css" onerror="this.onerror=null;">
+</head>
+<body>
+
+    <!-- Top Global App Navigation Header -->
+    <header class="app-header">
+        <div class="brand-section">
+            <a href="/" class="brand-logo">
+                <svg class="brand-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
+                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                </svg>
+                <div class="brand-name">AeroQuantum<span>-Wind</span></div>
+            </a>
+            <div class="brand-divider"></div>
+            <div class="brand-tag">Wind Farm Optimization</div>
+        </div>
+
+        <!-- 6-Screen Stepper Progress Breadcrumbs -->
+        <nav class="stepper-nav" aria-label="Workflow Steps">
+            <div class="step-item active" data-step="1">
+                <div class="step-circle">1</div>
+                <span>Select Site</span>
+            </div>
+            <div class="step-chevron">›</div>
+            <div class="step-item" data-step="2">
+                <div class="step-circle">2</div>
+                <span>Configure Farm</span>
+            </div>
+            <div class="step-chevron">›</div>
+            <div class="step-item" data-step="3">
+                <div class="step-circle">3</div>
+                <span>Analyze Layout</span>
+            </div>
+            <div class="step-chevron">›</div>
+            <div class="step-item" data-step="4">
+                <div class="step-circle">4</div>
+                <span>Optimize (QAOA)</span>
+            </div>
+            <div class="step-chevron">›</div>
+            <div class="step-item" data-step="5">
+                <div class="step-circle">5</div>
+                <span>Inspect Results</span>
+            </div>
+            <div class="step-chevron">›</div>
+            <div class="step-item" data-step="6">
+                <div class="step-circle">6</div>
+                <span>Export Blueprint</span>
+            </div>
+        </nav>
+
+        <!-- Right Header Actions -->
+        <div class="header-actions">
+            <button type="button" id="btn-open-auth" class="btn-auth-header">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+                <span id="header-user-label">Sign In</span>
+            </button>
+            <div class="project-badge">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                </svg>
+                <span>Project: <strong>New Project</strong></span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+            </div>
+        </div>
+
+        <!-- Mobile Step Indicator Pill -->
+        <div id="mobile-step-pill" class="mobile-step-pill">
+            Step 1/6: Select Site
+        </div>
+    </header>
+
+    <!-- ===================================================================
+         AUTHENTICATION / LOGIN & ONBOARDING VIEW (AeroQuantum-Wind Workspace)
+         =================================================================== -->
+    <div id="auth-modal" class="auth-modal-backdrop" style="display: none;">
+        <div class="auth-phone-container">
+            <!-- Simulated iOS Dynamic Island / Status Bar -->
+            <div class="auth-status-bar">
+                <span class="auth-status-time">12:48</span>
+                <div class="auth-dynamic-island">
+                    <div class="auth-island-badge">
+                        <span class="auth-island-dot"></span>
+                        <span>QAOA</span>
+                    </div>
+                </div>
+                <div class="auth-status-icons">
+                    <svg width="15" height="11" viewBox="0 0 17 11" fill="currentColor">
+                        <rect x="0" y="7" width="2.5" height="4" rx="0.5"/>
+                        <rect x="4.5" y="5" width="2.5" height="6" rx="0.5"/>
+                        <rect x="9" y="2.5" width="2.5" height="8.5" rx="0.5"/>
+                        <rect x="13.5" y="0" width="2.5" height="11" rx="0.5"/>
+                    </svg>
+                    <svg width="15" height="11" viewBox="0 0 16 11" fill="currentColor">
+                        <path d="M8 2.5C10.5 2.5 12.7 3.5 14.3 5.2L15.4 4C13.5 2 10.9 0.8 8 0.8C5.1 0.8 2.5 2 0.6 4L1.7 5.2C3.3 3.5 5.5 2.5 8 2.5Z"/>
+                        <circle cx="8" cy="9.5" r="1.5"/>
+                    </svg>
+                    <svg width="22" height="11" viewBox="0 0 25 12" fill="currentColor">
+                        <rect x="0" y="0" width="21" height="12" rx="3" fill="none" stroke="currentColor" stroke-width="1"/>
+                        <rect x="2" y="2" width="15" height="8" rx="1.5"/>
+                        <path d="M23 4.5v3a1.5 1.5 0 0 0 0-3z"/>
+                    </svg>
+                </div>
+            </div>
+
+            <!-- Dismiss / Close button -->
+            <button type="button" id="btn-close-auth" class="auth-close-btn" aria-label="Close">✕</button>
+
+            <!-- VIEW A: WELCOME / ONBOARDING VIEW (Left Phone in Mockup) -->
+            <div id="auth-welcome-view" class="auth-screen-view" style="display: none;">
+                <div class="auth-hero-illustration">
+                    <img src="/assets/auth/robot-welcome-hero.webp" alt="AeroQuantum AI Assistant" class="auth-robot-img">
+                </div>
+                <div class="auth-welcome-body">
+                    <!-- Carousel Pagination Dots -->
+                    <div class="auth-dots-indicator">
+                        <span class="auth-dot"></span>
+                        <span class="auth-dot active"></span>
+                        <span class="auth-dot"></span>
+                    </div>
+
+                    <h1 class="auth-welcome-title">Redefine Wind Farm Design</h1>
+                    <p class="auth-welcome-desc">Let an intelligent assistant optimize your wind farm layouts, simulate wake loss, and maximize energy yield.</p>
+
+                    <button type="button" id="btn-welcome-get-started" class="btn-auth-pill">
+                        GET STARTED
+                    </button>
+                </div>
+            </div>
+
+            <!-- VIEW B: CREATE ACCOUNT / LOGIN SHEET (Right Phone in Mockup) -->
+            <div id="auth-login-view" class="auth-screen-view">
+                <div class="auth-hero-illustration compact">
+                    <!-- Robot Speech Bubble -->
+                    <div class="auth-speech-bubble">
+                        <span>Hi! Welcome to AeroQuantum AI Bot</span>
+                        <div class="auth-speech-bubble-tail"></div>
+                    </div>
+                    <img src="/assets/auth/robot-login-hero.webp" alt="AeroQuantum AI Assistant" class="auth-robot-img">
+                </div>
+
+                <!-- White Bottom Sheet -->
+                <div class="auth-bottom-sheet">
+                    <h2 id="auth-form-title" class="auth-sheet-title">Create Account</h2>
+
+                    <form id="auth-form" class="auth-form" autocomplete="on">
+                        <!-- Email Input Group -->
+                        <div class="auth-field-group">
+                            <label class="auth-field-label" for="auth-email-input">Work E-mail</label>
+                            <input id="auth-email-input" class="auth-field-input" type="email" placeholder="engineer@aerowind.io" required value="engineer1@aeroquantum.com">
+                        </div>
+
+                        <!-- Organization / Team Input Group (visible in signup mode) -->
+                        <div id="auth-username-group" class="auth-field-group">
+                            <label class="auth-field-label" for="auth-username-input">Organization / Team</label>
+                            <input id="auth-username-input" class="auth-field-input" type="text" placeholder="Wind Systems Lab" value="engineer1">
+                        </div>
+
+                        <!-- Password Input Group -->
+                        <div class="auth-field-group password-group">
+                            <label class="auth-field-label" for="auth-password-input">Password</label>
+                            <div class="auth-password-wrapper">
+                                <input id="auth-password-input" class="auth-field-input" type="password" placeholder="••••••••" required value="securepassword123">
+                                <button type="button" id="btn-toggle-password" class="auth-eye-btn" aria-label="Toggle password visibility">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                                        <line x1="1" y1="1" x2="23" y2="23"></line>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Error Message -->
+                        <div id="auth-error-msg" class="auth-error-text" style="display: none;"></div>
+
+                        <!-- Primary Action Button -->
+                        <button type="submit" id="btn-auth-submit" class="btn-auth-pill">
+                            CREATE ACCOUNT
+                        </button>
+                    </form>
+
+                    <div class="auth-divider">
+                        <span>or</span>
+                    </div>
+
+                    <!-- Social Login Buttons -->
+                    <div class="auth-social-row">
+                        <!-- Google -->
+                        <button type="button" class="auth-social-btn" title="Sign in with Google">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12.24 10.285V13.8h6.887C18.2 16.6 15.64 18.8 12.24 18.8c-3.76 0-6.8-3.04-6.8-6.8s3.04-6.8 6.8-6.8c1.7 0 3.24.63 4.44 1.67l2.67-2.67C17.58 2.5 15.08 1.6 12.24 1.6 6.38 1.6 1.6 6.38 1.6 12.24s4.78 10.64 10.64 10.64c6.12 0 10.18-4.3 10.18-10.36 0-.7-.07-1.37-.18-2.23H12.24z"/>
+                            </svg>
+                        </button>
+                        <!-- Apple -->
+                        <button type="button" class="auth-social-btn" title="Sign in with Apple">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.4c.66-.82 1.11-1.96.99-3.1-.97.04-2.12.65-2.79 1.44-.59.68-1.11 1.84-.97 2.96 1.08.08 2.14-.54 2.77-1.3"/>
+                            </svg>
+                        </button>
+                        <!-- Facebook -->
+                        <button type="button" class="auth-social-btn" title="Sign in with Facebook">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <!-- Mode Toggle Link -->
+                    <div class="auth-toggle-footer">
+                        <span id="auth-toggle-prompt">Already have an account yet?</span>
+                        <button type="button" id="btn-toggle-auth-mode" class="auth-switch-link">Log In</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Home Indicator Bar -->
+            <div class="auth-home-indicator"></div>
+        </div>
+    </div>
+
+    <!-- SCREEN 0: Project Entry & Workspace Modal (Apple Liquid Glass) -->
+    <div id="project-entry-modal" class="project-modal-backdrop" style="display: none;">
+        <div class="project-modal-card">
+            <div class="project-modal-header">
+                <div class="project-modal-brand">
+                    <svg class="brand-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
+                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                    </svg>
+                    <div>
+                        <div class="project-modal-title">AeroQuantum-Wind</div>
+                        <div class="project-modal-tagline">Design a wind farm from real geographic data.</div>
+                    </div>
+                </div>
+                <button type="button" id="btn-close-project-modal" class="btn-modal-close" aria-label="Close dialog">✕</button>
+            </div>
+
+            <div class="project-modal-body">
+                <div class="project-action-buttons">
+                    <button type="button" id="btn-modal-new-project" class="btn-primary-hero">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        <span>New Project</span>
+                    </button>
+                    <button type="button" id="btn-modal-continue-project" class="btn-secondary-hero">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 3l14 9-14 9V3z"></path>
+                        </svg>
+                        <span>Continue Existing Project</span>
+                    </button>
+                </div>
+
+                <div class="recent-projects-container">
+                    <div class="recent-projects-heading">Recent Projects</div>
+                    <div class="recent-projects-list">
+                        <div class="project-item-card" data-project="kanyakumari">
+                            <div class="project-item-info">
+                                <div class="project-item-name">Kanyakumari Wind Farm Complex</div>
+                                <div class="project-item-meta">Tamil Nadu, India · 24.8 km² · Last analyzed: Today</div>
+                            </div>
+                            <span class="project-status-tag status-opt">Optimized</span>
+                        </div>
+                        <div class="project-item-card" data-project="jaisalmer">
+                            <div class="project-item-info">
+                                <div class="project-item-name">Jaisalmer Desert Array</div>
+                                <div class="project-item-meta">Rajasthan, India · 32.4 km² · Last analyzed: Yesterday</div>
+                            </div>
+                            <span class="project-status-tag status-feas">Feasible</span>
+                        </div>
+                        <div class="project-item-card" data-project="kutch">
+                            <div class="project-item-info">
+                                <div class="project-item-name">Kutch Coastal Basin</div>
+                                <div class="project-item-meta">Gujarat, India · 28.0 km² · Last analyzed: 2 days ago</div>
+                            </div>
+                            <span class="project-status-tag status-feas">Feasible</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Viewport Workspace -->
+    <main class="screen-viewport">
+
+        <!-- ===================================================================
+             SCREEN 1: CHOOSE WIND FARM SITE
+             =================================================================== -->
+        <div id="screen-1-container" class="screen-1-view">
+
+            <!-- Left Panel: Site Selection Mode & Recents (Desktop) -->
+            <aside class="site-selection-panel">
+                <div class="panel-heading">Where do you want to build?</div>
+                <div class="panel-subheading">Design a wind farm from real geographic data. Search, use GPS, enter coordinates, or draw.</div>
+
+                <!-- Mode Selection Tabs -->
+                <div class="selection-mode-tabs">
+                    <button type="button" class="mode-tab-btn active" data-mode="search" id="tab-mode-search">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                        <span>Search</span>
+                    </button>
+                    <button type="button" class="mode-tab-btn" data-mode="radius" id="tab-mode-radius">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                        <span>Radius</span>
+                    </button>
+                    <button type="button" class="mode-tab-btn" data-mode="draw" id="tab-mode-draw">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon>
+                        </svg>
+                        <span>Freeform Polygon</span>
+                    </button>
+                </div>
+
+                <!-- Mode 1: Search Input Box + Use Current Location -->
+                <div id="search-box-container" class="search-input-box-wrapper" style="display: flex; flex-direction: column; gap: 8px;">
+                    <div class="search-input-box">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                        <input id="search-input-field" class="search-input-field" type="text" placeholder="Search site (city, state, country)..." value="Kanyakumari, Tamil Nadu, India">
+                    </div>
+                    <button type="button" id="btn-use-current-location" class="btn-location-gps">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <line x1="12" y1="2" x2="12" y2="6"></line>
+                            <line x1="12" y1="18" x2="12" y2="22"></line>
+                            <line x1="2" y1="12" x2="6" y2="12"></line>
+                            <line x1="18" y1="12" x2="22" y2="12"></line>
+                        </svg>
+                        <span>Use Current Location</span>
+                    </button>
+                </div>
+
+                <!-- Mode 2: Radius Selection Chips & Custom Input -->
+                <div id="radius-mode-container" class="radius-mode-container" style="display: none; flex-direction: column; gap: 10px; margin-bottom: 20px; background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 12px;">
+                    <div style="font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Concession Radius</div>
+                    <div class="radius-chips-row" style="display: flex; flex-wrap: wrap; gap: 6px;">
+                        <button type="button" class="chip-btn radius-chip-btn" data-radius="1">1 km</button>
+                        <button type="button" class="chip-btn radius-chip-btn active" data-radius="5">5 km</button>
+                        <button type="button" class="chip-btn radius-chip-btn" data-radius="10">10 km</button>
+                        <button type="button" class="chip-btn radius-chip-btn" data-radius="25">25 km</button>
+                        <button type="button" class="chip-btn radius-chip-btn" data-radius="50">50 km</button>
+                        <button type="button" class="chip-btn radius-chip-btn" data-radius="100">100 km</button>
+                    </div>
+                    <div class="radius-custom-row" style="display: flex; gap: 8px; align-items: center; margin-top: 4px;">
+                        <input id="custom-radius-input" type="number" min="0.5" max="200" step="0.5" placeholder="Custom radius (km)" class="coord-input" style="flex: 1;" value="5">
+                        <button type="button" id="btn-apply-custom-radius" class="btn-apply-coords" style="width: auto; padding: 7px 14px; margin-top: 0;">Apply</button>
+                    </div>
+                    <div style="font-size: 11px; color: var(--text-dim);">
+                        Calculates a 64-vertex geodesic circular boundary and fits site framing tightly.
+                    </div>
+                </div>
+
+                <!-- Mode 3: Freeform Polygon Interactive Drawing Controls -->
+                <div id="draw-mode-hint" class="draw-mode-hint" style="display: none; margin-bottom: 20px;">
+                    <div style="font-size: 12px; margin-bottom: 8px; color: var(--text-primary); font-weight: 600;">
+                        Interactive GIS Polygon Drawing
+                    </div>
+                    <div style="font-size: 11px; margin-bottom: 10px; color: var(--text-secondary);">
+                        Click on the satellite map to drop vertices. Drag markers to adjust, right-click to delete.
+                    </div>
+                    <div class="draw-boundary-tools-row" style="display: flex; flex-wrap: wrap; gap: 6px;">
+                        <button type="button" id="btn-start-polygon-draw" class="btn-draw-tool active" title="Start placing boundary vertices">
+                            <span>✏️ Draw Area</span>
+                        </button>
+                        <button type="button" id="btn-close-polygon-draw" class="btn-draw-tool" title="Close polygon and calculate concession area">
+                            <span>✅ Close Polygon</span>
+                        </button>
+                        <button type="button" id="btn-clear-polygon-draw" class="btn-draw-tool secondary" title="Clear all drawn points">
+                            <span>🗑️ Clear</span>
+                        </button>
+                        <button type="button" id="btn-fit-drawn-polygon" class="btn-draw-tool secondary" title="Fit map view to boundary">
+                            <span>🎯 Fit Site</span>
+                        </button>
+                    </div>
+                    <div id="draw-status-label" style="font-size: 11px; margin-top: 8px; color: var(--primary-cyan); line-height: 1.4;">
+                        Click on the satellite map to place boundary points.
+                    </div>
+                </div>
+
+                <!-- Fallback / Legacy Coords Form (Preserved for backward compatibility) -->
+                <div id="coords-input-form" class="coords-input-form">
+                    <div class="coords-row">
+                        <div class="coord-field-group">
+                            <label class="coord-label">Latitude</label>
+                            <input id="coord-lat-input" class="coord-input" type="number" step="0.0001" placeholder="8.0883" value="8.0883">
+                        </div>
+                        <div class="coord-field-group">
+                            <label class="coord-label">Longitude</label>
+                            <input id="coord-lon-input" class="coord-input" type="number" step="0.0001" placeholder="77.5385" value="77.5385">
+                        </div>
+                    </div>
+                    <button type="button" id="btn-apply-coords" class="btn-apply-coords">Apply Coordinates</button>
+                </div>
+
+                <!-- Recent Locations Section -->
+                <div class="recent-locations-section">
+                    <div class="section-label">Recent Locations</div>
+                    <div class="recent-locations-list">
+                        <button type="button" class="location-item-btn active" data-location="Kanyakumari, Tamil Nadu">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                                <circle cx="12" cy="10" r="3"></circle>
+                            </svg>
+                            <span>Kanyakumari, Tamil Nadu</span>
+                        </button>
+                        <button type="button" class="location-item-btn" data-location="Jaisalmer, Rajasthan">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                                <circle cx="12" cy="10" r="3"></circle>
+                            </svg>
+                            <span>Jaisalmer, Rajasthan</span>
+                        </button>
+                        <button type="button" class="location-item-btn" data-location="Kutch, Gujarat">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                                <circle cx="12" cy="10" r="3"></circle>
+                            </svg>
+                            <span>Kutch, Gujarat</span>
+                        </button>
+                        <button type="button" class="location-item-btn" data-location="Tuticorin, Tamil Nadu">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                                <circle cx="12" cy="10" r="3"></circle>
+                            </svg>
+                            <span>Tuticorin, Tamil Nadu</span>
+                        </button>
+                        <button type="button" class="location-item-btn" data-location="Anantapur, Andhra Pradesh">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                                <circle cx="12" cy="10" r="3"></circle>
+                            </svg>
+                            <span>Anantapur, Andhra Pradesh</span>
+                        </button>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Center Satellite Map Canvas -->
+            <div class="map-container-wrapper">
+                <div id="map"></div>
+                <div id="screen1-cesium" style="display: none; width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 5;"></div>
+
+                <!-- On-Map Floating Top Search Pill & Layer Switcher -->
+                <div class="map-top-bar">
+                    <div class="map-search-pill">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--text-dim); margin-right: 8px;">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                        <input id="map-search-input" type="text" placeholder="Where do you want to build? Search location..." value="Kanyakumari, Tamil Nadu, India">
+                        <button type="button" id="btn-map-gps" class="btn-map-gps-inline" title="Use current location (GPS)">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <circle cx="12" cy="12" r="3"></circle>
+                                <line x1="12" y1="2" x2="12" y2="6"></line>
+                                <line x1="12" y1="18" x2="12" y2="22"></line>
+                                <line x1="2" y1="12" x2="6" y2="12"></line>
+                                <line x1="18" y1="12" x2="22" y2="12"></line>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div class="map-layer-selector">
+                        <button type="button" class="map-layer-btn" data-layer="map">Map</button>
+                        <button type="button" class="map-layer-btn active" data-layer="satellite">Satellite</button>
+                        <button type="button" class="map-layer-btn" data-layer="terrain">Terrain</button>
+                        <button type="button" class="map-layer-btn" id="btn-s1-toggle-3d" data-layer="3d" title="Real 3D Globe with Tilt & Elevation">3D Globe</button>
+                    </div>
+                </div>
+
+                <!-- Contextual Location & Concession Drawing Tools (Mobile + Desktop) -->
+                <div class="map-contextual-bar" id="map-contextual-bar">
+                    <button type="button" id="btn-ctx-fit" class="ctx-pill-btn" title="Fit camera to site boundary">
+                        <span>🎯 Fit Site</span>
+                    </button>
+                    <button type="button" id="btn-ctx-gps" class="ctx-pill-btn" title="Acquire GPS location">
+                        <span>⌖ Current Location</span>
+                    </button>
+                    <button type="button" id="btn-ctx-coords" class="ctx-pill-btn" title="Enter latitude & longitude">
+                        <span>📍 Coordinates</span>
+                    </button>
+                    <button type="button" id="btn-ctx-circle" class="ctx-pill-btn" title="Draw circular boundary">
+                        <span>⭕ Circle</span>
+                    </button>
+                    <button type="button" id="btn-ctx-poly" class="ctx-pill-btn" title="Draw polygon boundary">
+                        <span>📐 Polygon</span>
+                    </button>
+                    <button type="button" id="btn-ctx-reset" class="ctx-pill-btn secondary" title="Reset boundary">
+                        <span>↺ Reset</span>
+                    </button>
+                    <button type="button" id="btn-ctx-data-sources" class="ctx-pill-btn" title="View dataset provenance and authority">
+                        <span>🌐 Data Sources</span>
+                    </button>
+                </div>
+
+                <!-- Floating Coordinates Input Popup -->
+                <div id="ctx-coords-popup" class="ctx-coords-popup" style="display: none;">
+                    <div class="coords-popup-header">
+                        <span>Enter Coordinates</span>
+                        <button type="button" id="btn-close-coords-popup" class="btn-coords-close">✕</button>
+                    </div>
+                    <div class="coords-popup-inputs">
+                        <div class="coords-field">
+                            <label for="ctx-coord-lat">Latitude (°N)</label>
+                            <input type="number" id="ctx-coord-lat" step="0.0001" value="8.0883">
+                        </div>
+                        <div class="coords-field">
+                            <label for="ctx-coord-lon">Longitude (°E)</label>
+                            <input type="number" id="ctx-coord-lon" step="0.0001" value="77.5385">
+                        </div>
+                    </div>
+                    <button type="button" id="btn-apply-ctx-coords" class="btn-apply-coords">Apply Coordinates</button>
+                </div>
+
+                <!-- Map Right Floating Controls -->
+                <div class="map-floating-controls">
+                    <div class="map-control-btn" title="North Orientation">
+                        <span class="compass-arrow-north">▲</span>
+                    </div>
+                    <button type="button" id="btn-map-zoom-in" class="map-control-btn" title="Zoom In">+</button>
+                    <button type="button" id="btn-map-zoom-out" class="map-control-btn" title="Zoom Out">−</button>
+                    <button type="button" id="btn-map-recenter" class="map-control-btn" title="Recenter on Selected Site">⌖</button>
+                </div>
+            </div>
+
+            <!-- Right Panel: Site Information & Sticky Confirmation (Desktop + Mobile Bottom Sheet) -->
+            <aside id="site-info-panel" class="site-info-panel">
+                <div id="mobile-drag-handle" class="mobile-drag-handle" title="Drag or tap to expand"></div>
+
+                <div id="site-info-header" class="site-info-header">
+                    <div class="site-info-title">Site Information</div>
+                    <svg id="sheet-chevron-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--text-secondary); transition: transform 0.2s;">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                </div>
+
+                <div class="site-info-content">
+                    <!-- Progressive Site Intelligence Section -->
+                    <div class="site-intelligence-card" id="site-intelligence-card">
+                        <div class="intel-header">
+                            <span class="intel-title">Let's check this site</span>
+                            <span class="intel-status-pill verified" id="intel-overall-pill">✓ Verified</span>
+                        </div>
+                        <div class="intel-subtitle">Real-time geotechnical and atmospheric analysis:</div>
+                        <div class="intel-checks-list" id="intel-checks-list">
+                            <div class="intel-check-item verified">
+                                <span class="check-icon">✓</span>
+                                <span class="check-label">Checking terrain</span>
+                                <span class="check-source">Verified (SRTM DEM, 42m avg)</span>
+                            </div>
+                            <div class="intel-check-item verified">
+                                <span class="check-icon">✓</span>
+                                <span class="check-label">Checking available land</span>
+                                <span class="check-source">Verified (24.8 km² GIS boundary)</span>
+                            </div>
+                            <div class="intel-check-item verified">
+                                <span class="check-icon">✓</span>
+                                <span class="check-label">Checking buildings</span>
+                                <span class="check-source">Verified (500m setback clear)</span>
+                            </div>
+                            <div class="intel-check-item verified">
+                                <span class="check-icon">✓</span>
+                                <span class="check-label">Checking roads</span>
+                                <span class="check-source">Verified (Corridor access)</span>
+                            </div>
+                            <div class="intel-check-item verified">
+                                <span class="check-icon">✓</span>
+                                <span class="check-label">Checking access</span>
+                                <span class="check-source">Verified (Heavy haulage road)</span>
+                            </div>
+                            <div class="intel-check-item verified">
+                                <span class="check-icon">✓</span>
+                                <span class="check-label">Checking wind resource</span>
+                                <span class="check-source">Verified (ECMWF 7.1 m/s)</span>
+                            </div>
+                            <div class="intel-check-item warning">
+                                <span class="check-icon">!</span>
+                                <span class="check-label">Checking construction suitability</span>
+                                <span class="check-source">Requires verification (soil test)</span>
+                            </div>
+                            <div class="intel-check-item verified">
+                                <span class="check-icon">✓</span>
+                                <span class="check-label">Checking environmental constraints</span>
+                                <span class="check-source">Verified (No wildlife sanctuaries)</span>
+                            </div>
+                            <div class="intel-check-item verified">
+                                <span class="check-icon">✓</span>
+                                <span class="check-label">Checking turbine spacing</span>
+                                <span class="check-source">Verified (5D compliant)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SITE SUITABILITY Summary Card -->
+                    <div class="site-suitability-summary">
+                        <div class="suitability-badge-row">
+                            <span class="suitability-label">SITE SUITABILITY</span>
+                            <span class="suitability-val good" id="site-suitability-val">Good</span>
+                        </div>
+                        <div class="suitability-reasons">
+                            <div class="reason-row"><span>Wind resource:</span> <strong>Good (7.1 m/s)</strong></div>
+                            <div class="reason-row"><span>Available area:</span> <strong>Good (24.8 km²)</strong></div>
+                            <div class="reason-row"><span>Terrain:</span> <strong>Good (Mild slope)</strong></div>
+                            <div class="reason-row"><span>Road access:</span> <strong>Moderate (1.8 km to highway)</strong></div>
+                            <div class="reason-row"><span>Construction:</span> <strong style="color: var(--warning);">Requires verification</strong></div>
+                        </div>
+                    </div>
+
+                    <!-- Verification Confirmation Card -->
+                    <div class="site-verified-card">
+                        <div class="verified-icon">✓</div>
+                        <div class="verified-text">
+                            <strong>Site Selected</strong>
+                            <span>Review the progressive site checks and confirm to proceed.</span>
+                        </div>
+                    </div>
+
+                    <!-- Landscape Terrain Photo Preview -->
+                    <div class="site-photo-card">
+                        <img src="/assets/real-turbines-photo.jpg" alt="Selected site terrain profile" onerror="this.src='assets/real-turbines-photo.jpg';">
+                        <div class="site-photo-gradient"></div>
+                    </div>
+
+                    <!-- Key-Value Metadata Table -->
+                    <div class="site-metadata-table">
+                        <div class="meta-row">
+                            <span class="meta-label">Location</span>
+                            <span id="meta-location-name" class="meta-val">Kanyakumari, Tamil Nadu, India</span>
+                        </div>
+                        <div class="meta-row">
+                            <span class="meta-label">Latitude</span>
+                            <span id="meta-latitude" class="meta-val mono">8.0883° N</span>
+                        </div>
+                        <div class="meta-row">
+                            <span class="meta-label">Longitude</span>
+                            <span id="meta-longitude" class="meta-val mono">77.5385° E</span>
+                        </div>
+                        <div class="meta-row">
+                            <span class="meta-label">Selected Area</span>
+                            <span id="meta-area" class="meta-val">24.8 km²</span>
+                        </div>
+                        <div class="meta-row">
+                            <span class="meta-label">Elevation (avg.)</span>
+                            <span id="meta-elevation" class="meta-val">42 m</span>
+                        </div>
+                        <div class="meta-row">
+                            <span class="meta-label">Terrain Type</span>
+                            <span id="meta-terrain" class="meta-val">Coastal / Mild Terrain</span>
+                        </div>
+                        <div class="meta-row">
+                            <span class="meta-label">Distance to Coast</span>
+                            <span id="meta-coast" class="meta-val">0.2 km</span>
+                        </div>
+                        <div class="meta-row">
+                            <span class="meta-label">Land Use (Predicted)</span>
+                            <span id="meta-landuse" class="meta-val">Mixed (Agriculture/Scrub)</span>
+                        </div>
+                        <div class="meta-row" style="flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.06);">
+                            <span class="meta-label">Land Feasibility Mask (5-Class)</span>
+                            <span id="meta-land-feasibility" class="meta-val" style="font-size: 11px; line-height: 1.4; font-family: var(--font-mono);">Evaluating buildable/restricted parcels...</span>
+                        </div>
+                    </div>
+
+                    <!-- Wind Resource Section (Live Telemetry & Engineering Physics) -->
+                    <div class="wind-resource-card">
+                        <div class="resource-header">
+                            <span>Wind Resource (Live Telemetry)</span>
+                            <span id="meta-source-badge" style="font-size: 10px; color: var(--primary-cyan); font-weight: 600; cursor: pointer; text-decoration: underline;" title="Click to view verified data provenance & authority (ECMWF, SRTM, GWA, OSM)">ECMWF / SRTM ⓘ</span>
+                        </div>
+                        <div class="resource-row">
+                            <span>Hub Wind Speed (100 m)</span>
+                            <strong id="meta-wind-speed">7.1 m/s</strong>
+                        </div>
+                        <div class="resource-row">
+                            <span>Wind Power Density</span>
+                            <strong id="meta-wind-density">~ 320 W/m²</strong>
+                        </div>
+                        <div class="resource-row">
+                            <span>Wind Direction (100 m)</span>
+                            <strong id="meta-wind-dir">270° (W)</strong>
+                        </div>
+                        <div class="resource-row">
+                            <span>Air Density (ρ)</span>
+                            <strong id="meta-air-density">1.18 kg/m³</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Primary Action Sticky Footer -->
+                <div class="panel-action-footer">
+                    <button type="button" id="btn-review-site" class="btn-review-site" title="Review Site Analysis Details">
+                        <span>📋 Review Site</span>
+                    </button>
+                    <button type="button" id="btn-confirm-site" class="btn-confirm-site" title="Proceed to Turbine Configuration">
+                        <span>Continue</span>
+                        <span>›</span>
+                    </button>
+                </div>
+            </aside>
+        </div>
+
+        <!-- ===================================================================
+             SCREEN 2: CONFIGURE WIND FARM (Mobile-first Scrollable Configuration)
+             =================================================================== -->
+        <div id="screen-2-container" class="screen-2-view">
+            <div class="config-container-wrapper">
+                <!-- Screen 2 Top Sub-Header -->
+                <div class="config-header">
+                    <button type="button" id="btn-back-to-screen-1" class="btn-sub-back">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                            <polyline points="15 18 9 12 15 6"></polyline>
+                        </svg>
+                        <span>Back</span>
+                    </button>
+                    <div class="config-header-center">
+                        <div class="config-title">Farm Configuration</div>
+                        <div id="screen-2-site-indicator" class="config-site-pill">
+                            <span>📍</span>
+                            <span id="s2-indicator-text">Kanyakumari · 8.0883° N, 77.5385° E</span>
+                        </div>
+                    </div>
+                    <div style="width: 60px;"></div> <!-- balance spacing -->
+                </div>
+
+                <!-- Scrollable Form Body -->
+                <div class="config-scroll-body">
+
+                    <!-- Selected Site Summary -->
+                    <div class="config-card site-persistence-card" style="padding: 10px 14px; margin-bottom: 10px;">
+                        <div class="site-metadata-table" style="margin-top: 0;">
+                            <div class="meta-row">
+                                <span class="meta-label">Location</span>
+                                <span id="s2-meta-location" class="meta-val">Kanyakumari, Tamil Nadu, India</span>
+                            </div>
+                            <div class="meta-row">
+                                <span class="meta-label">Coordinates</span>
+                                <span id="s2-meta-coords" class="meta-val mono">8.0883° N, 77.5385° E</span>
+                            </div>
+                            <div class="meta-row">
+                                <span class="meta-label">Calculated Area</span>
+                                <span id="s2-meta-area" class="meta-val">24.8 km²</span>
+                            </div>
+                            <div class="meta-row">
+                                <span class="meta-label">Live Wind Telemetry</span>
+                                <span id="s2-meta-wind" class="meta-val" style="color: var(--primary-cyan);">7.1 m/s @ 300° (ECMWF)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SECTION 1: How many turbines? (Primary Question) -->
+                    <div class="config-card">
+                        <div class="config-card-header">
+                            <div class="card-title-group">
+                                <span class="card-title-icon">🔢</span>
+                                <span class="card-title">How many turbines?</span>
+                            </div>
+                            <span id="badge-capacity-utilization" class="card-badge">Safe Capacity</span>
+                        </div>
+
+                        <div class="quick-chips-row">
+                            <button type="button" class="chip-btn" data-turbines="4">4</button>
+                            <button type="button" class="chip-btn" data-turbines="8">8</button>
+                            <button type="button" class="chip-btn active" data-turbines="12">12</button>
+                            <button type="button" class="chip-btn" data-turbines="16">16</button>
+                            <button type="button" class="chip-btn" data-turbines="20">20</button>
+                            <button type="button" class="chip-btn" data-turbines="24">24</button>
+                            <button type="button" class="chip-btn" data-turbines="50">50</button>
+                        </div>
+
+                        <div class="slider-stepper-combo">
+                            <input type="range" id="cfg-turbines-slider" class="slider-input" min="2" max="100" value="12" step="1">
+                            <div class="stepper-input-wrapper">
+                                <button type="button" id="btn-turbines-minus" class="stepper-btn" aria-label="Decrease turbine count">−</button>
+                                <input id="cfg-turbines-count" class="stepper-value-input" type="number" inputmode="numeric" min="1" max="150" value="12">
+                                <button type="button" id="btn-turbines-plus" class="stepper-btn" aria-label="Increase turbine count">+</button>
+                            </div>
+                        </div>
+
+                        <!-- Real-Time Aerodynamic Capacity Status & Landscape Feasibility Gate -->
+                        <div id="cfg-capacity-card" class="capacity-status-card optimal">
+                            <div style="font-weight: 700; display: flex; align-items: center; justify-content: space-between;">
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <span id="capacity-status-icon">✓</span>
+                                    <span id="capacity-status-headline">Site Capacity Optimal</span>
+                                </div>
+                                <span class="capacity-feasibility-pill" id="feasibility-badge">12 / 17 Feasible</span>
+                            </div>
+                            <div id="capacity-status-desc">
+                                12 turbines comfortably fit within the site with standard 5D×7D aerodynamic wake buffer spacing.
+                            </div>
+
+                            <div class="feasibility-stats-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; background: rgba(0,0,0,0.25); padding: 8px 12px; border-radius: 8px;">
+                                <div>
+                                    <div style="font-size: 11px; color: var(--text-dim);">Requested</div>
+                                    <strong id="metric-requested-count" style="font-size: 15px; color: var(--foreground);">12</strong>
+                                </div>
+                                <div>
+                                    <div style="font-size: 11px; color: var(--text-dim);">Available Feasible Positions</div>
+                                    <strong id="metric-max-capacity" style="font-size: 15px; color: var(--primary-cyan);">17</strong>
+                                </div>
+                            </div>
+
+                            <div class="feasibility-reasons-list" style="margin-top: 8px; font-size: 11px; display: flex; flex-direction: column; gap: 4px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 8px;">
+                                <div class="feas-row" style="display: flex; justify-content: space-between;"><span>• Site boundary:</span> <strong>GIS Concession Boundary</strong></div>
+                                <div class="feas-row" style="display: flex; justify-content: space-between;"><span>• Terrain slope:</span> <strong>Buildable slope (&lt;10%)</strong></div>
+                                <div class="feas-row" style="display: flex; justify-content: space-between;"><span>• Building setbacks:</span> <strong>500m exclusion buffer</strong></div>
+                                <div class="feas-row" style="display: flex; justify-content: space-between;"><span>• Road/access constraints:</span> <strong>100m transport corridor</strong></div>
+                                <div class="feas-row" style="display: flex; justify-content: space-between;"><span>• Minimum spacing:</span> <strong>5D (600m) aerodynamic wake buffer</strong></div>
+                                <div class="feas-row" style="display: flex; justify-content: space-between;"><span>• Active constraints:</span> <strong>Geotechnical suitability verified</strong></div>
+                            </div>
+                            <div class="feasibility-actions-row" style="display: flex; gap: 8px; margin-top: 8px;">
+                                <button type="button" id="btn-clamp-capacity" class="btn-auto-fit" style="display: none; flex: 1;">
+                                    Optimize Recommended Capacity
+                                </button>
+                                <button type="button" id="btn-change-config" class="btn-change-cfg" style="display: none;">
+                                    Change Configuration
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SECTION 2: Turbine Specification & Spacing Preference -->
+                    <div class="config-card">
+                        <div class="config-card-header">
+                            <div class="card-title-group">
+                                <span class="card-title-icon">⚙️</span>
+                                <span class="card-title">Turbine Specification</span>
+                            </div>
+                            <span class="card-badge">IEC Class IIA</span>
+                        </div>
+
+                        <div class="form-field-group">
+                            <label class="field-label" for="cfg-turbine-model">Turbine Model</label>
+                            <select id="cfg-turbine-model" class="cfg-select">
+                                <option value="ge-120" selected>GE 2.5-120 (120m rotor, 110m hub, 2.5 MW)</option>
+                                <option value="vestas-110">Vestas V110-2.0MW (110m rotor, 100m hub, 2.0 MW)</option>
+                                <option value="sg-132">Siemens Gamesa SG 3.4-132 (132m rotor, 120m hub, 3.4 MW)</option>
+                                <option value="suzlon-120">Suzlon S120-2.1MW (120m rotor, 120m hub, 2.1 MW)</option>
+                                <option value="custom">Custom Engineering Specification...</option>
+                            </select>
+                        </div>
+
+                        <div class="two-col-grid">
+                            <div class="form-field-group">
+                                <div class="field-label-row">
+                                    <label class="field-label" for="cfg-rotor-diam">Rotor Diameter</label>
+                                    <span id="badge-rotor-diam" class="field-value-badge">120 m</span>
+                                </div>
+                                <input id="cfg-rotor-diam" class="cfg-text-input" type="number" inputmode="numeric" min="40" max="250" value="120">
+                            </div>
+
+                            <div class="form-field-group">
+                                <div class="field-label-row">
+                                    <label class="field-label" for="cfg-hub-height">Hub Height</label>
+                                    <span id="badge-hub-height" class="field-value-badge">110 m</span>
+                                </div>
+                                <input id="cfg-hub-height" class="cfg-text-input" type="number" inputmode="numeric" min="40" max="250" value="110">
+                            </div>
+                        </div>
+
+                        <div class="form-field-group" style="margin-top: 6px;">
+                            <div class="field-label-row">
+                                <label class="field-label">Spacing Preference</label>
+                                <span id="badge-spacing-meters" class="field-value-badge">600 m (5D)</span>
+                            </div>
+                            <div class="quick-chips-row">
+                                <button type="button" class="chip-btn" data-spacing="3">3D (Dense)</button>
+                                <button type="button" class="chip-btn active" data-spacing="5">5D (Standard)</button>
+                                <button type="button" class="chip-btn" data-spacing="7">7D (Optimal Low Wake)</button>
+                            </div>
+                            <div class="field-subtext">
+                                Spacing enforces minimum physical clearance between candidate sites to prevent excessive wake loss.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SECTION 5: Advanced Engineering Parameters (Accordion) -->
+                    <div id="accordion-advanced-wrapper" class="accordion-wrapper">
+                        <div id="accordion-advanced-header" class="accordion-header">
+                            <div class="accordion-title">
+                                <span>🛠️</span>
+                                <span>Advanced Aerodynamics & Optimization Settings</span>
+                            </div>
+                            <span class="accordion-arrow">▼</span>
+                        </div>
+                        <div class="accordion-body">
+                            <div class="form-field-group">
+                                <div class="field-label-row">
+                                    <label class="field-label" for="cfg-rated-power">Rated Power per Turbine (kW)</label>
+                                    <span id="badge-rated-power" class="field-value-badge">2,500 kW (2.5 MW)</span>
+                                </div>
+                                <input id="cfg-rated-power" class="cfg-text-input" type="number" inputmode="numeric" min="500" max="15000" step="100" value="2500">
+                            </div>
+
+                            <div class="form-field-group">
+                                <div class="field-label-row">
+                                    <label class="field-label" for="cfg-wind-dir-slider">Prevailing Wind Direction</label>
+                                    <span id="badge-wind-dir" class="field-value-badge">300° (WNW)</span>
+                                </div>
+                                <div class="wind-dir-container">
+                                    <div class="compass-visual-dial" title="Wind azimuth angle">
+                                        <div id="compass-rotor" class="compass-arrow-rotor" style="transform: rotate(300deg);">↑</div>
+                                    </div>
+                                    <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
+                                        <input type="range" id="cfg-wind-dir-slider" class="slider-input" min="0" max="360" value="300" step="1">
+                                        <div class="quick-chips-row">
+                                            <button type="button" class="chip-btn" data-wind-dir="0">0° N</button>
+                                            <button type="button" class="chip-btn" data-wind-dir="90">90° E</button>
+                                            <button type="button" class="chip-btn" data-wind-dir="180">180° S</button>
+                                            <button type="button" class="chip-btn" data-wind-dir="270">270° W</button>
+                                            <button type="button" class="chip-btn active" data-wind-dir="live">Live Telemetry</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-field-group">
+                                <div class="field-label-row">
+                                    <label class="field-label" for="cfg-wake-decay">Wake Decay Constant (k)</label>
+                                    <span id="badge-wake-decay" class="field-value-badge">0.075 (Onshore)</span>
+                                </div>
+                                <select id="cfg-wake-decay" class="cfg-select">
+                                    <option value="0.075" selected>0.075 — Standard Onshore (Moderate turbulence)</option>
+                                    <option value="0.050">0.050 — Offshore / Coastal Water (Low turbulence)</option>
+                                    <option value="0.090">0.090 — Complex Rough Terrain (High turbulence)</option>
+                                </select>
+                            </div>
+
+                            <div class="form-field-group">
+                                <div class="field-label-row">
+                                    <label class="field-label" for="cfg-qubo-lambda">QUBO Constraint Multiplier (λ)</label>
+                                    <span id="badge-qubo-lambda" class="field-value-badge">150.0</span>
+                                </div>
+                                <input id="cfg-qubo-lambda" class="cfg-text-input" type="number" step="10" min="50" max="1000" value="150.0">
+                                <div class="field-subtext">Weight applied in QAOA objective to strictly enforce exactly K turbines chosen.</div>
+                            </div>
+
+                            <div class="form-field-group">
+                                <div class="field-label-row">
+                                    <label class="field-label" for="cfg-grid-resolution">Candidate Micro-Siting Grid</label>
+                                    <span id="badge-grid-resolution" class="field-value-badge">6 × 6 (36 Candidate Sites)</span>
+                                </div>
+                                <select id="cfg-grid-resolution" class="cfg-select">
+                                    <option value="4">4 × 4 — 16 Candidate Sites (Fastest QAOA)</option>
+                                    <option value="5">5 × 5 — 25 Candidate Sites</option>
+                                    <option value="6" selected>6 × 6 — 36 Candidate Sites (Recommended)</option>
+                                    <option value="8">8 × 8 — 64 Candidate Sites (High Resolution)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Sticky Bottom Action Bar -->
+                <div class="config-sticky-footer">
+                    <div class="config-summary-group">
+                        <span class="summary-power-label">Total Rated Power</span>
+                        <span id="cfg-total-capacity" class="summary-power-val">12 Turbines · 30.0 MW</span>
+                    </div>
+                    <button type="button" id="btn-generate-layout" class="btn-generate-layout">
+                        <span>GENERATE INITIAL LAYOUT</span>
+                        <span>›</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================================================================
+             SCREEN 3: INITIAL LAYOUT / AERODYNAMIC PROBLEM VIEW
+             =================================================================== -->
+        <div id="screen-3-container" class="screen-3-view">
+            <!-- Screen 3 Top Sub-Header -->
+            <div class="config-header" style="z-index: 700;">
+                <button type="button" id="btn-s3-back" class="btn-sub-back">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                        <polyline points="15 18 9 12 15 6"></polyline>
+                    </svg>
+                    <span>Back</span>
+                </button>
+                <div class="config-header-center">
+                    <div class="config-title">Initial Layout Analysis</div>
+                    <div id="screen-3-site-indicator" class="config-site-pill">
+                        <span>📍</span>
+                        <span id="s3-indicator-text">Kanyakumari · 12 Turbines (30.0 MW)</span>
+                    </div>
+                </div>
+                <div style="width: 60px;"></div> <!-- balance spacing -->
+            </div>
+
+            <!-- Screen 3 Layout: Map Hero + Analysis Panel (Side on Desktop, Bottom Sheet on Mobile) -->
+            <div class="screen-3-layout">
+                <!-- Center Hero Map Container -->
+                <div class="s3-map-container">
+                    <div id="screen3-map"></div>
+                    <canvas id="screen3-canvas" class="wind-overlay-canvas"></canvas>
+
+                    <!-- Floating Wind Vector Indicator -->
+                    <div id="s3-wind-vector-badge" class="wind-vector-badge">
+                        <svg class="wind-vector-arrow-svg" id="s3-wind-arrow-svg" viewBox="0 0 24 12" fill="currentColor">
+                            <path d="M0 5h18l-4-4 1.4-1.4L24 6l-8.6 6.4-1.4-1.4 4-4H0V5z"/>
+                        </svg>
+                        <span id="s3-wind-vector-text">Wind: 7.1 m/s @ 300° (WNW)</span>
+                    </div>
+
+                    <!-- Floating Aerodynamic Speed Legend -->
+                    <div id="s3-wind-speed-legend" class="wind-speed-legend">
+                        <div class="legend-title">Aerodynamic Flow Velocity</div>
+                        <div class="legend-gradient-bar"></div>
+                        <div class="legend-ticks">
+                            <span>0 m/s</span>
+                            <span>4</span>
+                            <span>8</span>
+                            <span>12</span>
+                            <span>16+ m/s</span>
+                        </div>
+                        <div class="legend-status-row">
+                            <div class="legend-dot-item">
+                                <span class="legend-dot turbine"></span>
+                                <span>Turbine</span>
+                            </div>
+                            <div class="legend-dot-item">
+                                <span class="legend-dot wake-low"></span>
+                                <span>Free Flow</span>
+                            </div>
+                            <div class="legend-dot-item">
+                                <span class="legend-dot wake-high"></span>
+                                <span>Wake Conflict</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Dynamic Floating Conflict Badges Container -->
+                    <div id="s3-conflict-badges-overlay"></div>
+
+                    <!-- Compact Simulation Status Checklist -->
+                    <div class="simulation-status-strip" id="s3-simulation-status">
+                        <div class="sim-check-item"><span>Wind field</span> <strong class="sim-check-mark">✓</strong></div>
+                        <div class="sim-check-item"><span>Turbine placement</span> <strong class="sim-check-mark">✓</strong></div>
+                        <div class="sim-check-item"><span>Wake interaction</span> <strong class="sim-check-mark">✓</strong></div>
+                        <div class="sim-check-item"><span>Energy estimation</span> <strong class="sim-check-mark">✓</strong></div>
+                        <div class="sim-check-item"><span>Optimization prep</span> <strong class="sim-check-mark">✓</strong></div>
+                    </div>
+
+                    <!-- Map Floating Controls -->
+                    <div class="map-controls-group" style="position: absolute; top: 68px; right: 20px; z-index: 500; display: flex; flex-direction: column; gap: 8px;">
+                        <button type="button" id="btn-s3-toggle-wakes" class="map-icon-btn active" title="Toggle Jensen Wake Cones">
+                            <span style="font-size: 14px;">💨</span>
+                        </button>
+                        <button type="button" id="btn-s3-reset-view" class="map-icon-btn" title="Reset Map View">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+                                <path d="M3 3v5h5"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Analysis Bottom Sheet / Desktop Sidebar -->
+                <div id="screen-3-sheet" class="s3-analysis-panel collapsed">
+                    <div class="sheet-drag-handle" id="s3-sheet-handle"></div>
+
+                    <!-- Header -->
+                    <div class="s3-panel-header" id="s3-panel-toggle">
+                        <div class="s3-panel-title-group">
+                            <div class="s3-panel-title">
+                                <span>Initial Layout Analysis</span>
+                                <span class="card-badge" style="background: rgba(239, 68, 68, 0.2); color: #fca5a5; border-color: rgba(239, 68, 68, 0.4);">
+                                    SIMULATION
+                                </span>
+                            </div>
+                            <div class="s3-panel-subtitle">Baseline un-optimized arrangement before QAOA</div>
+                        </div>
+                        <button type="button" class="btn-sheet-toggle" id="btn-s3-sheet-arrow" aria-label="Toggle Panel">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <!-- Peek Chips Row (Mobile Glance) -->
+                    <div class="s3-peek-chips-row">
+                        <div class="s3-peek-chip">
+                            <span>Turbines:</span> <strong id="s3-peek-turbines">12</strong>
+                        </div>
+                        <div class="s3-peek-chip">
+                            <span>Est. AEP:</span> <strong id="s3-peek-aep" style="color: var(--primary-cyan);">-- GWh</strong>
+                        </div>
+                        <div class="s3-peek-chip">
+                            <span>Wake Loss:</span> <strong id="s3-peek-wake-loss" style="color: #f59e0b;">--%</strong>
+                        </div>
+                        <div class="s3-peek-chip alert" id="s3-peek-conflicts-chip">
+                            <span id="s3-peek-conflicts">-- Conflicts</span>
+                        </div>
+                    </div>
+
+                    <!-- Expanded Content -->
+                    <div class="s3-expanded-content">
+                        <!-- Key Aerodynamic Metrics Table -->
+                        <div class="config-card" style="padding: 12px 14px;">
+                            <div class="config-card-header" style="margin-bottom: 8px;">
+                                <div class="card-title-group">
+                                    <span class="card-title-icon">📊</span>
+                                    <span class="card-title">Aerodynamic Telemetry</span>
+                                </div>
+                                <span class="card-badge">ESTIMATED</span>
+                            </div>
+                            <div class="site-metadata-table">
+                                <div class="meta-row">
+                                    <span class="meta-label">Selected Turbines</span>
+                                    <span id="s3-meta-turbines" class="meta-val">12 Turbines (30.0 MW)</span>
+                                </div>
+                                <div class="meta-row">
+                                    <span class="meta-label">Gross AEP (Zero Wake)</span>
+                                    <span id="s3-meta-gross-aep" class="meta-val mono">-- GWh/yr</span>
+                                </div>
+                                <div class="meta-row">
+                                    <span class="meta-label">Estimated Net AEP</span>
+                                    <span id="s3-meta-net-aep" class="meta-val mono" style="color: var(--primary-cyan);">-- GWh/yr</span>
+                                </div>
+                                <div class="meta-row">
+                                    <span class="meta-label">Wake Interaction Loss</span>
+                                    <span id="s3-meta-wake-loss" class="meta-val mono" style="color: #ef4444; font-weight: 700;">--%</span>
+                                </div>
+                                <div class="meta-row">
+                                    <span class="meta-label">Minimum Observed Spacing</span>
+                                    <span id="s3-meta-min-spacing" class="meta-val mono">-- m</span>
+                                </div>
+                                <div class="meta-row">
+                                    <span class="meta-label">Wake Conflict Pairs</span>
+                                    <span id="s3-meta-conflicts-count" class="meta-val mono" style="color: #ef4444;">-- pairs</span>
+                                </div>
+                                <div class="meta-row">
+                                    <span class="meta-label">Wake Model Standard</span>
+                                    <span class="meta-val">Jensen N.O. (k=0.075, Ct=0.8)</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Wind Rose Polar Frequency Card -->
+                        <div class="wind-rose-card">
+                            <div class="wind-rose-header">
+                                <span>Wind Rose & Sector Frequency</span>
+                                <span style="font-size: 11px; color: var(--primary-cyan);">16 Sectors</span>
+                            </div>
+                            <div class="wind-rose-body">
+                                <svg id="s3-wind-rose-svg" class="wind-rose-radar" viewBox="-60 -60 120 120"></svg>
+                                <div class="wind-rose-stats">
+                                    <div class="rose-stat-label">Prevailing Sector</div>
+                                    <div id="s3-rose-dominant" class="rose-stat-val">300° (WNW)</div>
+                                    <div class="rose-stat-label">Sector Frequency</div>
+                                    <div id="s3-rose-freq" class="rose-stat-val">30.0%</div>
+                                    <div class="rose-stat-label">Source Telemetry</div>
+                                    <div class="rose-stat-val" style="font-size: 10px; color: var(--text-dim);">ECMWF / Open-Meteo</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Wake Conflict Breakdown -->
+                        <div id="s3-conflicts-list-card" class="config-card" style="padding: 12px 14px;">
+                            <div class="config-card-header" style="margin-bottom: 8px;">
+                                <div class="card-title-group">
+                                    <span class="card-title-icon">⚠️</span>
+                                    <span class="card-title">Downwind Wake Overlaps</span>
+                                </div>
+                                <span id="s3-conflicts-badge" class="card-badge" style="background: rgba(239,68,68,0.2); color: #fca5a5;">-- Overlaps</span>
+                            </div>
+                            <div id="s3-conflicts-container" style="display: flex; flex-direction: column; gap: 6px; font-size: 11px;">
+                                <!-- Dynamically populated -->
+                            </div>
+                        </div>
+
+                        <!-- Simulation Transparency Disclaimer -->
+                        <div class="simulation-disclaimer-card">
+                            <span class="disclaimer-icon">ℹ️</span>
+                            <span>
+                                <strong>Engineering Simulation Notice:</strong> Wake velocity deficits and AEP calculations are modeled using the kinematic Jensen decay model and reanalysis wind statistics. This un-optimized baseline arrangement exhibits severe downwind wake interaction. QAOA quantum optimization will reshuffle positions across candidate sites to minimize mutual wake shadowing.
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Bottom Action Bar -->
+                    <div class="config-sticky-footer" style="position: relative; border-radius: 0;">
+                        <div class="config-summary-group">
+                            <span class="summary-power-label">Initial Wake Penalty</span>
+                            <span id="s3-footer-loss" class="summary-power-val" style="color: #ef4444;">--% Loss</span>
+                        </div>
+                        <button type="button" id="btn-screen3-optimize" class="btn-generate-layout">
+                            <span>OPTIMIZE WITH QAOA</span>
+                            <span>›</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================================================================
+             SCREEN 4: QAOA QUANTUM OPTIMIZATION
+             =================================================================== -->
+        <div id="screen-4-container" class="screen-4-view">
+            <!-- Screen 4 Top Sub-Header -->
+            <div class="config-header" style="z-index: 700;">
+                <button type="button" id="btn-s4-back" class="btn-sub-back">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                        <polyline points="15 18 9 12 15 6"></polyline>
+                    </svg>
+                    <span>Back</span>
+                </button>
+                <div class="config-header-center">
+                    <div class="config-title">Quantum Optimization</div>
+                    <div id="screen-4-site-indicator" class="config-site-pill">
+                        <span>📍</span>
+                        <span id="s4-indicator-text">Kanyakumari · 12 Turbines (30.0 MW)</span>
+                    </div>
+                </div>
+                <div style="width: 60px;"></div> <!-- balance spacing -->
+            </div>
+
+            <!-- Scrollable Body for Mobile & Responsive Desktop -->
+            <div class="screen-4-scroll-body">
+                <!-- Engine Header Card -->
+                <div class="config-card" style="padding: 14px 16px;">
+                    <div class="config-card-header" style="margin-bottom: 4px;">
+                        <div class="card-title-group">
+                            <span class="card-title-icon">⚛️</span>
+                            <span class="card-title">Finding a better turbine arrangement</span>
+                        </div>
+                        <span class="card-badge">QUANTUM OPTIMIZATION</span>
+                    </div>
+                    <div style="font-size: 13px; color: var(--text-secondary); line-height: 1.45;">
+                        We evaluate candidate layouts using quantum superposition to minimize turbulent wake interference and maximize total wind farm yield.
+                    </div>
+
+                    <!-- 3 Segmented Filter Tabs -->
+                    <div class="engine-tabs-bar" style="margin-top: 8px;">
+                        <button type="button" class="engine-tab-btn active" data-s4-tab="all">
+                            <span>1. Problem Formulation</span>
+                        </button>
+                        <button type="button" class="engine-tab-btn" data-s4-tab="circuit">
+                            <span>2. QAOA Circuit</span>
+                        </button>
+                        <button type="button" class="engine-tab-btn" data-s4-tab="solutions">
+                            <span>3. Best Solution</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Optimization Status Banner -->
+                <div id="s4-status-card" class="opt-status-card running">
+                    <div class="opt-status-icon" id="s4-status-icon">⟳</div>
+                    <div class="opt-status-text-group">
+                        <div class="opt-status-title" id="s4-status-title">Running QAOA simulation</div>
+                        <div class="opt-status-desc" id="s4-status-desc">Searching for optimal turbine layout...</div>
+                    </div>
+                </div>
+
+                <!-- Optimization Progress Card -->
+                <div class="opt-progress-card">
+                    <div class="opt-progress-header">
+                        <span class="opt-progress-label">Evaluating candidate layouts using QAOA...</span>
+                        <span id="s4-iteration-counter" class="opt-progress-counter">Iteration 42 / 100 · 42%</span>
+                    </div>
+                    <div class="opt-progress-track">
+                        <div id="s4-progress-fill" class="opt-progress-fill" style="width: 42%;"></div>
+                    </div>
+
+                    <!-- KPI Stats Trio -->
+                    <div class="opt-kpi-grid">
+                        <div class="opt-kpi-card">
+                            <span class="opt-kpi-label">Current Candidate AEP</span>
+                            <span id="s4-kpi-current-aep" class="opt-kpi-val">78.4 GWh</span>
+                        </div>
+                        <div class="opt-kpi-card">
+                            <span class="opt-kpi-label">Best Candidate AEP</span>
+                            <span id="s4-kpi-best-aep" class="opt-kpi-val" style="color: var(--primary-cyan);">🏆 88.1 GWh</span>
+                        </div>
+                        <div class="opt-kpi-card">
+                            <span class="opt-kpi-label">Improvement vs Baseline</span>
+                            <span id="s4-kpi-improvement" class="opt-kpi-val improvement">↑ +12.4%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECTION 1: QUBO Formulation -->
+                <div id="s4-section-qubo" class="qubo-section-card s4-tab-content">
+                    <div class="config-card-header">
+                        <div class="card-title-group">
+                            <span class="card-title-icon">🔢</span>
+                            <span class="card-title">QUBO Formulation</span>
+                        </div>
+                        <span class="card-badge">Decision Variables</span>
+                    </div>
+                    <div style="font-size: 11px; color: var(--text-dim); margin-top: -6px;">
+                        Convert wind farm layout micro-siting to quadratic binary variables (xᵢ ∈ {0, 1}) with wake coupling.
+                    </div>
+
+                    <div class="qubo-layout-row">
+                        <!-- Decision Variables 6x6 Matrix -->
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                            <div style="font-size: 11px; font-weight: 600; color: var(--text-secondary);">
+                                Binary Placement Grid (<span id="s4-qubo-active-count">12</span>/36 Active)
+                            </div>
+                            <div id="s4-qubo-grid" class="qubo-grid-container">
+                                <!-- Populated dynamically with 36 bits -->
+                            </div>
+                            <div style="display: flex; gap: 12px; font-size: 10px; color: var(--text-dim);">
+                                <span style="display: flex; align-items: center; gap: 4px;">
+                                    <span style="width: 8px; height: 8px; background: var(--primary-cyan); border-radius: 2px;"></span>
+                                    1 = Turbine placed
+                                </span>
+                                <span style="display: flex; align-items: center; gap: 4px;">
+                                    <span style="width: 8px; height: 8px; border: 1px dashed rgba(255,255,255,0.4); border-radius: 2px;"></span>
+                                    0 = Empty position
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Objective Components -->
+                        <div class="objective-components-list">
+                            <div style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 2px;">
+                                Objective Formulation Components
+                            </div>
+                            <div class="objective-item">
+                                <span class="objective-item-icon" style="background: rgba(16, 185, 129, 0.2); color: #10b981;">⚡</span>
+                                <span class="objective-item-text">Maximize energy production</span>
+                                <span class="objective-item-weight">Weight: 1.0</span>
+                            </div>
+                            <div class="objective-item">
+                                <span class="objective-item-icon" style="background: rgba(239, 68, 68, 0.2); color: #ef4444;">🛑</span>
+                                <span class="objective-item-text">Minimize wake losses</span>
+                                <span class="objective-item-weight">Weight: 1.0</span>
+                            </div>
+                            <div class="objective-item">
+                                <span class="objective-item-icon" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b;">💧</span>
+                                <span class="objective-item-text">Enforce minimum spacing</span>
+                                <span class="objective-item-weight">λ = 150.0</span>
+                            </div>
+                            <div class="objective-item">
+                                <span class="objective-item-icon" style="background: rgba(139, 92, 246, 0.2); color: #8b5cf6;">🎯</span>
+                                <span class="objective-item-text">Keep within site boundary</span>
+                                <span class="objective-item-weight">λ = 200.0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECTION 2: QAOA Circuit (Abstract View) -->
+                <div id="s4-section-circuit" class="circuit-diagram-card s4-tab-content">
+                    <div class="config-card-header">
+                        <div class="card-title-group">
+                            <span class="card-title-icon">🧬</span>
+                            <span class="card-title">QAOA Circuit (Abstract View)</span>
+                        </div>
+                        <span class="card-badge">p = 2 Layers</span>
+                    </div>
+                    <div style="font-size: 11px; color: var(--text-dim); margin-top: -6px;">
+                        Parameterized quantum alternating operator ansatz circuit for combinatorial micro-siting optimization.
+                    </div>
+
+                    <!-- Clean SVG Circuit Diagram -->
+                    <div class="circuit-svg-wrapper">
+                        <svg id="s4-circuit-svg" viewBox="0 0 600 160" width="100%" height="100%">
+                            <!-- Qubit Wires -->
+                            <line x1="20" y1="25" x2="520" y2="25" stroke="rgba(255,255,255,0.15)" stroke-width="1.5"/>
+                            <line x1="20" y1="55" x2="520" y2="55" stroke="rgba(255,255,255,0.15)" stroke-width="1.5"/>
+                            <line x1="20" y1="85" x2="520" y2="85" stroke="rgba(255,255,255,0.15)" stroke-width="1.5"/>
+                            <line x1="20" y1="115" x2="520" y2="115" stroke="rgba(255,255,255,0.15)" stroke-width="1.5"/>
+                            <line x1="20" y1="145" x2="520" y2="145" stroke="rgba(255,255,255,0.15)" stroke-width="1.5"/>
+
+                            <!-- Wire Labels -->
+                            <text x="35" y="29" fill="#94a3b8" font-size="10" font-family="monospace">q₀</text>
+                            <text x="35" y="59" fill="#94a3b8" font-size="10" font-family="monospace">q₁</text>
+                            <text x="35" y="89" fill="#94a3b8" font-size="10" font-family="monospace">q₂</text>
+                            <text x="35" y="119" fill="#94a3b8" font-size="10" font-family="monospace">q₃</text>
+                            <text x="35" y="149" fill="#94a3b8" font-size="10" font-family="monospace">qₙ</text>
+
+                            <!-- Layer 1: Hadamard Gates [H] -->
+                            <g fill="#38bdf8" stroke="#0284c7" stroke-width="1">
+                                <rect x="65" y="15" width="20" height="20" rx="3" fill="#0284c7"/>
+                                <text x="75" y="29" fill="#ffffff" font-size="11" font-weight="bold" text-anchor="middle">H</text>
+
+                                <rect x="65" y="45" width="20" height="20" rx="3" fill="#0284c7"/>
+                                <text x="75" y="59" fill="#ffffff" font-size="11" font-weight="bold" text-anchor="middle">H</text>
+
+                                <rect x="65" y="75" width="20" height="20" rx="3" fill="#0284c7"/>
+                                <text x="75" y="89" fill="#ffffff" font-size="11" font-weight="bold" text-anchor="middle">H</text>
+
+                                <rect x="65" y="105" width="20" height="20" rx="3" fill="#0284c7"/>
+                                <text x="75" y="119" fill="#ffffff" font-size="11" font-weight="bold" text-anchor="middle">H</text>
+
+                                <rect x="65" y="135" width="20" height="20" rx="3" fill="#0284c7"/>
+                                <text x="75" y="149" fill="#ffffff" font-size="11" font-weight="bold" text-anchor="middle">H</text>
+                            </g>
+
+                            <!-- Cost Unitary Block γ₁ -->
+                            <rect x="110" y="15" width="55" height="140" rx="6" fill="rgba(16, 185, 129, 0.2)" stroke="#10b981" stroke-width="1.5"/>
+                            <text x="137" y="78" fill="#a7f3d0" font-size="12" font-weight="bold" text-anchor="middle">γ₁</text>
+                            <text x="137" y="96" fill="#a7f3d0" font-size="10" text-anchor="middle">Cost</text>
+
+                            <!-- Mixer Unitary Block β₁ -->
+                            <rect x="180" y="15" width="55" height="140" rx="6" fill="rgba(37, 99, 235, 0.2)" stroke="#3b82f6" stroke-width="1.5"/>
+                            <text x="207" y="78" fill="#93c5fd" font-size="12" font-weight="bold" text-anchor="middle">β₁</text>
+                            <text x="207" y="96" fill="#93c5fd" font-size="10" text-anchor="middle">Mixer</text>
+
+                            <!-- Ellipsis -->
+                            <text x="260" y="85" fill="#64748b" font-size="18" text-anchor="middle">•••</text>
+
+                            <!-- Cost Unitary Block γ_p -->
+                            <rect x="285" y="15" width="55" height="140" rx="6" fill="rgba(16, 185, 129, 0.2)" stroke="#10b981" stroke-width="1.5"/>
+                            <text x="312" y="78" fill="#a7f3d0" font-size="12" font-weight="bold" text-anchor="middle">γₚ</text>
+                            <text x="312" y="96" fill="#a7f3d0" font-size="10" text-anchor="middle">Cost</text>
+
+                            <!-- Mixer Unitary Block β_p -->
+                            <rect x="355" y="15" width="55" height="140" rx="6" fill="rgba(37, 99, 235, 0.2)" stroke="#3b82f6" stroke-width="1.5"/>
+                            <text x="382" y="78" fill="#93c5fd" font-size="12" font-weight="bold" text-anchor="middle">βₚ</text>
+                            <text x="382" y="96" fill="#93c5fd" font-size="10" text-anchor="middle">Mixer</text>
+
+                            <!-- Measurement Meters -->
+                            <g stroke="#94a3b8" stroke-width="1" fill="none">
+                                <rect x="430" y="15" width="22" height="20" rx="3" fill="#1e293b"/>
+                                <path d="M434 30 a7 7 0 0 1 14 0 M441 30 l4 -8"/>
+
+                                <rect x="430" y="45" width="22" height="20" rx="3" fill="#1e293b"/>
+                                <path d="M434 60 a7 7 0 0 1 14 0 M441 60 l4 -8"/>
+
+                                <rect x="430" y="75" width="22" height="20" rx="3" fill="#1e293b"/>
+                                <path d="M434 90 a7 7 0 0 1 14 0 M441 90 l4 -8"/>
+
+                                <rect x="430" y="105" width="22" height="20" rx="3" fill="#1e293b"/>
+                                <path d="M434 120 a7 7 0 0 1 14 0 M441 120 l4 -8"/>
+
+                                <rect x="430" y="135" width="22" height="20" rx="3" fill="#1e293b"/>
+                                <path d="M434 150 a7 7 0 0 1 14 0 M441 150 l4 -8"/>
+                            </g>
+
+                            <!-- Arrow to Candidate Layout -->
+                            <path d="M465 85 L500 85" stroke="#38bdf8" stroke-width="1.5" marker-end="url(#arrow)"/>
+                            <text x="545" y="80" fill="#38bdf8" font-size="10" font-weight="600" text-anchor="middle">Measurement</text>
+                            <text x="545" y="95" fill="#94a3b8" font-size="9" text-anchor="middle">(Candidate Layout)</text>
+                        </svg>
+                    </div>
+                </div>
+
+                <!-- SECTION 3: Problem Details & Constraints Status -->
+                <div id="s4-section-solutions" class="config-card s4-tab-content" style="padding: 14px 16px;">
+                    <div class="config-card-header">
+                        <div class="card-title-group">
+                            <span class="card-title-icon">📊</span>
+                            <span class="card-title">Problem Details & Solution</span>
+                        </div>
+                        <span class="card-badge" style="background: rgba(16,185,129,0.2); color: #a7f3d0;">FEASIBLE</span>
+                    </div>
+
+                    <div class="site-metadata-table">
+                        <div class="meta-row">
+                            <span class="meta-label">Optimization Problem</span>
+                            <span class="meta-val">Wind Farm Micro-Siting</span>
+                        </div>
+                        <div class="meta-row">
+                            <span class="meta-label">Variables (Candidate Sites)</span>
+                            <span id="s4-detail-vars" class="meta-val mono">36 Positions</span>
+                        </div>
+                        <div class="meta-row">
+                            <span class="meta-label">Qubits (Decision Spins)</span>
+                            <span id="s4-detail-qubits" class="meta-val mono">36 Qubits</span>
+                        </div>
+                        <div class="meta-row">
+                            <span class="meta-label">QAOA Iterations</span>
+                            <span id="s4-detail-iters" class="meta-val mono">100 / 100</span>
+                        </div>
+                        <div class="meta-row">
+                            <span class="meta-label">Estimated Optimal AEP</span>
+                            <span id="s4-solution-aep" class="meta-val mono" style="color: var(--primary-cyan); font-weight: 700;">88.1 GWh/yr</span>
+                        </div>
+                        <div class="meta-row">
+                            <span class="meta-label">Optimized Wake Loss</span>
+                            <span id="s4-solution-wake-loss" class="meta-val mono" style="color: #10b981; font-weight: 700;">4.2% (down from 14.8%)</span>
+                        </div>
+                    </div>
+
+                    <!-- Constraint Checks -->
+                    <div style="font-size: 11px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 14px; margin-bottom: 8px;">
+                        Constraint Verification
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <div class="constraint-row">
+                            <div class="constraint-name-group">
+                                <span class="constraint-check-badge">✓</span>
+                                <span>Turbine count</span>
+                            </div>
+                            <span id="s4-check-turbines" class="constraint-status-text">Satisfied (12/12)</span>
+                        </div>
+                        <div class="constraint-row">
+                            <div class="constraint-name-group">
+                                <span class="constraint-check-badge">✓</span>
+                                <span>Minimum spacing</span>
+                            </div>
+                            <span id="s4-check-spacing" class="constraint-status-text">Satisfied (663 m ≥ 600 m)</span>
+                        </div>
+                        <div class="constraint-row">
+                            <div class="constraint-name-group">
+                                <span class="constraint-check-badge">✓</span>
+                                <span>Site boundary</span>
+                            </div>
+                            <span id="s4-check-boundary" class="constraint-status-text">Satisfied (Within GIS)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Simulation Transparency Disclaimer -->
+                <div class="simulation-disclaimer-card">
+                    <span class="disclaimer-icon">ℹ️</span>
+                    <span>
+                        <strong>QAOA Simulation Notice:</strong> Quantum optimization is performed via statevector simulation with an Ising cost Hamiltonian. The final layout satisfies all physical clearance rules and achieves optimal wake decoupling.
+                    </span>
+                </div>
+            </div>
+
+            <!-- Sticky Bottom Action Bar -->
+            <div class="config-sticky-footer">
+                <div class="config-summary-group">
+                    <span class="summary-power-label">QAOA Optimal AEP</span>
+                    <span id="s4-footer-summary" class="summary-power-val" style="color: #10b981;">88.1 GWh · 4.2% Loss</span>
+                </div>
+                <button type="button" id="btn-screen4-view-optimized" class="btn-generate-layout">
+                    <span>VIEW OPTIMIZED LAYOUT</span>
+                    <span>›</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- ===================================================================
+             SCREEN 5: OPTIMIZED 3D WIND FARM / INSPECT RESULTS
+             =================================================================== -->
+        <div id="screen-5-container" class="screen-5-view">
+            <!-- Screen 5 Top Sub-Header -->
+            <div class="config-header" style="z-index: 700;">
+                <button type="button" id="btn-s5-back" class="btn-sub-back">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                        <polyline points="15 18 9 12 15 6"></polyline>
+                    </svg>
+                    <span>Back</span>
+                </button>
+                <div class="config-header-center">
+                    <div class="config-title">Optimized Wind Farm</div>
+                    <div id="screen-5-site-indicator" class="config-site-pill">
+                        <span>📍</span>
+                        <span id="s5-indicator-text">Kanyakumari · 10 Turbines (QAOA)</span>
+                    </div>
+                </div>
+                <div style="width: 60px;"></div> <!-- balance spacing -->
+            </div>
+
+            <!-- Screen 5 Layout: Map Hero + Analysis Panel (Side on Desktop, Bottom Sheet on Mobile) -->
+            <div class="screen-5-layout">
+                <!-- Center Hero Map Container -->
+                <div class="s5-map-container">
+                    <div id="screen5-map"></div>
+                    <div id="screen5-cesium" style="display: none; width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 5;"></div>
+                    <canvas id="screen5-canvas" class="wind-overlay-canvas"></canvas>
+
+                    <!-- Floating Wind Vector Indicator -->
+                    <div id="s5-wind-vector-badge" class="wind-vector-badge s5-wind-badge">
+                        <svg class="wind-vector-arrow-svg" id="s5-wind-arrow-svg" viewBox="0 0 24 12" fill="currentColor">
+                            <path d="M0 5h18l-4-4 1.4-1.4L24 6l-8.6 6.4-1.4-1.4 4-4H0V5z"/>
+                        </svg>
+                        <span id="s5-wind-vector-text">Wind Direction NE (45°)</span>
+                    </div>
+
+                    <!-- Floating Aerodynamic Speed Legend -->
+                    <div id="s5-wind-speed-legend" class="wind-speed-legend">
+                        <div class="legend-title">Wind Speed (m/s)</div>
+                        <div class="legend-gradient-bar"></div>
+                        <div class="legend-ticks">
+                            <span>0</span>
+                            <span>4</span>
+                            <span>8</span>
+                            <span>12</span>
+                            <span>16+</span>
+                        </div>
+                        <div class="legend-status-row">
+                            <div class="legend-dot-item">
+                                <span class="legend-dot turbine"></span>
+                                <span>Turbine</span>
+                            </div>
+                            <div class="legend-dot-item">
+                                <span class="legend-dot wake-low"></span>
+                                <span>Wake (low loss)</span>
+                            </div>
+                            <div class="legend-dot-item">
+                                <span class="legend-dot wake-med" style="background: #f59e0b;"></span>
+                                <span>Wake (medium)</span>
+                            </div>
+                            <div class="legend-dot-item">
+                                <span class="legend-dot wake-high"></span>
+                                <span>Wake (high)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Top Floating Controls Toolbar matching Reference -->
+                    <div class="s5-controls-toolbar">
+                        <!-- Satellite / Terrain / 3D Switch -->
+                        <div class="s5-layer-toggle">
+                            <button type="button" id="btn-s5-satellite" class="s5-layer-btn active" title="Satellite Basemap">Satellite</button>
+                            <button type="button" id="btn-s5-terrain" class="s5-layer-btn" title="Terrain Basemap">Terrain</button>
+                            <button type="button" id="btn-s5-toggle-3d" class="s5-layer-btn" title="Real 3D Globe with Tilt & Elevation">3D Globe</button>
+                        </div>
+
+                        <!-- Wakes Toggle Pill -->
+                        <div class="s5-pill-toggle active" id="btn-s5-toggle-wakes" title="Toggle Jensen Wake Cones">
+                            <div class="s5-pill-switch-track"></div>
+                            <span>Wakes</span>
+                        </div>
+
+                        <!-- Before / After Segmented Toggle -->
+                        <div class="s5-segmented-toggle">
+                            <button type="button" class="s5-toggle-btn" id="s5-btn-before">Before</button>
+                            <button type="button" class="s5-toggle-btn active" id="s5-btn-optimized">Optimized</button>
+                        </div>
+                    </div>
+
+                    <!-- Floating 3D Camera Presets Toolbar -->
+                    <div id="s5-camera-presets-bar" class="s5-camera-presets-bar" style="display: none;">
+                        <button type="button" class="camera-preset-btn active" data-preset="FIT_SITE" title="Fit Entire Concession Site">Fit Site</button>
+                        <button type="button" class="camera-preset-btn" data-preset="TOP" title="Top-Down Planimetric View">Top</button>
+                        <button type="button" class="camera-preset-btn" data-preset="NORTH" title="Facing North">North</button>
+                        <button type="button" class="camera-preset-btn" data-preset="SOUTH" title="Facing South">South</button>
+                        <button type="button" class="camera-preset-btn" data-preset="EAST" title="Facing East">East</button>
+                        <button type="button" class="camera-preset-btn" data-preset="WEST" title="Facing West">West</button>
+                        <button type="button" class="camera-preset-btn" data-preset="OBLIQUE" title="45° Oblique Perspective">Oblique</button>
+                        <button type="button" class="camera-preset-btn" data-preset="LOW_ANGLE" title="Low Angle Pitch">Low Angle</button>
+                        <button type="button" class="camera-preset-btn" data-preset="NEAR_GROUND" title="Ground Level Elevation">Ground</button>
+                    </div>
+
+                    <!-- Floating Vertical Map Action Group -->
+                    <div class="s5-map-actions-group">
+                        <button type="button" id="btn-s5-reset-view" class="map-icon-btn" title="Reset Map View">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+                                <path d="M3 3v5h5"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Analysis Bottom Sheet / Desktop Sidebar -->
+                <div id="screen-5-sheet" class="s5-analysis-panel collapsed">
+                    <div class="sheet-drag-handle" id="s5-sheet-handle"></div>
+
+                    <!-- Header -->
+                    <div class="s5-panel-header" id="s5-panel-toggle">
+                        <div class="s5-panel-title-group">
+                            <div class="s5-panel-title">
+                                <span>Optimized Layout</span>
+                                <span class="card-badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border-color: rgba(16, 185, 129, 0.3);">
+                                    Simulation
+                                </span>
+                            </div>
+                            <div class="s5-panel-subtitle">QAOA-optimized layout with minimized wake deficits</div>
+                        </div>
+                        <button type="button" class="btn-sheet-toggle" id="btn-s5-sheet-arrow" aria-label="Toggle Panel">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <!-- Peek Chips Row (Mobile Glance) -->
+                    <div class="s5-peek-chips-row">
+                        <div class="s5-peek-chip">
+                            <span>Turbines:</span> <strong id="s5-peek-turbines">10</strong>
+                        </div>
+                        <div class="s5-peek-chip">
+                            <span>Est. AEP:</span> <strong id="s5-peek-aep" style="color: var(--primary-cyan);">72.6 GWh/yr</strong>
+                        </div>
+                        <div class="s5-peek-chip">
+                            <span>Wake Loss:</span> <strong id="s5-peek-wake-loss" style="color: #10b981;">9.8%</strong>
+                        </div>
+                        <div class="s5-peek-chip">
+                            <span>Feasible:</span> <strong id="s5-peek-feasible" style="color: #10b981;">✓ Yes</strong>
+                        </div>
+                    </div>
+
+                    <!-- Expanded Content Scroll Container -->
+                    <div class="s5-analysis-scroll">
+                        <!-- Card 1: Optimized Layout Telemetry -->
+                        <div class="config-card" style="padding: 12px 14px;">
+                            <div class="config-card-header" style="margin-bottom: 8px;">
+                                <div class="card-title-group">
+                                    <span class="card-title-icon">⚡</span>
+                                    <span class="card-title">Layout Telemetry</span>
+                                </div>
+                                <span class="card-badge">SIMULATION</span>
+                            </div>
+                            <div class="site-metadata-table">
+                                <div class="meta-row">
+                                    <span class="meta-label">Turbines</span>
+                                    <span id="s5-meta-turbines" class="meta-val">10</span>
+                                </div>
+                                <div class="meta-row">
+                                    <span class="meta-label">Estimated AEP</span>
+                                    <span id="s5-meta-aep" class="meta-val mono" style="color: var(--primary-cyan);">72.6 GWh/year</span>
+                                </div>
+                                <div class="meta-row">
+                                    <span class="meta-label">Estimated Wake Loss</span>
+                                    <span id="s5-meta-wake-loss" class="meta-val mono" style="color: #10b981; font-weight: 700;">9.8 %</span>
+                                </div>
+                                <div class="meta-row">
+                                    <span class="meta-label">Average Spacing</span>
+                                    <span id="s5-meta-avg-spacing" class="meta-val mono">618 m</span>
+                                </div>
+                                <div class="meta-row">
+                                    <span class="meta-label">Feasible</span>
+                                    <span id="s5-meta-feasible" class="meta-val" style="color: #10b981; font-weight: 600;">✓ Yes</span>
+                                </div>
+                                <div class="meta-row">
+                                    <span class="meta-label">Optimization</span>
+                                    <span class="meta-val mono">QAOA</span>
+                                </div>
+                                <div class="meta-row">
+                                    <span class="meta-label">Status</span>
+                                    <span class="meta-val">Simulation (Estimated)</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card 2: Interactive Turbine Inspector -->
+                        <div class="s5-turbine-inspector-card" id="s5-turbine-inspector">
+                            <div class="inspector-header">
+                                <div class="inspector-title-group">
+                                    <span>🔍</span>
+                                    <span>Turbine Inspector</span>
+                                </div>
+                                <div class="inspector-nav">
+                                    <button type="button" class="inspector-nav-btn" id="btn-s5-prev-turbine" title="Previous Turbine">‹</button>
+                                    <span id="s5-inspector-index">4 / 10</span>
+                                    <button type="button" class="inspector-nav-btn" id="btn-s5-next-turbine" title="Next Turbine">›</button>
+                                </div>
+                            </div>
+                            <div class="inspector-body">
+                                <div class="inspector-thumb-container">
+                                    <img src="/assets/real-turbines-photo.jpg" alt="Turbine Photo" class="inspector-thumb-photo" />
+                                    <span id="s5-inspector-thumb-label" class="inspector-thumb-badge">T-04</span>
+                                </div>
+                                <div class="inspector-details">
+                                    <div id="s5-inspector-name" class="inspector-turbine-name">Turbine T-04</div>
+                                    <div class="inspector-meta-row">
+                                        <span class="inspector-meta-label">Latitude</span>
+                                        <span id="s5-inspector-lat" class="inspector-meta-val">8.0891° N</span>
+                                    </div>
+                                    <div class="inspector-meta-row">
+                                        <span class="inspector-meta-label">Longitude</span>
+                                        <span id="s5-inspector-lon" class="inspector-meta-val">77.5324° E</span>
+                                    </div>
+                                    <div class="inspector-meta-row">
+                                        <span class="inspector-meta-label">Elevation</span>
+                                        <span id="s5-inspector-elevation" class="inspector-meta-val mono">42 m</span>
+                                    </div>
+                                    <div class="inspector-meta-row">
+                                        <span class="inspector-meta-label">Estimated Output</span>
+                                        <span id="s5-inspector-output" class="inspector-meta-val" style="color: var(--primary-cyan);">2.48 MW</span>
+                                    </div>
+                                    <div class="inspector-meta-row">
+                                        <span class="inspector-meta-label">Wake Exposure</span>
+                                        <span id="s5-inspector-wake" class="inspector-meta-val">6.3 %</span>
+                                    </div>
+                                    <div class="inspector-meta-row">
+                                        <span class="inspector-meta-label">Nearest Turbine</span>
+                                        <span id="s5-inspector-nearest" class="inspector-meta-val">615 m (T-06)</span>
+                                    </div>
+                                    <div class="inspector-meta-row">
+                                        <span class="inspector-meta-label">Average Spacing</span>
+                                        <span id="s5-inspector-spacing" class="inspector-meta-val">628 m</span>
+                                    </div>
+                                    <div class="inspector-actions-row" style="margin-top: 10px; display: flex; gap: 8px;">
+                                        <button type="button" id="btn-s5-fly-turbine" class="btn-inspector-action" style="flex: 1; padding: 6px 10px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 6px; color: var(--primary-cyan); font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.15s ease;">
+                                            ✈️ Inspect in 3D
+                                        </button>
+                                        <button type="button" id="btn-s5-compare-layout" class="btn-inspector-compare" style="flex: 1;">
+                                            ⇄ Compare Layout
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card 3: Layout Comparison (Estimated) -->
+                        <div class="comparison-card">
+                            <div class="config-card-header" style="margin-bottom: 4px;">
+                                <div class="card-title-group">
+                                    <span class="card-title-icon">⚖️</span>
+                                    <span class="card-title">Layout Comparison</span>
+                                </div>
+                                <span class="card-badge">ESTIMATED</span>
+                            </div>
+                            <table class="comparison-table">
+                                <thead>
+                                    <tr>
+                                        <th>Metric</th>
+                                        <th>Initial Layout</th>
+                                        <th>Optimized Layout</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td class="comparison-metric-name">AEP</td>
+                                        <td id="s5-comp-init-aep">68.4 GWh/yr</td>
+                                        <td>
+                                            <span id="s5-comp-opt-aep">72.6 GWh/yr</span>
+                                            <span id="s5-comp-aep-badge" class="comparison-gain-badge">+ 6.1 %</span>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="comparison-metric-name">Wake Loss</td>
+                                        <td id="s5-comp-init-wake">18.7 %</td>
+                                        <td>
+                                            <span id="s5-comp-opt-wake">9.8 %</span>
+                                            <span id="s5-comp-wake-badge" class="comparison-gain-badge">+ 47.6 %</span>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="comparison-metric-name">Avg. Spacing</td>
+                                        <td id="s5-comp-init-spacing">580 m</td>
+                                        <td>
+                                            <span id="s5-comp-opt-spacing">618 m</span>
+                                            <span id="s5-comp-spacing-badge" class="comparison-gain-badge">+ 6.6 %</span>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Technical Simulation Notice -->
+                        <div style="font-size: 11px; color: var(--text-dim); line-height: 1.5; padding: 4px 2px;">
+                            Simulation: Layout optimized via QAOA statevector relaxation and Jensen kinematic wake models. Not experimentally validated.
+                        </div>
+                    </div>
+
+                    <!-- Sticky Bottom Action Button -->
+                    <div class="s5-primary-action-container">
+                        <button type="button" id="btn-screen5-export" class="btn-export-blueprint">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                            </svg>
+                            <span>EXPORT BLUEPRINT</span>
+                            <span style="font-size: 16px;">›</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================================================================
+             SCREEN 6: VIEW ENGINEERING BLUEPRINT & EXPORT
+             =================================================================== -->
+        <div id="screen-6-container" class="screen-6-view" style="display: none;">
+            <!-- Screen 6 Sub-header -->
+            <div class="config-header screen-sub-header">
+                <button id="btn-s6-back" type="button" class="btn-sub-back">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                        <polyline points="15 18 9 12 15 6"></polyline>
+                    </svg>
+                    <span>Back</span>
+                </button>
+                <div class="config-header-center screen-sub-title-group">
+                    <h2 class="config-title screen-sub-title">Engineering Blueprint</h2>
+                    <div id="s6-indicator-text" class="config-subtitle screen-sub-indicator">Kanyakumari · 12 Turbines (QAOA)</div>
+                </div>
+                <button id="btn-s6-print" type="button" class="btn-print-blueprint" title="Print Engineering Report">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                        <rect x="6" y="14" width="12" height="8"></rect>
+                    </svg>
+                    <span class="btn-print-text">Print</span>
+                </button>
+            </div>
+
+            <div class="s6-blueprint-scroll">
+                <!-- Blueprint Overview Card -->
+                <div class="blueprint-summary-card">
+                    <div class="blueprint-card-header">
+                        <div class="blueprint-badge">QAOA OPTIMIZED BLUEPRINT</div>
+                        <div class="blueprint-doc-id" id="s6-doc-id">DOC-AQW-2026-0883</div>
+                    </div>
+                    <div class="blueprint-site-hero">
+                        <div class="blueprint-site-title" id="s6-site-title">Kanyakumari Wind Farm Complex</div>
+                        <div class="blueprint-site-subtitle" id="s6-site-coords">8.0883° N, 77.5385° E · Tamil Nadu, India</div>
+                    </div>
+
+                    <!-- Key Engineering Metrics Grid -->
+                    <div class="blueprint-metrics-grid">
+                        <div class="bp-metric-item">
+                            <span class="bp-metric-label">Turbines Allocated</span>
+                            <span class="bp-metric-value" id="s6-stat-turbines">12 / 12</span>
+                        </div>
+                        <div class="bp-metric-item">
+                            <span class="bp-metric-label">Installed Capacity</span>
+                            <span class="bp-metric-value" id="s6-stat-capacity">30.0 MW</span>
+                        </div>
+                        <div class="bp-metric-item">
+                            <span class="bp-metric-label">Net Estimated AEP</span>
+                            <span class="bp-metric-value highlight" id="s6-stat-aep">88.1 GWh/yr</span>
+                        </div>
+                        <div class="bp-metric-item">
+                            <span class="bp-metric-label">Wake Loss Deficit</span>
+                            <span class="bp-metric-value success" id="s6-stat-wake-loss">4.2 %</span>
+                        </div>
+                        <div class="bp-metric-item">
+                            <span class="bp-metric-label">Deficit Reduction</span>
+                            <span class="bp-metric-value success" id="s6-stat-improvement">+71.6 %</span>
+                        </div>
+                        <div class="bp-metric-item">
+                            <span class="bp-metric-label">Mean Inter-Turbine Spacing</span>
+                            <span class="bp-metric-value" id="s6-stat-spacing">663 m (5.5D)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Site & Hardware Specification Card -->
+                <div class="blueprint-spec-card">
+                    <h3 class="bp-card-heading">Engineering & Environmental Parameters</h3>
+                    <div class="bp-specs-table">
+                        <div class="bp-spec-row">
+                            <span>Turbine Specification</span>
+                            <strong id="s6-spec-model">Vestas V120-2.5 MW (IEC IIIA)</strong>
+                        </div>
+                        <div class="bp-spec-row">
+                            <span>Rotor Diameter / Hub Height</span>
+                            <strong id="s6-spec-dims">120 m / 110 m</strong>
+                        </div>
+                        <div class="bp-spec-row">
+                            <span>Prevailing Wind Regime</span>
+                            <strong id="s6-spec-wind">7.1 m/s @ 270° (Westerly)</strong>
+                        </div>
+                        <div class="bp-spec-row">
+                            <span>Project Area & Terrain</span>
+                            <strong id="s6-spec-terrain">24.8 km² · Coastal / Marine Interface</strong>
+                        </div>
+                        <div class="bp-spec-row">
+                            <span>Optimization Algorithm</span>
+                            <strong>Warm-Started QAOA (K-Preserving Mixer, p=2)</strong>
+                        </div>
+                        <div class="bp-spec-row">
+                            <span>QUBO Formulation</span>
+                            <strong id="s6-spec-qubo">N=36 candidate sites, λ=150.0</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Turbines Micro-Siting Coordinates Table -->
+                <div class="blueprint-table-card">
+                    <div class="bp-table-header">
+                        <h3 class="bp-card-heading">Turbine Micro-Siting Schedule</h3>
+                        <span class="bp-table-sub">WGS84 Geodetic Datum & Hub Yield</span>
+                    </div>
+                    <div class="bp-table-wrapper">
+                        <table class="bp-schedule-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Latitude</th>
+                                    <th>Longitude</th>
+                                    <th>Elevation</th>
+                                    <th>Effective Wind</th>
+                                    <th>Est. Output</th>
+                                    <th>Wake Deficit</th>
+                                    <th>Nearest Spacing</th>
+                                </tr>
+                            </thead>
+                            <tbody id="s6-turbine-table-body">
+                                <!-- Dynamically populated -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Data Provenance & Legal Classification Card (Phase 14) -->
+                <div class="blueprint-provenance-card">
+                    <h3 class="bp-card-heading">Data Provenance & Verification Status</h3>
+                    <div class="provenance-list">
+                        <div class="prov-item">
+                            <span class="prov-tag live">Latest Available</span>
+                            <span class="prov-desc">Atmospheric & Hub-Height Wind Telemetry: Open-Meteo European Centre (ECMWF)</span>
+                        </div>
+                        <div class="prov-item">
+                            <span class="prov-tag live">Latest Available</span>
+                            <span class="prov-desc">Satellite & Terrain Imagery: Google Photorealistic 3D / Earth Observation System</span>
+                        </div>
+                        <div class="prov-item">
+                            <span class="prov-tag sim">Simulated</span>
+                            <span class="prov-desc">Micro-Siting & Wake Deficit Matrix: Analytical Jensen / Park Aerodynamic Wake Model</span>
+                        </div>
+                        <div class="prov-item">
+                            <span class="prov-tag sim">Simulated</span>
+                            <span class="prov-desc">Combinatorial Micro-Siting Solver: Quantum Approximate Optimization Algorithm (QAOA)</span>
+                        </div>
+                        <div class="prov-item">
+                            <span class="prov-tag warn">Requires Verification</span>
+                            <span class="prov-desc">Cadastral property parcel boundaries and local aviation height permits require external jurisdictional verification prior to civil ground-breaking.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Export Actions Bar (Phase 12) -->
+                <div class="blueprint-export-bar">
+                    <button id="btn-export-geojson" type="button" class="btn-bp-export primary">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        <span>Export GeoJSON (GIS)</span>
+                    </button>
+                    <button id="btn-export-csv" type="button" class="btn-bp-export secondary">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                        </svg>
+                        <span>Export CSV Coordinates</span>
+                    </button>
+                    <button id="btn-export-json" type="button" class="btn-bp-export secondary">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="16 18 22 12 16 6"></polyline>
+                            <polyline points="8 6 2 12 8 18"></polyline>
+                        </svg>
+                        <span>Export JSON Specification</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    <!-- Data Sources Provenance Modal -->
+    <div id="data-sources-modal" class="project-modal-backdrop" style="display: none; z-index: 9999;">
+        <div class="project-modal-card" style="max-width: 680px; max-height: 85vh; overflow-y: auto;">
+            <div class="project-modal-header">
+                <div class="project-modal-brand">
+                    <span style="font-size: 22px;">🌐</span>
+                    <div>
+                        <div class="project-modal-title">Dataset Provenance & Authority</div>
+                        <div class="project-modal-tagline">Disclosing real-world telemetry sources, timestamps, and model fidelity.</div>
+                    </div>
+                </div>
+                <button type="button" id="btn-close-sources-modal" class="btn-modal-close" aria-label="Close dialog">✕</button>
+            </div>
+            <div class="project-modal-body" id="data-sources-modal-body" style="display: flex; flex-direction: column; gap: 12px; margin-top: 14px;">
+                <div style="text-align: center; color: var(--text-secondary); padding: 20px;">Loading provenance metadata...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Global App Toast Notification -->
+    <div id="app-toast" class="app-toast"></div>
+
+    <!-- Leaflet JS (local vendor with CDN fallback) -->
+    <script src="/assets/vendor/leaflet.js" onerror="this.onerror=null;this.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';"></script>
+    <script>
+        if (typeof L === 'undefined') {
+            document.write('<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>');
+        }
+    </script>
+
+    <!-- Wind Aerodynamic Canvas Engine -->
+    <script src="js/wind-fx.js"></script>
+
+    <!-- CesiumJS 3D Geospatial Engine (local vendor with CDN fallback) -->
+    <script>window.CESIUM_BASE_URL = "/assets/vendor/cesium/";</script>
+    <script src="/assets/vendor/cesium/Cesium.js" onerror="this.onerror=null;window.CESIUM_BASE_URL='https://cdn.jsdelivr.net/npm/cesium@1.118/Build/Cesium/';const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/cesium@1.118/Build/Cesium/Cesium.js';document.head.appendChild(s);"></script>
+    <script src="js/cesium-map.js"></script>
+
+    <!-- Engineering App Core Logic -->
+    <script src="js/app.js"></script>
+</body>
+</html>

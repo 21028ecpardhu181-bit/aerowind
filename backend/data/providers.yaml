@@ -1,0 +1,309 @@
+# AeroQuantum-Wind — Official Data Provider Registry
+# Phase 1 Source Foundation & Provenance Configuration
+# Taxonomies: VERIFIED_REAL, PARTIAL, MANUAL_REQUIRED, UNAVAILABLE, HARDCODED, MOCK, UNKNOWN, NOT_ENGINEERING_GRADE
+
+version: "1.0.0"
+updated_at: "2026-10-06T16:00:00Z"
+jurisdiction_primary: "India (MNRE / NIWE / SOI)"
+
+providers:
+  # 1. ADMINISTRATIVE & CADASTRAL BOUNDARIES
+  survey_of_india_village:
+    status: "MANUAL_REQUIRED"
+    provider: "Survey of India (SOI), Department of Science & Technology"
+    dataset: "Village Boundary Database (National Administrative Cadastre)"
+    url: "https://onlinemaps.surveyofindia.gov.in/"
+    coverage: "Pan-India (Village, Taluk, District, State)"
+    resolution: "Cadastral Survey Vector (1:50,000 / Village Scale)"
+    version: "2024 Release"
+    crs: "EPSG:4326 (WGS 84)"
+    format: "ESRI Shapefile / File Geodatabase"
+    access_mechanism: "Web portal download with registered user authentication"
+    automated_api_possible: false
+    license: "Government of India National Geospatial Policy 2022 (Free for all users)"
+    commercial_use_allowed: true
+    engineering_purpose: "Official concession bounding envelope and revenue cadastral parcel boundaries"
+    engineering_suitability: "ENGINEERING_GRADE (Gold Standard for Indian Cadastral Siting)"
+    limitations: "No programmatic public REST API. Requires manual download and ingest into local spatial database."
+
+  osm_nominatim_boundary:
+    status: "PARTIAL"
+    provider: "OpenStreetMap Contributors"
+    dataset: "Nominatim Administrative Polygons"
+    url: "https://nominatim.openstreetmap.org/"
+    coverage: "Global (Variable in rural India)"
+    resolution: "Vector boundary polygons (crowdsourced)"
+    version: "Live ODbL database"
+    crs: "EPSG:4326 (WGS 84)"
+    format: "GeoJSON"
+    access_mechanism: "REST API (`polygon_geojson=1`)"
+    automated_api_possible: true
+    license: "Open Data Commons Open Database License (ODbL 1.0)"
+    commercial_use_allowed: true
+    engineering_purpose: "Preliminary fallback village search when official SOI cadastre has not been loaded"
+    engineering_suitability: "PRELIMINARY_SCREENING_ONLY"
+    limitations: "Rural Indian villages frequently mapped as single point nodes without boundary polygons."
+
+  # 2. WIND RESOURCE & CLIMATOLOGY
+  niwe_wind_atlas_120m:
+    status: "MANUAL_REQUIRED"
+    provider: "National Institute of Wind Energy (NIWE), MNRE"
+    dataset: "120m & 150m AGL Wind Potential Atlas of India"
+    url: "https://niwe.res.in/Open_data_Set/technical_report/19/"
+    coverage: "India (State-level and national onshore)"
+    resolution: "500m modelling grid (Meso-micro coupled WRF validated with 406 wind masts)"
+    height_m: 120.0
+    version: "Technical Report 19 / 2022-2024 Revision"
+    crs: "WGS 84 / UTM Indian Zones"
+    format: "GeoTIFF raster / Vector shapefile / Technical reports"
+    access_mechanism: "Download from NIWE Open Data portal / maps.niwe.res.in"
+    automated_api_possible: false
+    license: "Government of India Open Data / NIWE Proprietary with attribution"
+    commercial_use_allowed: true
+    engineering_purpose: "Bankable regional wind resource baseline, Capacity Utilization Factor (CUF), and land exclusions"
+    engineering_suitability: "ENGINEERING_GRADE (National Benchmark for Project Feasibility)"
+    limitations: "Requires offline raster ingestion; no public unauthenticated REST API exists."
+
+  global_wind_atlas_heuristic:
+    status: "HARDCODED"
+    provider: "Existing Repo Legacy Code (backend/app/gis/global_wind_atlas.py)"
+    dataset: "Regional Coordinate Heuristic (Mock GWA 3.0)"
+    url: "Internal Code"
+    coverage: "Hardcoded regional if/elif blocks (Gujarat, Rajasthan, TN, etc.)"
+    resolution: "Arbitrary"
+    version: "Deprecated Hackathon Prototype"
+    crs: "N/A"
+    format: "Python in-memory calculation"
+    access_mechanism: "Local module call"
+    automated_api_possible: true
+    license: "Internal"
+    commercial_use_allowed: false
+    engineering_purpose: "None"
+    engineering_suitability: "NOT_ENGINEERING_GRADE"
+    limitations: "Fails to represent true spatial mesoscale wind variation; must be replaced."
+
+  # 3. LIVE WEATHER & TELEMETRY
+  open_meteo_forecast_100m:
+    status: "VERIFIED_REAL"
+    provider: "Open-Meteo GmbH"
+    dataset: "ECMWF / DWD ICON Global Numerical Weather Prediction"
+    url: "https://api.open-meteo.com/v1/forecast"
+    coverage: "Global terrestrial"
+    resolution: "Hourly numerical weather prediction (0.1° / ~11km grid)"
+    height_m: 100.0
+    version: "Operational live run"
+    crs: "EPSG:4326 (WGS 84)"
+    format: "JSON REST"
+    access_mechanism: "Direct HTTP GET (Free tier / rate-limited)"
+    automated_api_possible: true
+    license: "CC-BY 4.0 / Data sources ECMWF & DWD"
+    commercial_use_allowed: true
+    engineering_purpose: "Real-time atmospheric telemetry for UI display and instantaneous test condition simulation"
+    engineering_suitability: "REAL_WEATHER_NOT_LONG_TERM_RESOURCE"
+    limitations: "Current weather or 7-day forecast CANNOT be used as substitute for 20-year AEP resource assessment."
+
+  # 4. TERRAIN & ELEVATION
+  open_meteo_elevation_copernicus:
+    status: "VERIFIED_REAL"
+    provider: "Open-Meteo (backed by Copernicus DEM GLO-90 / SRTM)"
+    dataset: "Copernicus DEM Global 90m (GLO-90)"
+    url: "https://api.open-meteo.com/v1/elevation"
+    coverage: "Global terrestrial (between 84°N and 56°S)"
+    resolution: "90m horizontal grid (Note: repo claims 30m, but Open-Meteo public API serves GLO-90)"
+    version: "Copernicus DEM GLO-90 2020 Release"
+    crs: "Horizontal: WGS 84 (EPSG:4326); Vertical: EGM2008 Geoid"
+    format: "JSON REST (elevation array in meters ASL)"
+    access_mechanism: "Direct HTTP GET"
+    automated_api_possible: true
+    license: "Copernicus WorldDEM / Open-Meteo CC-BY 4.0"
+    commercial_use_allowed: true
+    engineering_purpose: "Preliminary topographic slope gradient, aspect, and turbine foundation elevations"
+    engineering_suitability: "PARTIAL (Suitable for preliminary slope screening, but not microscale civil design)"
+    limitations: "90m spatial resolution smooths micro-ridges and steep gullies compared to official GLO-30."
+
+  copernicus_dataspace_dem_glo30:
+    status: "MANUAL_REQUIRED"
+    provider: "European Space Agency (ESA) Copernicus Data Space Ecosystem"
+    dataset: "Copernicus DEM GLO-30 Public (Digital Surface Model 30m)"
+    url: "https://dataspace.copernicus.eu/"
+    coverage: "Global terrestrial"
+    resolution: "30m horizontal grid"
+    version: "Copernicus DEM 2021/2022"
+    crs: "WGS 84 / EGM2008"
+    format: "Cloud-Optimized GeoTIFF (COG)"
+    access_mechanism: "S3 / OData API requiring OAuth2 credentials"
+    automated_api_possible: true
+    license: "Free and Open Public License (with registration)"
+    commercial_use_allowed: true
+    engineering_purpose: "High-resolution micro-siting terrain slope and wake terrain interaction"
+    engineering_suitability: "ENGINEERING_GRADE"
+    limitations: "Requires Copernicus Data Space user account, client_id, and client_secret."
+
+  # 5. LAND COVER
+  esa_worldcover_10m:
+    status: "MANUAL_REQUIRED"
+    provider: "European Space Agency (ESA) / VITO Remote Sensing"
+    dataset: "ESA WorldCover 10m (v100 2020 and v200 2021)"
+    url: "https://esa-worldcover.org/en/data-access"
+    coverage: "Global terrestrial"
+    resolution: "10m spatial resolution (Sentinel-1 and Sentinel-2 derived)"
+    version: "v200 (2021 Product)"
+    crs: "EPSG:4326 (WGS 84)"
+    format: "Cloud-Optimized GeoTIFF (COG) in 3°x3° tiles on AWS Open Data (`eu-central-1`)"
+    access_mechanism: "AWS S3 / STAC API (`https://services.terrascope.be/stac`)"
+    automated_api_possible: true
+    license: "Creative Commons Attribution 4.0 International (CC-BY 4.0)"
+    commercial_use_allowed: true
+    engineering_purpose: "Land classification (Cropland, Built-up, Bare, Forest, Wetland, Water)"
+    engineering_suitability: "ENGINEERING_GRADE (Surface Roughness $z_0$ and Physical Ground Cover)"
+    limitations: "Does NOT indicate legal development title or local cadastral land classification."
+
+  # 6. PHYSICAL EXCLUSIONS & INFRASTRUCTURE
+  osm_overpass_infrastructure:
+    status: "VERIFIED_REAL"
+    provider: "OpenStreetMap Contributors"
+    dataset: "OSM Overpass Infrastructure (Buildings, Roads, Power, Water)"
+    url: "https://overpass-api.de/api/interpreter"
+    coverage: "Global (High urban completeness, moderate/sparse rural completeness)"
+    resolution: "Vector points, ways, and relations"
+    version: "Real-time OSM database"
+    crs: "EPSG:4326 (WGS 84)"
+    format: "JSON via Overpass QL"
+    access_mechanism: "Direct HTTP POST/GET"
+    automated_api_possible: true
+    license: "Open Data Commons Open Database License (ODbL 1.0)"
+    commercial_use_allowed: true
+    engineering_purpose: "Exclusion zones for roads, railway lines, high-voltage lines, and settlements"
+    engineering_suitability: "PARTIAL (Incomplete in rural regions; failure must yield UNKNOWN, never CLEAR)"
+    limitations: "Rural buildings often unmapped. Rate-limiting (HTTP 429) on public servers."
+
+  # 7. PROTECTED AREAS & CONSERVATION
+  unep_wdpa_protected_planet:
+    status: "MANUAL_REQUIRED"
+    provider: "UNEP-WCMC / IUCN Protected Planet"
+    dataset: "World Database on Protected Areas (WDPA) & WD-OECM v4"
+    url: "https://api.protectedplanet.net/documentation"
+    coverage: "Global protected areas (National Parks, Sanctuaries, Biosphere Reserves, Ramsar)"
+    resolution: "Vector boundary polygons and points"
+    version: "WDPA Monthly Release"
+    crs: "EPSG:4326 (WGS 84)"
+    format: "API JSON / Monthly shapefile download"
+    access_mechanism: "REST API v4 requiring personal API token (`?token=...`)"
+    automated_api_possible: true
+    license: "UNEP-WCMC Terms of Use: Strictly NON-COMMERCIAL for free API. Commercial users directed to IBAT (ibat-alliance.org)"
+    commercial_use_allowed: false
+    engineering_purpose: "Statutory environmental exclusions and 1km Eco-Sensitive Zone buffers"
+    engineering_suitability: "ENGINEERING_GRADE (Non-Commercial / Research Use Only)"
+    limitations: "API requires approval and personal token; commercial renewable projects must use IBAT."
+
+  moefcc_parivesh_esz:
+    status: "MANUAL_REQUIRED"
+    provider: "Ministry of Environment, Forest and Climate Change (MoEFCC), India"
+    dataset: "PARIVESH / Forest & Eco-Sensitive Zone (ESZ) Notified Boundaries"
+    url: "https://parivesh.nic.in/"
+    coverage: "India (Protected Areas & Notified Eco-Sensitive Zones)"
+    resolution: "Official Gazette Notifications & Spatial Shapefiles"
+    version: "Current Statutory Notifications"
+    crs: "WGS 84 / Survey of India Standard"
+    format: "PDF Gazettes / Survey Shapefiles"
+    access_mechanism: "Web portal download"
+    automated_api_possible: false
+    license: "Government of India Statutory Public Records"
+    commercial_use_allowed: true
+    engineering_purpose: "Legal Indian regulatory clearance for forest land and eco-sensitive buffers"
+    engineering_suitability: "ENGINEERING_GRADE (Legally Enforceable in National Green Tribunal / NGT)"
+    limitations: "Manual download and legal review required per project."
+
+  # 8. GEOTECHNICAL SOIL PROPERTIES
+  isric_soilgrids_250m:
+    status: "PARTIAL"
+    provider: "ISRIC — World Soil Information"
+    dataset: "SoilGrids 2.0 (Global Gridded Soil Information)"
+    url: "https://rest.isric.org/soilgrids/v2.0/properties/query"
+    coverage: "Global terrestrial"
+    resolution: "250m spatial resolution at standard depths (0-5cm, 5-15cm, etc.)"
+    version: "SoilGrids 2.0 (2020/2021)"
+    crs: "Homolosine / WGS 84 EPSG:4326"
+    format: "REST API JSON / GeoTIFF downloads"
+    access_mechanism: "REST API (Note: Public REST API is currently in Beta / unstable)"
+    automated_api_possible: true
+    license: "CC-BY 4.0"
+    commercial_use_allowed: true
+    engineering_purpose: "Preliminary desktop screening of soil texture (clay/sand/silt) and bulk density"
+    engineering_suitability: "PRELIMINARY_SCREENING_ONLY (Never substitutes for geotechnical borehole SPT)"
+    limitations: "High pixel uncertainty; cannot be used to certify foundations without borehole investigation."
+
+  # 9. TURBINE PERFORMANCE CATALOGUE
+  mnre_almm_wind_catalogue:
+    status: "MANUAL_REQUIRED"
+    provider: "Ministry of New and Renewable Energy (MNRE) / NIWE"
+    dataset: "Approved List of Models and Manufacturers – Wind (ALMM-Wind / formerly RLMM)"
+    url: "https://mnre.gov.in/wind-schemes-guidelines/"
+    coverage: "All wind turbine models certified and approved for grid connection in India"
+    resolution: "Turbine model specifications (Rated Power, Rotor Diameter, Hub Height, Type Certificate)"
+    version: "Latest MNRE Gazette Notification / ALMM Circular"
+    crs: "N/A"
+    format: "Official Gazette PDF / NIWE certified technical schedule"
+    access_mechanism: "Manual download from MNRE/NIWE portals"
+    automated_api_possible: false
+    license: "Government of India Regulatory Gazette"
+    commercial_use_allowed: true
+    engineering_purpose: "Authoritative list of eligible, grid-compliant wind turbine models in India"
+    engineering_suitability: "ENGINEERING_GRADE (Regulatory Compliance Mandate)"
+    limitations: "Updated periodically by circular; must be maintained in source-controlled catalogue."
+
+  nrel_floris_reference_curves:
+    status: "VERIFIED_REAL"
+    provider: "National Renewable Energy Laboratory (NREL) & Manufacturer Technical Schedules"
+    dataset: "NREL FLORIS 4.x Tabulated Power & Thrust Coefficient ($C_T$) Curves"
+    url: "https://github.com/NREL/floris"
+    coverage: "Certified Turbine Reference Models"
+    resolution: "1 m/s wind speed bins from cut-in to cut-out"
+    version: "FLORIS v4.2 specification"
+    crs: "N/A"
+    format: "Tabulated Python arrays in `backend/app/engineering/floris_engine.py`"
+    access_mechanism: "Internal verified module"
+    automated_api_possible: true
+    license: "BSD 3-Clause License / Public Domain"
+    commercial_use_allowed: true
+    engineering_purpose: "Aerodynamic wake velocity deficit calculation and electrical power yield"
+    engineering_suitability: "ENGINEERING_GRADE"
+    limitations: "Specific to tabulated reference models; site-specific air density corrections required."
+
+  # 10. ELECTRICAL GRID & SUBSTATION INFRASTRUCTURE
+  cea_national_power_portal_grid:
+    status: "MANUAL_REQUIRED"
+    provider: "Central Electricity Authority (CEA) / National Power Portal (NPP)"
+    dataset: "Transmission Network & Substation Database (220kV, 400kV, 765kV)"
+    url: "https://npp.gov.in/ & https://cea.nic.in/power-maps/"
+    coverage: "Pan-India Transmission Network"
+    resolution: "Regional transmission diagrams & monthly substation achievement reports"
+    version: "Monthly Operational Schedule"
+    crs: "WGS 84"
+    format: "GIS maps / Monthly tabular PDF reports"
+    access_mechanism: "Manual portal access / CEA Perspective Transmission Plan"
+    automated_api_possible: false
+    license: "Government of India Official Energy Records"
+    commercial_use_allowed: true
+    engineering_purpose: "Interconnection feeder capacity and point-of-interconnection (POI) screening"
+    engineering_suitability: "PRELIMINARY_SCREENING_ONLY (Detailed load-flow interconnection study required)"
+    limitations: "No programmatic REST API; transmission line routes require State Transco survey."
+
+  # 11. AVIATION & DEFENCE OBSTACLE LIMITATION
+  aai_nocas_aviation:
+    status: "MANUAL_REQUIRED"
+    provider: "Airports Authority of India (AAI) / Ministry of Defence (MoD)"
+    dataset: "NOCAS Color-Coded Zoning Maps (CCZM) & Obstacle Limitation Surfaces (OLS)"
+    url: "https://nocas2.aai.aero/nocas/"
+    coverage: "20km - 56km radius around civil and military aerodromes across India"
+    resolution: "Grid-based Permissible Top Elevation (PTE)"
+    version: "Ministry of Civil Aviation Rules 2015 (Amended 2020)"
+    crs: "WGS 84"
+    format: "Interactive GIS portal / PDF zoning maps"
+    access_mechanism: "Manual verification on AAI NOCAS portal"
+    automated_api_possible: false
+    license: "Government of India Aviation Safety Regulations"
+    commercial_use_allowed: true
+    engineering_purpose: "Total tip height compliance and radar line-of-sight clearance"
+    engineering_suitability: "ENGINEERING_GRADE (Mandatory Statutory Clearance)"
+    limitations: "Restricts WTGs within 10km of Static Air Defence Radar and 8km of airport surveillance radar."

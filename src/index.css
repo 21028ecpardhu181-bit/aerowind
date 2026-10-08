@@ -1,0 +1,380 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
+    --primary: 43 96% 56%;
+    --primary-foreground: 222 47% 11%;
+    --radius: 0.75rem;
+  }
+
+  body {
+    @apply bg-[#F8FAFC] text-slate-900 antialiased font-sans;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  .tabular-nums {
+    font-feature-settings: "tnum";
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Authentic Liquid Glass with Specular Rim Highlight */
+.liquid-glass {
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 
+    0 20px 40px -15px rgba(15, 23, 42, 0.07),
+    0 1px 3px 0 rgba(15, 23, 42, 0.04),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1px 1px 0 rgba(15, 23, 42, 0.03);
+}
+
+.liquid-glass-elevated {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(24px) saturate(190%);
+  -webkit-backdrop-filter: blur(24px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 
+    0 25px 50px -12px rgba(15, 23, 42, 0.10),
+    0 4px 12px 0 rgba(15, 23, 42, 0.03),
+    inset 0 1px 1.5px 0 rgba(255, 255, 255, 1.0),
+    inset 0 -1px 1px 0 rgba(15, 23, 42, 0.02);
+}
+
+.liquid-glass-subtle {
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 
+    0 8px 24px -6px rgba(15, 23, 42, 0.05),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+/* Leaflet container isolation: trap Leaflet's internal high z-indexes so HUD and drawers render on top */
+#map, .leaflet-container {
+  isolation: isolate;
+  z-index: 1 !important;
+  background-color: #1e293b !important;
+}
+
+.leaflet-tile-pane {
+  opacity: 1 !important;
+}
+
+.leaflet-tile {
+  filter: none !important;
+}
+
+/* Subtle custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+/* GIS Map Markers & Badges */
+.gis-boundary-vertex-dot {
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.6));
+  cursor: pointer;
+}
+
+.gis-first-vertex-dot {
+  filter: drop-shadow(0 0 8px rgba(16, 185, 129, 0.8));
+  cursor: pointer;
+}
+
+.gis-vertex-tooltip {
+  background: rgba(15, 23, 42, 0.95) !important;
+  color: #FFD21F !important;
+  border: 1px solid rgba(255, 210, 31, 0.5) !important;
+  border-radius: 8px !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  font-family: monospace !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4) !important;
+  padding: 4px 8px !important;
+}
+
+.site-unified-badge-wrapper {
+  background: transparent !important;
+  border: none !important;
+}
+
+.site-unified-badge {
+  background: rgba(15, 23, 42, 0.94);
+  border: 1.5px solid #FFD21F;
+  border-radius: 12px;
+  padding: 6px 14px;
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  text-align: center;
+  white-space: nowrap;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.site-unified-badge .badge-title {
+  font-size: 12px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.02em;
+}
+
+.site-unified-badge .badge-sub {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.site-unified-badge .badge-sub strong {
+  color: #FFD21F;
+  font-weight: 800;
+}
+
+.selected-area-badge {
+  background: rgba(15, 23, 42, 0.90);
+  border: 1.5px solid #FFD21F;
+  color: #ffffff;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  text-align: center;
+  white-space: nowrap;
+  backdrop-filter: blur(8px);
+}
+
+.location-anchor-tag {
+  font-size: 12px;
+  font-weight: 800;
+  color: #0f172a;
+  background: rgba(255, 255, 255, 0.95);
+  padding: 3px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.gis-vertex-marker-wrapper {
+  background: transparent !important;
+  border: none !important;
+}
+
+.gis-vertex-marker {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #FFD21F;
+  border: 2px solid #0f172a;
+  color: #0f172a;
+  font-size: 10px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  cursor: grab;
+}
+
+.candidate-dot-wrapper {
+  background: transparent !important;
+  border: none !important;
+}
+
+.candidate-grid-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(255, 210, 31, 0.35);
+  border: 1.5px solid #FFD21F;
+  pointer-events: none;
+}
+
+.turbine-pin-wrapper {
+  background: transparent !important;
+  border: none !important;
+}
+
+/* Realistic 3-Blade Wind Turbine Marker */
+.realistic-turbine-marker {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  pointer-events: auto;
+  user-select: none;
+}
+
+/* Terrain Ground Shadow */
+.turbine-ground-shadow {
+  position: absolute;
+  width: 38px;
+  height: 14px;
+  background: radial-gradient(ellipse at center, rgba(15, 23, 42, 0.45) 0%, rgba(15, 23, 42, 0) 72%);
+  border-radius: 50%;
+  bottom: 6px;
+  left: 50%;
+  transform: translateX(-40%) rotate(-15deg);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Static Yawed Aerodynamic Nacelle SVG */
+.turbine-svg-nacelle {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  z-index: 2;
+  pointer-events: none;
+  filter: drop-shadow(0 2px 4px rgba(15, 23, 42, 0.4));
+}
+
+/* Rotating / Yawed Aerodynamic Blades SVG */
+.turbine-svg-blades {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  z-index: 3;
+  pointer-events: none;
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.35));
+}
+
+.realistic-turbine-marker.spinning .turbine-svg-blades {
+  animation: turbine-blade-spin 8s linear infinite;
+}
+
+@keyframes turbine-blade-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Central Nacelle & Rotor Hub */
+.turbine-nacelle-center {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #ffffff 0%, #cbd5e1 55%, #64748b 100%);
+  border: 1.5px solid #0f172a;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  z-index: 4;
+}
+
+/* Selected Aura & Glow Ring */
+.realistic-turbine-marker.selected .turbine-nacelle-center {
+  background: radial-gradient(circle at 35% 35%, #ffffff 0%, #38bdf8 60%, #0284c7 100%);
+  border-color: #ffffff;
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.4), 0 0 12px rgba(14, 165, 233, 0.8);
+}
+
+.realistic-turbine-marker.selected .turbine-svg-blades {
+  filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.7));
+}
+
+/* Sleek Apple Liquid Glass ID Label Pill */
+.turbine-glass-label {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 9999px;
+  padding: 1px 6px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 5;
+  transition: all 0.2s ease;
+}
+
+.realistic-turbine-marker.selected .turbine-glass-label {
+  background: rgba(2, 132, 199, 0.95);
+  border-color: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 0 10px rgba(14, 165, 233, 0.6);
+  transform: translateX(-50%) scale(1.08);
+}
+
+.turbine-label-id {
+  font-family: monospace;
+  font-size: 9.5px;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.turbine-label-power {
+  font-size: 8.5px;
+  font-weight: 700;
+  color: #fde047;
+}
+
+.realistic-turbine-marker:hover .turbine-glass-label {
+  transform: translateX(-50%) scale(1.1);
+  background: rgba(15, 23, 42, 0.95);
+}
+
+/* Legacy fallback pin for backward compatibility */
+.turbine-map-pin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  background: #FFD21F;
+  border: 2px solid #0f172a;
+  border-radius: 50%;
+  color: #0f172a;
+  font-size: 11px;
+  font-weight: 800;
+  font-family: monospace;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.turbine-map-pin.conflicted {
+  background: #ef4444;
+  border-color: #ffffff;
+  color: #ffffff;
+}
+
+.turbine-map-pin:hover {
+  transform: scale(1.15);
+}

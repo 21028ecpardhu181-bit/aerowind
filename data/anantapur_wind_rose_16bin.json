@@ -1,0 +1,373 @@
+{
+  "_comment": "AeroQuantum-Wind Project: Anantapur 16-bin Wind Rose Data Fixture",
+  "site_metadata": {
+    "site_name": "Anantapur Wind Corridor",
+    "state": "Andhra Pradesh",
+    "country": "India",
+    "coordinates": {
+      "latitude": 14.68,
+      "longitude": 77.60
+    },
+    "hub_height_m": 120.0,
+    "annual_weibull_k": 2.14,
+    "annual_weibull_c_mps": 8.42,
+    "mean_wind_speed_mps": 7.46,
+    "source_assumptions": "Calibrated against NREL Global Wind Atlas 3.0 and National Institute of Wind Energy (NIWE) 120m mast datasets for Anantapur corridor, AP (14.68N, 77.60E). Features a strong Southwest Monsoon (June-September) prevailing from WSW (247.5 deg), W (270.0 deg), and SW (225.0 deg) accounting for 76.0% of directional energy flux. Secondary winter Northeast Monsoon flow (October-January) accounts for 14.0%, and seasonal transition shoulder periods account for 10.0%. Directional bin frequencies sum strictly to 100.00%."
+  },
+  "bins": [
+    {
+      "bin_index": 0,
+      "direction_label": "N",
+      "angle_deg": 0.0,
+      "sector_min_deg": 348.75,
+      "sector_max_deg": 11.25,
+      "frequency_pct": 2.0,
+      "weibull_k": 1.95,
+      "weibull_c_mps": 5.80,
+      "mean_speed_mps": 5.14
+    },
+    {
+      "bin_index": 1,
+      "direction_label": "NNE",
+      "angle_deg": 22.5,
+      "sector_min_deg": 11.25,
+      "sector_max_deg": 33.75,
+      "frequency_pct": 3.0,
+      "weibull_k": 2.02,
+      "weibull_c_mps": 6.40,
+      "mean_speed_mps": 5.67
+    },
+    {
+      "bin_index": 2,
+      "direction_label": "NE",
+      "angle_deg": 45.0,
+      "sector_min_deg": 33.75,
+      "sector_max_deg": 56.25,
+      "frequency_pct": 6.0,
+      "weibull_k": 2.18,
+      "weibull_c_mps": 7.80,
+      "mean_speed_mps": 6.91
+    },
+    {
+      "bin_index": 3,
+      "direction_label": "ENE",
+      "angle_deg": 67.5,
+      "sector_min_deg": 56.25,
+      "sector_max_deg": 78.75,
+      "frequency_pct": 5.0,
+      "weibull_k": 2.12,
+      "weibull_c_mps": 7.40,
+      "mean_speed_mps": 6.55
+    },
+    {
+      "bin_index": 4,
+      "direction_label": "E",
+      "angle_deg": 90.0,
+      "sector_min_deg": 78.75,
+      "sector_max_deg": 101.25,
+      "frequency_pct": 1.5,
+      "weibull_k": 1.88,
+      "weibull_c_mps": 5.20,
+      "mean_speed_mps": 4.62
+    },
+    {
+      "bin_index": 5,
+      "direction_label": "ESE",
+      "angle_deg": 112.5,
+      "sector_min_deg": 101.25,
+      "sector_max_deg": 123.75,
+      "frequency_pct": 1.0,
+      "weibull_k": 1.82,
+      "weibull_c_mps": 4.90,
+      "mean_speed_mps": 4.36
+    },
+    {
+      "bin_index": 6,
+      "direction_label": "SE",
+      "angle_deg": 135.0,
+      "sector_min_deg": 123.75,
+      "sector_max_deg": 146.25,
+      "frequency_pct": 1.0,
+      "weibull_k": 1.80,
+      "weibull_c_mps": 4.80,
+      "mean_speed_mps": 4.27
+    },
+    {
+      "bin_index": 7,
+      "direction_label": "SSE",
+      "angle_deg": 157.5,
+      "sector_min_deg": 146.25,
+      "sector_max_deg": 168.75,
+      "frequency_pct": 1.0,
+      "weibull_k": 1.85,
+      "weibull_c_mps": 5.10,
+      "mean_speed_mps": 4.53
+    },
+    {
+      "bin_index": 8,
+      "direction_label": "S",
+      "angle_deg": 180.0,
+      "sector_min_deg": 168.75,
+      "sector_max_deg": 191.25,
+      "frequency_pct": 1.5,
+      "weibull_k": 1.90,
+      "weibull_c_mps": 5.50,
+      "mean_speed_mps": 4.88
+    },
+    {
+      "bin_index": 9,
+      "direction_label": "SSW",
+      "angle_deg": 202.5,
+      "sector_min_deg": 191.25,
+      "sector_max_deg": 213.75,
+      "frequency_pct": 6.5,
+      "weibull_k": 2.10,
+      "weibull_c_mps": 7.60,
+      "mean_speed_mps": 6.73
+    },
+    {
+      "bin_index": 10,
+      "direction_label": "SW",
+      "angle_deg": 225.0,
+      "sector_min_deg": 213.75,
+      "sector_max_deg": 236.25,
+      "frequency_pct": 18.0,
+      "weibull_k": 2.22,
+      "weibull_c_mps": 9.10,
+      "mean_speed_mps": 8.06
+    },
+    {
+      "bin_index": 11,
+      "direction_label": "WSW",
+      "angle_deg": 247.5,
+      "sector_min_deg": 236.25,
+      "sector_max_deg": 258.75,
+      "frequency_pct": 25.0,
+      "weibull_k": 2.30,
+      "weibull_c_mps": 9.65,
+      "mean_speed_mps": 8.55
+    },
+    {
+      "bin_index": 12,
+      "direction_label": "W",
+      "angle_deg": 270.0,
+      "sector_min_deg": 258.75,
+      "sector_max_deg": 281.25,
+      "frequency_pct": 20.0,
+      "weibull_k": 2.25,
+      "weibull_c_mps": 9.20,
+      "mean_speed_mps": 8.15
+    },
+    {
+      "bin_index": 13,
+      "direction_label": "WNW",
+      "angle_deg": 292.5,
+      "sector_min_deg": 281.25,
+      "sector_max_deg": 303.75,
+      "frequency_pct": 6.5,
+      "weibull_k": 2.05,
+      "weibull_c_mps": 7.20,
+      "mean_speed_mps": 6.38
+    },
+    {
+      "bin_index": 14,
+      "direction_label": "NW",
+      "angle_deg": 315.0,
+      "sector_min_deg": 303.75,
+      "sector_max_deg": 326.25,
+      "frequency_pct": 1.0,
+      "weibull_k": 1.85,
+      "weibull_c_mps": 5.00,
+      "mean_speed_mps": 4.44
+    },
+    {
+      "bin_index": 15,
+      "direction_label": "NNW",
+      "angle_deg": 337.5,
+      "sector_min_deg": 326.25,
+      "sector_max_deg": 348.75,
+      "frequency_pct": 1.0,
+      "weibull_k": 1.82,
+      "weibull_c_mps": 4.90,
+      "mean_speed_mps": 4.36
+    }
+  ],
+  "sectors": [
+    {
+      "bin_index": 0,
+      "direction_label": "N",
+      "angle_deg": 0.0,
+      "sector_min_deg": 348.75,
+      "sector_max_deg": 11.25,
+      "frequency_pct": 2.0,
+      "weibull_k": 1.95,
+      "weibull_c_mps": 5.80,
+      "mean_speed_mps": 5.14
+    },
+    {
+      "bin_index": 1,
+      "direction_label": "NNE",
+      "angle_deg": 22.5,
+      "sector_min_deg": 11.25,
+      "sector_max_deg": 33.75,
+      "frequency_pct": 3.0,
+      "weibull_k": 2.02,
+      "weibull_c_mps": 6.40,
+      "mean_speed_mps": 5.67
+    },
+    {
+      "bin_index": 2,
+      "direction_label": "NE",
+      "angle_deg": 45.0,
+      "sector_min_deg": 33.75,
+      "sector_max_deg": 56.25,
+      "frequency_pct": 6.0,
+      "weibull_k": 2.18,
+      "weibull_c_mps": 7.80,
+      "mean_speed_mps": 6.91
+    },
+    {
+      "bin_index": 3,
+      "direction_label": "ENE",
+      "angle_deg": 67.5,
+      "sector_min_deg": 56.25,
+      "sector_max_deg": 78.75,
+      "frequency_pct": 5.0,
+      "weibull_k": 2.12,
+      "weibull_c_mps": 7.40,
+      "mean_speed_mps": 6.55
+    },
+    {
+      "bin_index": 4,
+      "direction_label": "E",
+      "angle_deg": 90.0,
+      "sector_min_deg": 78.75,
+      "sector_max_deg": 101.25,
+      "frequency_pct": 1.5,
+      "weibull_k": 1.88,
+      "weibull_c_mps": 5.20,
+      "mean_speed_mps": 4.62
+    },
+    {
+      "bin_index": 5,
+      "direction_label": "ESE",
+      "angle_deg": 112.5,
+      "sector_min_deg": 101.25,
+      "sector_max_deg": 123.75,
+      "frequency_pct": 1.0,
+      "weibull_k": 1.82,
+      "weibull_c_mps": 4.90,
+      "mean_speed_mps": 4.36
+    },
+    {
+      "bin_index": 6,
+      "direction_label": "SE",
+      "angle_deg": 135.0,
+      "sector_min_deg": 123.75,
+      "sector_max_deg": 146.25,
+      "frequency_pct": 1.0,
+      "weibull_k": 1.80,
+      "weibull_c_mps": 4.80,
+      "mean_speed_mps": 4.27
+    },
+    {
+      "bin_index": 7,
+      "direction_label": "SSE",
+      "angle_deg": 157.5,
+      "sector_min_deg": 146.25,
+      "sector_max_deg": 168.75,
+      "frequency_pct": 1.0,
+      "weibull_k": 1.85,
+      "weibull_c_mps": 5.10,
+      "mean_speed_mps": 4.53
+    },
+    {
+      "bin_index": 8,
+      "direction_label": "S",
+      "angle_deg": 180.0,
+      "sector_min_deg": 168.75,
+      "sector_max_deg": 191.25,
+      "frequency_pct": 1.5,
+      "weibull_k": 1.90,
+      "weibull_c_mps": 5.50,
+      "mean_speed_mps": 4.88
+    },
+    {
+      "bin_index": 9,
+      "direction_label": "SSW",
+      "angle_deg": 202.5,
+      "sector_min_deg": 191.25,
+      "sector_max_deg": 213.75,
+      "frequency_pct": 6.5,
+      "weibull_k": 2.10,
+      "weibull_c_mps": 7.60,
+      "mean_speed_mps": 6.73
+    },
+    {
+      "bin_index": 10,
+      "direction_label": "SW",
+      "angle_deg": 225.0,
+      "sector_min_deg": 213.75,
+      "sector_max_deg": 236.25,
+      "frequency_pct": 18.0,
+      "weibull_k": 2.22,
+      "weibull_c_mps": 9.10,
+      "mean_speed_mps": 8.06
+    },
+    {
+      "bin_index": 11,
+      "direction_label": "WSW",
+      "angle_deg": 247.5,
+      "sector_min_deg": 236.25,
+      "sector_max_deg": 258.75,
+      "frequency_pct": 25.0,
+      "weibull_k": 2.30,
+      "weibull_c_mps": 9.65,
+      "mean_speed_mps": 8.55
+    },
+    {
+      "bin_index": 12,
+      "direction_label": "W",
+      "angle_deg": 270.0,
+      "sector_min_deg": 258.75,
+      "sector_max_deg": 281.25,
+      "frequency_pct": 20.0,
+      "weibull_k": 2.25,
+      "weibull_c_mps": 9.20,
+      "mean_speed_mps": 8.15
+    },
+    {
+      "bin_index": 13,
+      "direction_label": "WNW",
+      "angle_deg": 292.5,
+      "sector_min_deg": 281.25,
+      "sector_max_deg": 303.75,
+      "frequency_pct": 6.5,
+      "weibull_k": 2.05,
+      "weibull_c_mps": 7.20,
+      "mean_speed_mps": 6.38
+    },
+    {
+      "bin_index": 14,
+      "direction_label": "NW",
+      "angle_deg": 315.0,
+      "sector_min_deg": 303.75,
+      "sector_max_deg": 326.25,
+      "frequency_pct": 1.0,
+      "weibull_k": 1.85,
+      "weibull_c_mps": 5.00,
+      "mean_speed_mps": 4.44
+    },
+    {
+      "bin_index": 15,
+      "direction_label": "NNW",
+      "angle_deg": 337.5,
+      "sector_min_deg": 326.25,
+      "sector_max_deg": 348.75,
+      "frequency_pct": 1.0,
+      "weibull_k": 1.82,
+      "weibull_c_mps": 4.90,
+      "mean_speed_mps": 4.36
+    }
+  ]
+}

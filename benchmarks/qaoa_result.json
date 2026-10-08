@@ -1,0 +1,14 @@
+{
+  "method": "WS-QAOA",
+  "p": 2,
+  "shots": 2048,
+  "K": 4,
+  "wind_angle_deg": 270.0,
+  "best_bitstring": "0010100000001001",
+  "best_energy": -24.469699876751,
+  "aep_gwh": 30.720,
+  "wake_loss_pct": 0.11,
+  "runtime_s": 5.45,
+  "site_name": "Anantapur Wind Corridor",
+  "qubits": 16
+}

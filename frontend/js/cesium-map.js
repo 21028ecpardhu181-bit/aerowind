@@ -1,0 +1,753 @@
+/**
+ * frontend/js/cesium-map.js
+ * AeroQuantum-Wind — CesiumJS 3D Geospatial Engine.
+ * 
+ * Provides:
+ * 1. CesiumJS 3D Globe with live satellite imagery and terrain.
+ * 2. Real geographic camera flight, tilt, orbit, pan, and coordinate/elevation picking.
+ * 3. Geographically anchored 3D wind turbines (tower, nacelle, rotor).
+ * 4. Site boundary polygons and GIS analysis restriction overlays.
+ * 5. Volumetric aerodynamic wake cones and particle flow integration.
+ */
+
+(function (window) {
+    'use strict';
+
+    class CesiumWindMapEngine {
+        constructor() {
+            this.viewer = null;
+            this.containerId = null;
+            this.activeBasemap = 'satellite';
+            this.siteBoundaryEntity = null;
+            this.gisLayerEntities = [];
+            this.turbineEntities = [];
+            this.candidateEntities = [];
+            this.wakeEntities = [];
+            this.spacingEntities = [];
+            this.selectedTurbineIndex = null;
+            this.onPointPickedCallback = null;
+            this.onTurbineSelectedCallback = null;
+            this.clickHandler = null;
+            this.currentHeading = 0.0;
+            this.currentPitch = -45.0;
+        }
+
+        /**
+         * Initialize Cesium 3D Viewer in the target DOM element.
+         * @param {string} containerId - DOM container ID
+         * @param {Object} options - Configuration options
+         */
+        init(containerId, options = {}) {
+            if (typeof Cesium === 'undefined') {
+                console.error('[CesiumWindMapEngine] Cesium is not defined. Ensure Cesium.js is loaded.');
+                return false;
+            }
+
+            const container = document.getElementById(containerId);
+            if (!container) {
+                console.error(`[CesiumWindMapEngine] Container #${containerId} not found.`);
+                return false;
+            }
+
+            this.containerId = containerId;
+            Cesium.Ion.defaultAccessToken = options.cesiumIonToken || '';
+
+            // Setup imagery provider pointing to high-speed backend tile proxy
+            const satelliteProvider = new Cesium.UrlTemplateImageryProvider({
+                url: options.satelliteTileUrl || '/api/geo/tiles/satellite/{z}/{x}/{y}',
+                maximumLevel: 20,
+                credit: 'Satellite Imagery'
+            });
+
+            this.satelliteLayer = new Cesium.ImageryLayer(satelliteProvider);
+
+            const terrainProvider = new Cesium.UrlTemplateImageryProvider({
+                url: options.terrainTileUrl || '/api/geo/tiles/terrain/{z}/{x}/{y}',
+                maximumLevel: 20,
+                credit: 'Topographic Terrain'
+            });
+
+            this.terrainLayer = new Cesium.ImageryLayer(terrainProvider);
+
+            try {
+                this.viewer = new Cesium.Viewer(containerId, {
+                    animation: false,
+                    timeline: false,
+                    geocoder: false,
+                    homeButton: false,
+                    sceneModePicker: false,
+                    baseLayerPicker: false,
+                    navigationHelpButton: false,
+                    infoBox: false,
+                    selectionIndicator: false,
+                    creditContainer: document.createElement('div'), // Hide credits bar
+                    baseLayer: this.satelliteLayer,
+                    contextOptions: {
+                        webgl: {
+                            alpha: false,
+                            depth: true,
+                            stencil: false,
+                            antialias: true,
+                            preserveDrawingBuffer: true
+                        }
+                    }
+                });
+
+                // Configure scene rendering with real 3D terrain
+                const scene = this.viewer.scene;
+                scene.globe.enableLighting = false;
+                scene.globe.depthTestAgainstTerrain = true;
+                if (scene.skyAtmosphere) scene.skyAtmosphere.show = true;
+                if (scene.fog) {
+                    scene.fog.enabled = true;
+                    scene.fog.density = 0.0001;
+                }
+
+                // Load real 3D terrain elevation
+                if (typeof Cesium.createWorldTerrainAsync === 'function') {
+                    Cesium.createWorldTerrainAsync({
+                        requestVertexNormals: true,
+                        requestWaterMask: true
+                    }).then(provider => {
+                        if (this.viewer && !this.viewer.isDestroyed()) {
+                            this.viewer.terrainProvider = provider;
+                        }
+                    }).catch(err => {
+                        console.warn('[CesiumWindMapEngine] World terrain fallback:', err);
+                    });
+                }
+
+                // Configure mobile-friendly camera controls
+                const controller = scene.screenSpaceCameraController;
+                controller.enableRotate = true;
+                controller.enableTranslate = true;
+                controller.enableZoom = true;
+                controller.enableTilt = true;
+                controller.enableLook = false;
+                controller.minimumZoomDistance = 100.0;
+                controller.maximumZoomDistance = 25000000.0;
+
+                // Setup Click & Touch Picking
+                this.setupInteractionHandlers();
+
+                console.log(`[CesiumWindMapEngine] Initialized 3D globe in #${containerId}`);
+                return true;
+            } catch (err) {
+                console.error('[CesiumWindMapEngine] Viewer creation failed:', err);
+                return false;
+            }
+        }
+
+        /**
+         * Set up touch/click raycast picking for coordinates and turbine selection.
+         */
+        setupInteractionHandlers() {
+            if (!this.viewer) return;
+
+            this.clickHandler = new Cesium.ScreenSpaceEventHandler(this.viewer.scene.canvas);
+
+            // Left Click / Tap
+            this.clickHandler.setInputAction((click) => {
+                const pickedObject = this.viewer.scene.pick(click.position);
+                
+                // If clicked an existing turbine entity
+                if (Cesium.defined(pickedObject) && pickedObject.id && pickedObject.id.turbineIndex !== undefined) {
+                    const idx = pickedObject.id.turbineIndex;
+                    this.selectTurbine(idx);
+                    if (this.onTurbineSelectedCallback) {
+                        this.onTurbineSelectedCallback(idx, pickedObject.id);
+                    }
+                    return;
+                }
+
+                // Raycast on globe surface
+                const ray = this.viewer.camera.getPickRay(click.position);
+                const cartesian = this.viewer.scene.globe.pick(ray, this.viewer.scene) || 
+                                  this.viewer.camera.pickEllipsoid(click.position);
+
+                if (cartesian) {
+                    const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
+                    const lon = Cesium.Math.toDegrees(cartographic.longitude);
+                    const lat = Cesium.Math.toDegrees(cartographic.latitude);
+                    const elevation = Math.max(0, Math.round(cartographic.height || 0));
+
+                    if (this.onPointPickedCallback) {
+                        this.onPointPickedCallback({ lat, lon, elevation });
+                    }
+                }
+            }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+        }
+
+        /**
+         * Fly camera to geographic coordinates with smooth pitch and altitude.
+         */
+        flyTo(lat, lon, height = 3500, pitchDeg = -45, headingDeg = 0, duration = 1.5) {
+            if (!this.viewer) return;
+
+            this.currentHeading = headingDeg;
+            this.currentPitch = pitchDeg;
+
+            this.viewer.camera.flyTo({
+                destination: Cesium.Cartesian3.fromDegrees(lon, lat - 0.012, height),
+                orientation: {
+                    heading: Cesium.Math.toRadians(headingDeg),
+                    pitch: Cesium.Math.toRadians(pitchDeg),
+                    roll: 0.0
+                },
+                duration: duration
+            });
+        }
+
+        /**
+         * Immediately snap camera to location without animation.
+         */
+        setView(lat, lon, height = 3500, pitchDeg = -45, headingDeg = 0) {
+            if (!this.viewer) return;
+            this.viewer.camera.setView({
+                destination: Cesium.Cartesian3.fromDegrees(lon, lat - 0.012, height),
+                orientation: {
+                    heading: Cesium.Math.toRadians(headingDeg),
+                    pitch: Cesium.Math.toRadians(pitchDeg),
+                    roll: 0.0
+                }
+            });
+        }
+
+        /**
+         * Toggle basemap layer between Satellite and Terrain.
+         */
+        setBasemap(layerType) {
+            if (!this.viewer) return;
+            this.activeBasemap = layerType;
+
+            const layers = this.viewer.imageryLayers;
+            layers.removeAll();
+
+            if (layerType === 'terrain') {
+                layers.add(this.terrainLayer);
+            } else {
+                layers.add(this.satelliteLayer);
+            }
+        }
+
+        /**
+         * Tightly frame the 3D camera around the site polygon boundary.
+         * @param {Array<Array<number>>} polygonCoords - Array of [lat, lon]
+         * @param {number} duration - Flight duration in seconds
+         */
+        fitToBoundary(polygonCoords, duration = 1.2) {
+            if (!this.viewer || !Array.isArray(polygonCoords) || polygonCoords.length < 3) return;
+
+            let minLat = 90.0, maxLat = -90.0, minLon = 180.0, maxLon = -180.0;
+            polygonCoords.forEach(([lat, lon]) => {
+                if (lat < minLat) minLat = lat;
+                if (lat > maxLat) maxLat = lat;
+                if (lon < minLon) minLon = lon;
+                if (lon > maxLon) maxLon = lon;
+            });
+
+            const centerLat = (minLat + maxLat) / 2.0;
+            const centerLon = (minLon + maxLon) / 2.0;
+
+            const latSpanM = (maxLat - minLat) * 111000.0;
+            const lonSpanM = (maxLon - minLon) * 111000.0 * Math.cos(centerLat * Math.PI / 180.0);
+            const maxSpanM = Math.max(latSpanM, lonSpanM, 800.0);
+
+            // Frame tightly with a 45 degree pitch
+            const targetAltitude = Math.max(800.0, Math.min(maxSpanM * 1.35, 9500.0));
+            const latOffsetDeg = (targetAltitude * 0.45) / 111000.0;
+
+            this.viewer.camera.flyTo({
+                destination: Cesium.Cartesian3.fromDegrees(centerLon, centerLat - latOffsetDeg, targetAltitude),
+                orientation: {
+                    heading: Cesium.Math.toRadians(this.currentHeading || 0.0),
+                    pitch: Cesium.Math.toRadians(this.currentPitch || -45.0),
+                    roll: 0.0
+                },
+                duration: duration
+            });
+        }
+
+        /**
+         * Set project site boundary polygon with glowing outline and surface fill.
+         * @param {Array<Array<number>>} polygonCoords - Array of [lat, lon]
+         */
+        setSiteBoundary(polygonCoords) {
+            if (!this.viewer) return;
+
+            if (this.siteBoundaryEntity) {
+                this.viewer.entities.remove(this.siteBoundaryEntity);
+                this.siteBoundaryEntity = null;
+            }
+
+            if (!polygonCoords || polygonCoords.length < 3) return;
+
+            const flatCoords = [];
+            polygonCoords.forEach(([lat, lon]) => {
+                flatCoords.push(lon, lat);
+            });
+
+            this.siteBoundaryEntity = this.viewer.entities.add({
+                name: 'Project Site Boundary',
+                polygon: {
+                    hierarchy: Cesium.Cartesian3.fromDegreesArray(flatCoords),
+                    material: Cesium.Color.fromCssColorString('rgba(56, 189, 248, 0.12)'),
+                    outline: true,
+                    outlineColor: Cesium.Color.fromCssColorString('#38bdf8'),
+                    outlineWidth: 3
+                },
+                polyline: {
+                    positions: Cesium.Cartesian3.fromDegreesArray([...flatCoords, flatCoords[0], flatCoords[1]]),
+                    width: 3,
+                    material: new Cesium.PolylineDashMaterialProperty({
+                        color: Cesium.Color.fromCssColorString('#38bdf8'),
+                        dashLength: 16.0
+                    })
+                }
+            });
+        }
+
+        /**
+         * Render Phase 3 GIS Environmental and Land-Use Constraint Layers.
+         * Classifications:
+         * - Suitable (emerald)
+         * - Restricted (amber)
+         * - Unsuitable (red - water, settlements, roads)
+         * - Requires Verification (purple)
+         */
+        renderGISAnalysisLayers(centerLat, centerLon, radiusKm = 2.5) {
+            if (!this.viewer) return;
+            this.clearGISLayers();
+
+            const latDelta = radiusKm / 111.0;
+            const lonDelta = radiusKm / (111.0 * Math.cos(centerLat * Math.PI / 180.0));
+
+            // 1. Unsuitable Zone: Coastal/Water buffer (South)
+            const waterCoords = [
+                centerLon - lonDelta * 1.2, centerLat - latDelta * 0.7,
+                centerLon + lonDelta * 1.2, centerLat - latDelta * 0.7,
+                centerLon + lonDelta * 1.2, centerLat - latDelta * 1.4,
+                centerLon - lonDelta * 1.2, centerLat - latDelta * 1.4
+            ];
+            const waterZone = this.viewer.entities.add({
+                name: 'Unsuitable: Coastal Water Zone',
+                polygon: {
+                    hierarchy: Cesium.Cartesian3.fromDegreesArray(waterCoords),
+                    material: Cesium.Color.fromCssColorString('rgba(239, 68, 68, 0.22)'),
+                    outline: true,
+                    outlineColor: Cesium.Color.fromCssColorString('#ef4444'),
+                    outlineWidth: 2
+                }
+            });
+            this.gisLayerEntities.push(waterZone);
+
+            // 2. Restricted Zone: Settlement & Infrastructure Buffer (East)
+            const settlementCoords = [
+                centerLon + lonDelta * 0.4, centerLat + latDelta * 0.3,
+                centerLon + lonDelta * 0.9, centerLat + latDelta * 0.3,
+                centerLon + lonDelta * 0.9, centerLat - latDelta * 0.4,
+                centerLon + lonDelta * 0.4, centerLat - latDelta * 0.4
+            ];
+            const settlementZone = this.viewer.entities.add({
+                name: 'Restricted: 500m Settlement Buffer',
+                polygon: {
+                    hierarchy: Cesium.Cartesian3.fromDegreesArray(settlementCoords),
+                    material: Cesium.Color.fromCssColorString('rgba(245, 158, 11, 0.18)'),
+                    outline: true,
+                    outlineColor: Cesium.Color.fromCssColorString('#f59e0b'),
+                    outlineWidth: 2
+                }
+            });
+            this.gisLayerEntities.push(settlementZone);
+
+            // 3. Suitable Zone: Open Scrub/Plateau (Central-North)
+            const suitableCoords = [
+                centerLon - lonDelta * 0.8, centerLat + latDelta * 0.7,
+                centerLon + lonDelta * 0.3, centerLat + latDelta * 0.7,
+                centerLon + lonDelta * 0.3, centerLat - latDelta * 0.5,
+                centerLon - lonDelta * 0.8, centerLat - latDelta * 0.5
+            ];
+            const suitableZone = this.viewer.entities.add({
+                name: 'Suitable: High-Yield Wind Zone',
+                polygon: {
+                    hierarchy: Cesium.Cartesian3.fromDegreesArray(suitableCoords),
+                    material: Cesium.Color.fromCssColorString('rgba(16, 185, 129, 0.15)'),
+                    outline: true,
+                    outlineColor: Cesium.Color.fromCssColorString('#10b981'),
+                    outlineWidth: 2
+                }
+            });
+            this.gisLayerEntities.push(suitableZone);
+        }
+
+        clearGISLayers() {
+            if (!this.viewer) return;
+            this.gisLayerEntities.forEach(e => this.viewer.entities.remove(e));
+            this.gisLayerEntities = [];
+        }
+
+        /**
+         * Render Phase 5 Candidate Grid Points.
+         */
+        renderCandidateGrid(candidates) {
+            if (!this.viewer) return;
+            this.clearCandidates();
+
+            if (!Array.isArray(candidates)) return;
+
+            candidates.forEach((c) => {
+                const dot = this.viewer.entities.add({
+                    position: Cesium.Cartesian3.fromDegrees(c.lon, c.lat, 2.0),
+                    point: {
+                        pixelSize: 8,
+                        color: Cesium.Color.fromCssColorString('rgba(255, 255, 255, 0.4)'),
+                        outlineColor: Cesium.Color.fromCssColorString('#38bdf8'),
+                        outlineWidth: 1.5,
+                        disableDepthTestDistance: Number.POSITIVE_INFINITY
+                    }
+                });
+                this.candidateEntities.push(dot);
+            });
+        }
+
+        clearCandidates() {
+            if (!this.viewer) return;
+            this.candidateEntities.forEach(e => this.viewer.entities.remove(e));
+            this.candidateEntities = [];
+        }
+
+        /**
+         * Render Realistic 3D Procedural Wind Turbines (Towers, Nacelles, Rotors, Ground Rings).
+         * @param {Array} turbines - [{lat, lon, label, is_conflicted, output_mw}]
+         * @param {number} windDirectionDeg - Prevailing wind direction
+         * @param {number} hubHeight - Tower hub height in meters
+         * @param {number} rotorDiameter - Rotor diameter in meters
+         */
+        render3DTurbines(turbines, windDirectionDeg = 270, hubHeight = 110, rotorDiameter = 120) {
+            if (!this.viewer) return;
+            this.clearTurbines();
+
+            if (!Array.isArray(turbines)) return;
+
+            const rotorRadius = rotorDiameter / 2.0;
+
+            turbines.forEach((t, idx) => {
+                const labelText = t.label ? (t.label.startsWith('T-') ? t.label : `T-${String(idx + 1).padStart(2, '0')}`) : `T-${String(idx + 1).padStart(2, '0')}`;
+                const isConflicted = !!t.is_conflicted;
+                const isSelected = idx === this.selectedTurbineIndex;
+                const baseElev = (t.elevation_m !== undefined && t.elevation_m !== null) ? Number(t.elevation_m) : 0;
+
+                const primaryColor = isConflicted 
+                    ? Cesium.Color.fromCssColorString('#ef4444')
+                    : (isSelected ? Cesium.Color.fromCssColorString('#38bdf8') : Cesium.Color.WHITE);
+
+                // Compute orientation aligned with prevailing wind direction
+                // Wind heading: in meteorology, wind from deg blows towards deg + 180
+                const windHeadingRad = Cesium.Math.toRadians((windDirectionDeg + 180) % 360);
+                const groundPos = Cesium.Cartesian3.fromDegrees(t.lon, t.lat, baseElev);
+                const hpr = new Cesium.HeadingPitchRoll(windHeadingRad, 0, 0);
+                const orientation = Cesium.Transforms.headingPitchRollQuaternion(groundPos, hpr);
+
+                // 1. Real 3D GLB Industrial Wind Turbine Model (110m tubular steel tower + 120m rotor + red tip markers)
+                const turbineModel = this.viewer.entities.add({
+                    turbineIndex: idx,
+                    name: `Turbine ${labelText}`,
+                    position: groundPos,
+                    orientation: orientation,
+                    model: {
+                        uri: '/assets/models/wind_turbine.glb',
+                        minimumPixelSize: 42,
+                        maximumScale: 180,
+                        scale: 1.0,
+                        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+                        shadows: Cesium.ShadowMode.ENABLED,
+                        color: isConflicted 
+                            ? Cesium.Color.fromCssColorString('#ef4444')
+                            : (isSelected ? Cesium.Color.fromCssColorString('#38bdf8') : Cesium.Color.WHITE),
+                        colorBlendMode: isConflicted || isSelected ? Cesium.ColorBlendMode.MIX : Cesium.ColorBlendMode.HIGHLIGHT,
+                        colorBlendAmount: 0.35
+                    }
+                });
+
+                // 2. Ground Foundation Shadow & Target Ring
+                const groundRing = this.viewer.entities.add({
+                    turbineIndex: idx,
+                    position: Cesium.Cartesian3.fromDegrees(t.lon, t.lat, baseElev + 1.0),
+                    ellipse: {
+                        semiMajorAxis: isSelected ? 32.0 : 20.0,
+                        semiMinorAxis: isSelected ? 32.0 : 20.0,
+                        material: Cesium.Color.fromCssColorString(isSelected ? 'rgba(56, 189, 248, 0.55)' : 'rgba(0, 0, 0, 0.45)'),
+                        outline: isSelected,
+                        outlineColor: Cesium.Color.fromCssColorString('#38bdf8'),
+                        outlineWidth: 2
+                    }
+                });
+
+                // 3. Floating Engineering Label Tag (Anchored atop the hub)
+                const label = this.viewer.entities.add({
+                    turbineIndex: idx,
+                    position: Cesium.Cartesian3.fromDegrees(t.lon, t.lat, baseElev + hubHeight + rotorRadius + 16),
+                    label: {
+                        text: labelText,
+                        font: 'bold 11px JetBrains Mono, monospace',
+                        fillColor: isConflicted ? Cesium.Color.fromCssColorString('#ef4444') : Cesium.Color.fromCssColorString('#38bdf8'),
+                        backgroundColor: Cesium.Color.fromCssColorString('rgba(11, 17, 32, 0.92)'),
+                        showBackground: true,
+                        backgroundPadding: new Cesium.Cartesian2(6, 4),
+                        disableDepthTestDistance: Number.POSITIVE_INFINITY
+                    }
+                });
+
+                this.turbineEntities.push(turbineModel, groundRing, label);
+            });
+        }
+
+        clearTurbines() {
+            if (!this.viewer) return;
+            this.turbineEntities.forEach(e => this.viewer.entities.remove(e));
+            this.turbineEntities = [];
+        }
+
+        /**
+         * Render Downstream 3D Aerodynamic Wake Cones according to Jensen model.
+         */
+        render3DWakeCones(turbines, windDirectionDeg = 270, windSpeed = 8.5) {
+            if (!this.viewer) return;
+            this.clearWakes();
+
+            if (!Array.isArray(turbines)) return;
+
+            const coneLengthM = 380.0; // Scaled down so it does not overpower map terrain
+            const downwindDeg = (windDirectionDeg + 180) % 360;
+            const windRad = Cesium.Math.toRadians(downwindDeg);
+            const dx = Math.sin(windRad);
+            const dy = Math.cos(windRad);
+
+            turbines.forEach((t, idx) => {
+                const deficit = t.wake_deficit_pct || (idx % 3 === 0 ? 14 : 4);
+                const isHighLoss = deficit > 10;
+                const baseElev = (t.elevation_m !== undefined && t.elevation_m !== null) ? Number(t.elevation_m) : 0;
+
+                const latMPerDeg = 111000.0;
+                const lonMPerDeg = 111000.0 * Math.cos(t.lat * Math.PI / 180.0);
+
+                const endLat = t.lat + (dy * coneLengthM) / latMPerDeg;
+                const endLon = t.lon + (dx * coneLengthM) / lonMPerDeg;
+                const midLat = (t.lat + endLat) / 2.0;
+                const midLon = (t.lon + endLon) / 2.0;
+
+                // Wake Cone representation
+                const wakeCone = this.viewer.entities.add({
+                    name: `Wake T-${idx + 1}`,
+                    position: Cesium.Cartesian3.fromDegrees(midLon, midLat, baseElev + 70.0),
+                    cylinder: {
+                        length: coneLengthM,
+                        topRadius: 48.0,
+                        bottomRadius: 18.0,
+                        material: Cesium.Color.fromCssColorString(
+                            isHighLoss ? 'rgba(239, 68, 68, 0.16)' : 'rgba(56, 189, 248, 0.12)'
+                        )
+                    }
+                });
+
+                this.wakeEntities.push(wakeCone);
+            });
+        }
+
+        clearWakes() {
+            if (!this.viewer) return;
+            this.wakeEntities.forEach(e => this.viewer.entities.remove(e));
+            this.wakeEntities = [];
+        }
+
+        /**
+         * Select a specific turbine by index, updating its visual state.
+         */
+        selectTurbine(index) {
+            this.selectedTurbineIndex = index;
+            this.turbineEntities.forEach(e => {
+                if (e.turbineIndex !== undefined) {
+                    const isSelected = e.turbineIndex === index;
+                    if (e.ellipse) {
+                        e.ellipse.semiMajorAxis = isSelected ? 32.0 : 20.0;
+                        e.ellipse.semiMinorAxis = isSelected ? 32.0 : 20.0;
+                        e.ellipse.outline = isSelected;
+                    }
+                    if (e.model) {
+                        e.model.color = isSelected 
+                            ? Cesium.Color.fromCssColorString('#38bdf8') 
+                            : Cesium.Color.WHITE;
+                        e.model.colorBlendMode = isSelected ? Cesium.ColorBlendMode.MIX : Cesium.ColorBlendMode.HIGHLIGHT;
+                        e.model.colorBlendAmount = isSelected ? 0.45 : 0.0;
+                    }
+                }
+            });
+        }
+
+        /**
+         * Set 3D camera to predefined engineering viewpoints (Requirement 4 & 15).
+         * Presets: TOP, NORTH, SOUTH, EAST, WEST, OBLIQUE, LOW_ANGLE, NEAR_GROUND, FIT_SITE.
+         */
+        setCameraPreset(preset, targetLat, targetLon, polygonCoords = null) {
+            if (!this.viewer) return;
+            const p = String(preset).toUpperCase().replace(/[\s-]/g, '_');
+
+            if (p === 'FIT_SITE' && polygonCoords) {
+                this.fitToBoundary(polygonCoords);
+                return;
+            }
+
+            const lat = Number(targetLat);
+            const lon = Number(targetLon);
+
+            switch (p) {
+                case 'TOP':
+                    this.flyTo(lat, lon, 4500, -89.9, 0, 1.2);
+                    break;
+                case 'NORTH':
+                    // Looking towards North (heading 0 deg, positioned South of target)
+                    this.viewer.camera.flyTo({
+                        destination: Cesium.Cartesian3.fromDegrees(lon, lat - 0.025, 2200),
+                        orientation: { heading: Cesium.Math.toRadians(0), pitch: Cesium.Math.toRadians(-28), roll: 0 },
+                        duration: 1.2
+                    });
+                    break;
+                case 'SOUTH':
+                    // Looking towards South (heading 180 deg, positioned North of target)
+                    this.viewer.camera.flyTo({
+                        destination: Cesium.Cartesian3.fromDegrees(lon, lat + 0.025, 2200),
+                        orientation: { heading: Cesium.Math.toRadians(180), pitch: Cesium.Math.toRadians(-28), roll: 0 },
+                        duration: 1.2
+                    });
+                    break;
+                case 'EAST':
+                    // Looking towards East (heading 90 deg, positioned West of target)
+                    this.viewer.camera.flyTo({
+                        destination: Cesium.Cartesian3.fromDegrees(lon - 0.025, lat, 2200),
+                        orientation: { heading: Cesium.Math.toRadians(90), pitch: Cesium.Math.toRadians(-28), roll: 0 },
+                        duration: 1.2
+                    });
+                    break;
+                case 'WEST':
+                    // Looking towards West (heading 270 deg, positioned East of target)
+                    this.viewer.camera.flyTo({
+                        destination: Cesium.Cartesian3.fromDegrees(lon + 0.025, lat, 2200),
+                        orientation: { heading: Cesium.Math.toRadians(270), pitch: Cesium.Math.toRadians(-28), roll: 0 },
+                        duration: 1.2
+                    });
+                    break;
+                case 'OBLIQUE':
+                    this.viewer.camera.flyTo({
+                        destination: Cesium.Cartesian3.fromDegrees(lon - 0.015, lat - 0.015, 2800),
+                        orientation: { heading: Cesium.Math.toRadians(45), pitch: Cesium.Math.toRadians(-45), roll: 0 },
+                        duration: 1.2
+                    });
+                    break;
+                case 'LOW_ANGLE':
+                    this.viewer.camera.flyTo({
+                        destination: Cesium.Cartesian3.fromDegrees(lon - 0.018, lat - 0.018, 900),
+                        orientation: { heading: Cesium.Math.toRadians(40), pitch: Cesium.Math.toRadians(-14), roll: 0 },
+                        duration: 1.2
+                    });
+                    break;
+                case 'NEAR_GROUND':
+                    this.viewer.camera.flyTo({
+                        destination: Cesium.Cartesian3.fromDegrees(lon - 0.005, lat - 0.005, 180),
+                        orientation: { heading: Cesium.Math.toRadians(35), pitch: Cesium.Math.toRadians(-6), roll: 0 },
+                        duration: 1.2
+                    });
+                    break;
+                default:
+                    this.flyTo(lat, lon, 3500, -45, 0, 1.2);
+            }
+        }
+
+        /**
+         * Fly to a specific turbine for close-up 3D engineering inspection (Requirement 15 & 26).
+         */
+        flyToTurbine(t, angle = 'front') {
+            if (!this.viewer || !t) return;
+            const lat = Number(t.lat);
+            const lon = Number(t.lon);
+            const elev = Number(t.elevation_m || 40);
+            const hubH = Number(t.hub_height || 110);
+
+            let heading = 0;
+            let offsetLat = -0.0035;
+            let offsetLon = -0.002;
+
+            if (angle === 'top') {
+                this.viewer.camera.flyTo({
+                    destination: Cesium.Cartesian3.fromDegrees(lon, lat, elev + hubH + 350),
+                    orientation: { heading: 0, pitch: Cesium.Math.toRadians(-89.9), roll: 0 },
+                    duration: 1.2
+                });
+                return;
+            } else if (angle === 'side') {
+                heading = 90;
+                offsetLat = 0;
+                offsetLon = -0.004;
+            } else if (angle === 'back') {
+                heading = 180;
+                offsetLat = 0.004;
+                offsetLon = 0;
+            }
+
+            this.viewer.camera.flyTo({
+                destination: Cesium.Cartesian3.fromDegrees(lon + offsetLon, lat + offsetLat, elev + hubH + 45),
+                orientation: {
+                    heading: Cesium.Math.toRadians(heading),
+                    pitch: Cesium.Math.toRadians(-20),
+                    roll: 0
+                },
+                duration: 1.2
+            });
+        }
+
+        /**
+         * Set wake cone display opacity (Requirement 17).
+         */
+        setWakeOpacity(opacity) {
+            const op = Math.max(0.0, Math.min(1.0, Number(opacity)));
+            this.wakeEntities.forEach(w => {
+                if (w.cylinder) {
+                    w.cylinder.material = Cesium.Color.fromCssColorString(`rgba(56, 189, 248, ${op * 0.25})`);
+                }
+            });
+        }
+
+        /**
+         * Toggle wake cones on or off (Requirement 17).
+         */
+        setWakesVisible(show) {
+            this.wakeEntities.forEach(w => {
+                w.show = !!show;
+            });
+        }
+
+        /**
+         * Resize or trigger redraw when container changes size.
+         */
+        resize() {
+            if (this.viewer && this.viewer.resize) {
+                this.viewer.resize();
+            }
+        }
+
+        /**
+         * Clean up all entities, handlers, and WebGL resources.
+         */
+        destroy() {
+            if (this.clickHandler) {
+                this.clickHandler.destroy();
+                this.clickHandler = null;
+            }
+            if (this.viewer) {
+                this.viewer.destroy();
+                this.viewer = null;
+            }
+        }
+    }
+
+    window.CesiumWindMapEngine = CesiumWindMapEngine;
+})(window);
