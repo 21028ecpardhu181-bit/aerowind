@@ -71,22 +71,37 @@ class OverpassClient:
         """
         cache_key = self._get_cache_key(center_lat, center_lon, radius_km)
 
-        # 1. Check SQLite cache
+        # 1. Check SQLite cache (Exact key match)
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT features_json FROM osm_exclusion_cache WHERE cache_key = ?", (cache_key,))
         row = cursor.fetchone()
         if row:
-            conn.close()
             try:
                 cached = json.loads(row[0])
-                # If cached has fake cluster or 0 features, ignore and re-fetch real data
                 if not any(b.get("id") == "osm_settlement_cluster" for b in cached.get("features", {}).get("buildings", [])):
-                    if cached.get("counts", {}).get("total_features", 0) > 0:
-                        return cached
+                    conn.close()
+                    return cached
             except Exception:
                 pass
-        conn.close()
+
+        # 1b. Check SQLite cache (Spatial coverage: if an existing cached query encloses the requested area)
+        try:
+            cursor.execute("SELECT center_lat, center_lon, radius_km, features_json FROM osm_exclusion_cache")
+            all_rows = cursor.fetchall()
+            conn.close()
+            cos_lat = max(0.1, math.cos(math.radians(center_lat)))
+            for r_lat, r_lon, r_rad, r_json in all_rows:
+                dist_km = math.hypot((center_lat - r_lat) * 111.0, (center_lon - r_lon) * 111.0 * cos_lat)
+                if dist_km + radius_km <= r_rad + 0.2:
+                    cached = json.loads(r_json)
+                    if not any(b.get("id") == "osm_settlement_cluster" for b in cached.get("features", {}).get("buildings", [])):
+                        return cached
+        except Exception:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
         # 2. Build Overpass Bounding Box: [south, west, north, east]
         d_lat = radius_km / 111.0
@@ -101,21 +116,19 @@ class OverpassClient:
         bbox_str = f"{south:.4f},{west:.4f},{north:.4f},{east:.4f}"
 
         # Overpass QL query: includes settlement places, residential landuse, buildings, highways, powerlines, and water
-        overpass_ql = f"""
-        [out:json][timeout:6];
-        (
-          node["place"~"city|town|suburb|village|hamlet|isolated_dwelling"]({bbox_str});
-          way["landuse"~"residential|commercial|industrial|construction"]({bbox_str});
-          relation["landuse"~"residential|commercial|industrial"]({bbox_str});
-          way["building"]({bbox_str});
-          way["highway"~"motorway|trunk|primary|secondary|tertiary|residential"]({bbox_str});
-          way["power"="line"]({bbox_str});
-          node["power"="tower"]({bbox_str});
-          way["waterway"]({bbox_str});
-          way["natural"="water"]({bbox_str});
-        );
-        out geom qt 150;
-        """
+        overpass_ql = (
+            "[out:json][timeout:6]; ("
+            f'node["place"~"city|town|suburb|village|hamlet|isolated_dwelling"]({bbox_str}); '
+            f'way["landuse"~"residential|commercial|industrial|construction"]({bbox_str}); '
+            f'relation["landuse"~"residential|commercial|industrial"]({bbox_str}); '
+            f'way["building"]({bbox_str}); '
+            f'way["highway"~"motorway|trunk|primary|secondary|tertiary|residential"]({bbox_str}); '
+            f'way["power"="line"]({bbox_str}); '
+            f'node["power"="tower"]({bbox_str}); '
+            f'way["waterway"]({bbox_str}); '
+            f'way["natural"="water"]({bbox_str}); '
+            "); out geom qt 150;"
+        )
 
         buildings: List[Dict[str, Any]] = []
         powerlines: List[Dict[str, Any]] = []
@@ -280,12 +293,12 @@ class OverpassClient:
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
-            cursor.execute(
-                """INSERT OR REPLACE INTO osm_exclusion_cache 
-                   (cache_key, center_lat, center_lon, radius_km, features_json) 
-                   VALUES (?, ?, ?, ?, ?)""",
-                (cache_key, center_lat, center_lon, radius_km, json.dumps(result)),
+            query = (
+                "INSERT OR REPLACE INTO osm_exclusion_cache "
+                "(cache_key, center_lat, center_lon, radius_km, features_json) "
+                "VALUES (?, ?, ?, ?, ?)"
             )
+            cursor.execute(query, (cache_key, center_lat, center_lon, radius_km, json.dumps(result)))
             conn.commit()
             conn.close()
         except Exception:

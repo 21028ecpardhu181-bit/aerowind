@@ -24,6 +24,7 @@ interface Screen3LayoutProps {
   layoutData: LayoutAnalysisData;
   onLaunchOptimize: () => void;
   onBack: () => void;
+  onGenerateLayout?: () => void;
   solverEngine?: OptimizationEngineType;
   onSelectSolverEngine?: (engine: OptimizationEngineType) => void;
 }
@@ -39,6 +40,7 @@ export const Screen3Layout: React.FC<Screen3LayoutProps> = ({
   layoutData,
   onLaunchOptimize,
   onBack,
+  onGenerateLayout,
   solverEngine = 'aer_qaoa',
   onSelectSolverEngine,
 }) => {
@@ -79,7 +81,8 @@ export const Screen3Layout: React.FC<Screen3LayoutProps> = ({
   const polygonLayerRef = useRef<any>(null);
 
   // Guarantee real engineering turbine placement without manufacturing fake turbines
-  const isSiteUnsuitable = Boolean(layoutData.site_unsuitable || (layoutData.turbines && layoutData.turbines.length === 0));
+  const isSiteUnsuitable = Boolean(layoutData.site_unsuitable);
+  const isLayoutPending = !layoutData.site_unsuitable && (!layoutData.turbines || layoutData.turbines.length === 0);
   const baseTurbines = (layoutData.turbines && layoutData.turbines.length > 0) ? layoutData.turbines : [];
   const turbines = useMemo(
     () => ensureTurbinesInsideBoundary(baseTurbines, site.boundary, site.lat, site.lon),
@@ -123,14 +126,34 @@ export const Screen3Layout: React.FC<Screen3LayoutProps> = ({
         maxZoom: 20,
       });
 
-      // High-Resolution Satellite Tiles via local proxy cache
-      L.tileLayer(
-        '/api/geo/tiles/satellite/{z}/{x}/{y}',
+      // High-Resolution Satellite & Street Layers (Multi-CDN Resilient)
+      const satellite = L.tileLayer(
+        'https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
         {
-          maxZoom: 19,
-          attribution: 'Google / Esri Satellite',
+          subdomains: ['0', '1', '2', '3'],
+          maxZoom: 20,
+          maxNativeZoom: 19,
+          attribution: 'Imagery © Google Hybrid Satellite',
         }
-      ).addTo(map);
+      );
+
+      const streetFallback = L.tileLayer(
+        'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+        {
+          subdomains: 'abcd',
+          maxZoom: 19,
+          attribution: '© OpenStreetMap contributors © CARTO',
+        }
+      );
+
+      satellite.on('tileerror', () => {
+        if (!map._hasFallbackLayer) {
+          map._hasFallbackLayer = true;
+          streetFallback.addTo(map);
+        }
+      });
+
+      satellite.addTo(map);
 
       L.control.scale({ position: 'bottomleft', metric: true, imperial: false }).addTo(map);
       mapRef.current = map;
@@ -343,7 +366,7 @@ export const Screen3Layout: React.FC<Screen3LayoutProps> = ({
   };
 
   return (
-    <div id="screen-3-container" className="relative w-full h-[calc(100dvh-53px)] overflow-hidden flex flex-col bg-slate-100">
+    <div id="screen-3-container" className="relative w-full h-full overflow-hidden flex flex-col bg-slate-100">
       
       {/* ── TOP FLOATING CONTROL BAR ────────────────────────────── */}
       <div className="absolute top-2 left-2 right-2 sm:top-3 sm:left-3 sm:right-3 z-30 flex items-center justify-between pointer-events-none">
@@ -500,7 +523,7 @@ export const Screen3Layout: React.FC<Screen3LayoutProps> = ({
       {/* ── BOTTOM FLOATING LAYOUT TELEMETRY CARD ────────────────── */}
       <aside
         id="screen-3-sheet"
-        className={`absolute bottom-20 left-4 right-4 md:bottom-4 md:left-6 md:right-auto md:max-w-md z-20 pointer-events-auto transition-all duration-300 ${
+        className={`absolute bottom-20 left-4 right-4 md:bottom-4 md:left-6 md:right-auto md:max-w-md md:max-h-[calc(100vh-100px)] overflow-y-auto z-20 pointer-events-auto transition-all duration-300 ${
           isSheetCollapsed ? 'translate-y-[150%] opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'
         }`}
       >
@@ -512,17 +535,29 @@ export const Screen3Layout: React.FC<Screen3LayoutProps> = ({
           >
             <div>
               <h3 className="text-xs font-bold text-slate-900 leading-tight">
-                {isSiteUnsuitable ? 'Geospatial Feasibility Assessment' : 'Baseline Layout Simulation'}
+                {isSiteUnsuitable
+                  ? 'Geospatial Feasibility Assessment'
+                  : isLayoutPending
+                  ? 'Micro-Siting Analysis Required'
+                  : 'Baseline Layout Simulation'}
               </h3>
               <p className="text-[11px] text-slate-500">
-                {isSiteUnsuitable ? 'IEC 61400 setback & physical buildability mask' : 'Micro-siting & analytical Jensen wake model'}
+                {isSiteUnsuitable
+                  ? 'IEC 61400 setback & physical buildability mask'
+                  : isLayoutPending
+                  ? 'Candidate position generation pending for this site'
+                  : 'Micro-siting & analytical Jensen wake model'}
               </p>
             </div>
             <div className="flex items-center gap-2">
               <span className={`text-[10px] font-mono px-2 py-0.5 rounded-md font-bold border ${
-                isSiteUnsuitable ? 'bg-rose-100 text-rose-900 border-rose-300' : 'bg-amber-100 text-amber-900 border-amber-300'
+                isSiteUnsuitable
+                  ? 'bg-rose-100 text-rose-900 border-rose-300'
+                  : isLayoutPending
+                  ? 'bg-blue-100 text-blue-900 border-blue-300'
+                  : 'bg-amber-100 text-amber-900 border-amber-300'
               }`}>
-                {isSiteUnsuitable ? 'Constrained' : 'Feasible'}
+                {isSiteUnsuitable ? 'Constrained' : isLayoutPending ? 'Pending' : 'Feasible'}
               </span>
               <button
                 id="btn-s3-hide-panel"
@@ -538,7 +573,17 @@ export const Screen3Layout: React.FC<Screen3LayoutProps> = ({
           </div>
 
           {/* Unsuitable Alert or Metrics Grid */}
-          {isSiteUnsuitable ? (
+          {isLayoutPending ? (
+            <div className="p-3.5 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-950 flex flex-col gap-2">
+              <div className="flex items-center gap-2 font-bold text-blue-900">
+                <ShieldCheck className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                <span>Micro-siting analysis required</span>
+              </div>
+              <p className="text-[11px] text-slate-600 leading-relaxed">
+                Click below to evaluate terrain slope, setbacks, and generate candidate turbine positions within the concession boundary.
+              </p>
+            </div>
+          ) : isSiteUnsuitable ? (
             <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-950 flex flex-col gap-1.5">
               <div className="flex items-center gap-2 font-black text-rose-800">
                 <AlertTriangle className="w-4 h-4 text-rose-600 flex-shrink-0" />
@@ -660,6 +705,20 @@ export const Screen3Layout: React.FC<Screen3LayoutProps> = ({
               </button>
             </div>
 
+            {/* Engineering Engine Description */}
+            <div className="text-[10px] text-slate-600 bg-slate-50 p-2 rounded-xl border border-slate-200/70 flex flex-col gap-0.5">
+              <span className="font-bold text-slate-800">
+                {solverEngine === 'classical' && 'Classical QUBO / Heuristic Annealing'}
+                {solverEngine === 'aer_qaoa' && 'Warm-Started QAOA (Qiskit Aer Simulator)'}
+                {solverEngine === 'ibm_quantum' && 'IBM Quantum Physical Hardware'}
+              </span>
+              <span>
+                {solverEngine === 'classical' && 'Solves binary quadratic layout constraints on classical CPU. Classical preprocessing enforces setback buffers and spacing.'}
+                {solverEngine === 'aer_qaoa' && 'Simulation on CPU using Qiskit Aer statevector. Continuous relaxation angles warm-start the quantum circuit without hardware noise.'}
+                {solverEngine === 'ibm_quantum' && 'Dispatches jobs to IBM Quantum cloud hardware queue. If credentials are unset or queue is busy, falls back gracefully to Aer.'}
+              </span>
+            </div>
+
             {/* Hardware Unavailable Warning & Fallback */}
             {solverEngine === 'ibm_quantum' && !hardwareStatus.available && (
               <div id="ibm-hardware-warning" className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-950 flex flex-col gap-1.5">
@@ -687,11 +746,19 @@ export const Screen3Layout: React.FC<Screen3LayoutProps> = ({
             id="btn-screen3-optimize"
             variant="energy"
             size="md"
-            onClick={isSiteUnsuitable ? onBack : onLaunchOptimize}
+            onClick={
+              isLayoutPending
+                ? (onGenerateLayout || onBack)
+                : isSiteUnsuitable
+                ? onBack
+                : onLaunchOptimize
+            }
             className="w-full bg-[#FFD21F] hover:bg-[#F2C50F] text-slate-950 font-black py-3 mt-1 shadow-md text-xs"
           >
             <span>
-              {isSiteUnsuitable
+              {isLayoutPending
+                ? 'Generate Micro-Siting Layout'
+                : isSiteUnsuitable
                 ? 'Select Feasible Rural Site'
                 : solverEngine === 'classical'
                 ? 'Run Classical QUBO Optimization'

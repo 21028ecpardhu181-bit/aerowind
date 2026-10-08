@@ -70,12 +70,16 @@ export const Screen2Config: React.FC<Screen2ConfigProps> = ({
 
   // Synchronize internal state when config prop changes
   useEffect(() => {
-    setTurbineCount(config.turbineCount);
-    setRotorDiam(config.rotorDiameter);
-    setHubHeight(config.hubHeight);
-    setRatedPower(config.ratedPowerKw);
-    setWindDir(config.windDirectionDeg);
-    setSpacingD(config.spacingMultiplierD);
+    if (config.model) setModel(config.model);
+    if (config.turbineCount !== undefined) setTurbineCount(config.turbineCount);
+    if (config.rotorDiameter !== undefined) setRotorDiam(config.rotorDiameter);
+    if (config.hubHeight !== undefined) setHubHeight(config.hubHeight);
+    if (config.ratedPowerKw !== undefined) setRatedPower(config.ratedPowerKw);
+    if (config.windDirectionDeg !== undefined) setWindDir(config.windDirectionDeg);
+    if (config.spacingMultiplierD !== undefined) setSpacingD(config.spacingMultiplierD);
+    if (config.wakeDecay !== undefined) setWakeDecay(config.wakeDecay);
+    if (config.quboLambda !== undefined) setQuboLambda(config.quboLambda);
+    if (config.gridResolution !== undefined) setGridRes(config.gridResolution);
     if (config.foundationType) setFoundationType(config.foundationType);
   }, [config]);
 
@@ -754,19 +758,6 @@ export const Screen2Config: React.FC<Screen2ConfigProps> = ({
             </>
           )}
         </Button>
-
-        {/* ── DEDICATED ENGINEERING MICRO-SITING LOADING MODAL ── */}
-        <InitialLayoutLoadingModal
-          isOpen={Boolean(isGeneratingLayout || generationError)}
-          turbineCount={turbineCount}
-          siteName={site.shortName || site.name.split(',')[0] || 'Selected Concession'}
-          error={generationError || null}
-          onRetry={() => {
-            if (onRetryGeneration) onRetryGeneration();
-            else onGenerateLayout();
-          }}
-          onCancel={onClearGenerationError}
-        />
       </div>
     </div>
   );

@@ -40,14 +40,16 @@ export const InitialLayoutLoadingModal: React.FC<InitialLayoutLoadingModalProps>
     return `${mins}:${secs}`;
   };
 
+  // Dynamic stage progression matching engineering pipeline phases
+  const currentStageIndex = Math.min(6, Math.max(0, Math.floor(elapsed * 1.2)));
   const PIPELINE_STAGES = [
-    { id: 1, label: 'Site boundary', status: 'done' },
-    { id: 2, label: 'Terrain & elevation', status: 'done' },
-    { id: 3, label: 'Environmental & infrastructure exclusions', status: 'active' },
-    { id: 4, label: 'Wind resource', status: 'pending' },
-    { id: 5, label: 'Turbine candidate generation', status: 'pending' },
-    { id: 6, label: 'Engineering constraint validation', status: 'pending' },
-    { id: 7, label: 'Initial layout preparation', status: 'pending' },
+    { id: 1, label: 'Site boundary', status: currentStageIndex > 0 ? 'done' : 'active' },
+    { id: 2, label: 'Terrain & elevation', status: currentStageIndex > 1 ? 'done' : currentStageIndex === 1 ? 'active' : 'pending' },
+    { id: 3, label: 'Environmental & infrastructure exclusions', status: currentStageIndex > 2 ? 'done' : currentStageIndex === 2 ? 'active' : 'pending' },
+    { id: 4, label: 'Wind resource', status: currentStageIndex > 3 ? 'done' : currentStageIndex === 3 ? 'active' : 'pending' },
+    { id: 5, label: 'Turbine candidate generation', status: currentStageIndex > 4 ? 'done' : currentStageIndex === 4 ? 'active' : 'pending' },
+    { id: 6, label: 'Engineering constraint validation', status: currentStageIndex > 5 ? 'done' : currentStageIndex === 5 ? 'active' : 'pending' },
+    { id: 7, label: 'Initial layout preparation', status: currentStageIndex >= 6 ? 'active' : 'pending' },
   ];
 
   // If calculation failed, display truthful failure modal
@@ -358,6 +360,15 @@ export const InitialLayoutLoadingModal: React.FC<InitialLayoutLoadingModalProps>
           <div className="w-full text-[11px] text-blue-800 dark:text-blue-200 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/50 rounded-xl p-2.5 text-center transition-all animate-fadeIn">
             Still analyzing the site. No result has been fabricated or approximated.
           </div>
+        )}
+        {onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="mt-2 text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 underline cursor-pointer"
+          >
+            Cancel and return to configuration
+          </button>
         )}
       </div>
 

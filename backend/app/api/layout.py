@@ -127,8 +127,8 @@ def compute_initial_layout(req: InitialLayoutRequest) -> InitialLayoutResponse:
     pipeline_res = engine.execute_pipeline(requested_turbines=req.turbine_count)
     candidates = pipeline_res["candidates"]
 
-    # Phase 4: Use CandidateEngineeringValidator & CandidateEngine if authoritative boundary is provided
-    if req.boundary and len(req.boundary) >= 3:
+    # Phase 4: Supplement via CandidateEngine if initial pipeline needs candidates
+    if len(candidates) < req.turbine_count and req.boundary and len(req.boundary) >= 3:
         try:
             from backend.app.engineering.candidate_engine import candidate_engine
             ring = []

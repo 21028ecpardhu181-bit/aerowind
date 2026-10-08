@@ -114,8 +114,6 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
 
   // 1. Initialize Map
   useEffect(() => {
-    if (is3DActive) return;
-
     let checkInterval: any = null;
 
     const setupMap = () => {
@@ -135,20 +133,23 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
         maxZoom: 20,
       });
 
-      // High-Resolution Satellite & Topo Layers via resilient local proxy cache
+      // High-Resolution Satellite & Topo Layers (Multi-CDN Resilient)
       const satellite = L.tileLayer(
-        '/api/geo/tiles/satellite/{z}/{x}/{y}',
+        'https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
         {
-          maxZoom: 19,
-          attribution: 'Google / Esri Satellite',
+          subdomains: ['0', '1', '2', '3'],
+          maxZoom: 20,
+          maxNativeZoom: 19,
+          attribution: 'Imagery © Google Hybrid Satellite',
         }
       );
 
       const terrain = L.tileLayer(
-        '/api/geo/tiles/terrain/{z}/{x}/{y}',
+        'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
         {
-          maxZoom: 19,
-          attribution: 'Esri World Topo Map',
+          subdomains: 'abc',
+          maxZoom: 17,
+          attribution: 'Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap (CC-BY-SA)',
         }
       );
 
@@ -190,7 +191,7 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
 
       setTimeout(() => {
         try { map.invalidateSize(); } catch (_) {}
-      }, 200);
+      }, 100);
     };
 
     if (window.L) {
@@ -212,7 +213,17 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [is3DActive, site.lat, site.lon, activeTurbines, layoutMode, isPanelCollapsed]);
+  }, [site.lat, site.lon]);
+
+  // Invalidate map size whenever toggling back from 3D to 2D or resizing panel
+  useEffect(() => {
+    if (!is3DActive && mapRef.current) {
+      const timer = setTimeout(() => {
+        try { mapRef.current.invalidateSize(); } catch (_) {}
+      }, 60);
+      return () => clearTimeout(timer);
+    }
+  }, [is3DActive, isPanelCollapsed]);
 
   // Update layout markers & wakes on mode or wake toggle
   useEffect(() => {
@@ -220,7 +231,7 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
       renderLayout(mapRef.current, activeTurbines, windDir, showWakes, selectedTurbineIdx);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showWakes, selectedTurbineIdx, layoutMode]);
+  }, [showWakes, selectedTurbineIdx, layoutMode, activeTurbines, windDir]);
 
   const renderLayout = (map: any, turbs: Turbine[], angleDeg: number, wakesVisible: boolean, activeIdx: number) => {
     const L = window.L;
@@ -387,7 +398,7 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
   };
 
   return (
-    <div id="screen-5-container" className="relative w-full h-[calc(100dvh-53px)] overflow-hidden flex flex-col bg-slate-100">
+    <div id="screen-5-container" className="relative w-full h-full overflow-hidden flex flex-col bg-slate-100">
       
       {/* ── TOP STATUS & CONTROLS BAR ───────────────────────────── */}
       <div className="absolute top-2 left-2 right-2 sm:top-3 sm:left-3 sm:right-3 z-30 flex flex-wrap items-center justify-between gap-1.5 sm:gap-2 pointer-events-none">
@@ -628,7 +639,7 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
       {/* ── BOTTOM FLOATING INSPECTOR PANEL (Hideable Box) ───────── */}
       <aside
         id="screen-5-sheet"
-        className={`absolute bottom-24 left-4 right-4 md:bottom-4 md:left-6 md:right-auto md:max-w-md z-[1250] pointer-events-auto transition-all duration-300 ${
+        className={`absolute bottom-24 left-4 right-4 md:bottom-4 md:left-6 md:right-auto md:max-w-md md:max-h-[calc(100vh-100px)] overflow-y-auto z-[1250] pointer-events-auto transition-all duration-300 ${
           isPanelCollapsed ? 'translate-y-[150%] opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'
         }`}
       >

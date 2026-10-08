@@ -39,6 +39,7 @@ import { Screen5Inspect } from './components/workflow/Screen5Inspect';
 import { Screen6Blueprint } from './components/workflow/Screen6Blueprint';
 import { DataSourcesModal } from './components/workflow/DataSourcesModal';
 import { AuthModal } from './components/workflow/AuthModal';
+import { InitialLayoutLoadingModal } from './components/workflow/InitialLayoutLoadingModal';
 import { BottomSheet } from './components/ui/BottomSheet';
 import { ProjectSelector } from './components/dashboard/ProjectSelector';
 import { ensureTurbinesInsideBoundary } from './utils/geometry';
@@ -168,8 +169,11 @@ export function App() {
     setCurrentScreen(screen);
     if (screen === 'home') setCurrentTab('home');
     else if (screen === 'dashboard') setCurrentTab('dashboard');
+    else if (screen === 's1_site') setCurrentTab((prev) => (prev === 'weather' ? 'weather' : 'site'));
+    else if (screen === 's2_config') setCurrentTab('turbines');
+    else if (screen === 's3_analysis' || screen === 's4_optimize') setCurrentTab('optimize');
+    else if (screen === 's5_inspect') setCurrentTab('results');
     else if (screen === 's6_blueprint') setCurrentTab('blueprints');
-    else if (screen === 's1_site') setCurrentTab('new');
 
     if (!isNavigatingFromHistory.current) {
       const hash = screen === 'home' ? '' : `#${screen}`;
@@ -705,6 +709,17 @@ export function App() {
 
       const estimatedNetAep = Math.round(count * mwPerTurbine * 8.76 * 0.35 * 0.94 * 10) / 10;
 
+      // Synchronize turbine settings across site so map, 3D, and downstream tabs retain them
+      setSite((sPrev) => ({
+        ...sPrev,
+        ...(newCfg.windDirectionDeg !== undefined ? { windDirectionDeg: newCfg.windDirectionDeg } : {}),
+        ...(newCfg.hubHeight !== undefined ? { hubHeight: newCfg.hubHeight } : {}),
+        ...(newCfg.rotorDiameter !== undefined ? { rotorDiameter: newCfg.rotorDiameter } : {}),
+        ...(newCfg.turbineCount !== undefined ? { turbineCount: newCfg.turbineCount } : {}),
+        ...(newCfg.modelName ? { turbineModel: newCfg.modelName } : (newCfg.model ? { turbineModel: newCfg.model } : {})),
+        ...(newCfg.foundationType ? { foundation_type: newCfg.foundationType } : {}),
+      }));
+
       if (activeProject) {
         const updatedProject: ProjectSummary = {
           ...activeProject,
@@ -1186,16 +1201,32 @@ export function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-slate-900 flex flex-col font-sans selection:bg-[#FFD21F] selection:text-slate-950">
+    <div className="h-screen max-h-screen overflow-hidden bg-[#F8FAFC] text-slate-900 flex flex-col font-sans selection:bg-[#FFD21F] selection:text-slate-950">
       {/* Global Header */}
       <AppHeader
         currentTab={currentTab}
         onTabChange={(tab) => {
+          setCurrentTab(tab);
           if (tab === 'home') navigateToScreen('home');
           else if (tab === 'dashboard' || tab === 'projects') navigateToScreen('dashboard');
+          else if (tab === 'site' || tab === 'map') {
+            setCurrentTab('site');
+            navigateToScreen('s1_site');
+          }
+          else if (tab === 'weather') {
+            setCurrentTab('weather');
+            navigateToScreen('s1_site');
+          }
+          else if (tab === 'turbines' || tab === 'config') navigateToScreen('s2_config');
+          else if (tab === 'optimize' || tab === 'analysis' || tab === 'analytics') {
+            navigateToScreen('s3_analysis');
+            if ((!layoutData.turbines || layoutData.turbines.length === 0) && !isGeneratingLayoutRef.current) {
+              handleGenerateLayout();
+            }
+          }
+          else if (tab === 'results' || tab === 'inspect') navigateToScreen('s5_inspect');
           else if (tab === 'new') handleNewProject();
-          else if (tab === 'blueprints') navigateToScreen('s6_blueprint');
-          else setCurrentTab(tab);
+          else if (tab === 'blueprints' || tab === 'reports') navigateToScreen('s6_blueprint');
         }}
         telemetry={telemetry}
         onNewProject={handleNewProject}
@@ -1206,7 +1237,7 @@ export function App() {
       />
 
       {/* Main Workspace with Sidebar on Desktop */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 min-h-0 flex overflow-hidden">
         {/* Desktop Sidebar (visible on dedicated dashboard) */}
         {currentScreen === 'dashboard' && (
           <div className="hidden md:block">
@@ -1227,7 +1258,7 @@ export function App() {
         )}
 
         {/* Screen Routing */}
-        <main className={`flex-1 flex flex-col ${['s1_site', 's3_analysis', 's5_inspect'].includes(currentScreen) ? 'overflow-hidden h-full relative' : 'overflow-y-auto'}`}>
+        <main className={`flex-1 min-h-0 flex flex-col ${['s1_site', 's3_analysis', 's5_inspect'].includes(currentScreen) ? 'overflow-hidden h-full relative' : 'overflow-y-auto'}`}>
           {/* 1. SEPARATED OPENING SCREEN ("Create New Project" Hero Screen) */}
           {currentScreen === 'home' && (
             <CreateNewProjectHero
@@ -1305,6 +1336,7 @@ export function App() {
               layoutData={layoutData}
               onLaunchOptimize={handleLaunchOptimize}
               onBack={handleGoBack}
+              onGenerateLayout={handleGenerateLayout}
               solverEngine={solverEngine}
               onSelectSolverEngine={setSolverEngine}
             />
@@ -1403,6 +1435,20 @@ export function App() {
         isOpen={isAuthOpen}
         onClose={() => setIsAuthOpen(false)}
         onAuthSuccess={(user) => setCurrentUser(user as any)}
+      />
+
+      {/* Global Micro-Siting Calculation Modal */}
+      <InitialLayoutLoadingModal
+        isOpen={Boolean(isGeneratingLayout || generationError)}
+        turbineCount={config.turbineCount || 12}
+        siteName={site.shortName || site.name.split(',')[0] || 'Selected Concession'}
+        error={generationError || null}
+        onRetry={handleGenerateLayout}
+        onCancel={() => {
+          setIsGeneratingLayout(false);
+          setGenerationError(null);
+          isGeneratingLayoutRef.current = false;
+        }}
       />
     </div>
   );
