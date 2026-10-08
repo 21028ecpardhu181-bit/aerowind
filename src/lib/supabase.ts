@@ -1,17 +1,16 @@
 import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL =
-  import.meta.env.VITE_SUPABASE_URL || 'https://avtkzutofgsjzldkimro.supabase.co';
+  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL) ||
+  'https://avtkzutofgsjzldkimro.supabase.co';
 
 const SUPABASE_KEY =
-  import.meta.env.VITE_SUPABASE_ANON_KEY ||
-  import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY ||
-  import.meta.env.VITE_SUPABASE_JWT_ANON ||
-  '';
+  (typeof import.meta !== 'undefined' && (import.meta.env?.VITE_SUPABASE_ANON_KEY || import.meta.env?.VITE_SUPABASE_JWT_ANON)) ||
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF2dGt6dXRvZmdzanpsZGtpbXJvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE0NjA1NzQsImV4cCI6MjEwNzAzNjU3NH0.uf4qQfLCpBToJ7Vz_FSspcJj7rjRJYwVdLUcdiMZva0';
 
 export const supabase = createClient(
   SUPABASE_URL,
-  SUPABASE_KEY || 'placeholder-key'
+  SUPABASE_KEY
 );
 
 export const isSupabaseConfigured = (): boolean => {
@@ -25,9 +24,9 @@ export async function checkSupabaseConnection(): Promise<{ connected: boolean; l
   const start = Date.now();
   try {
     const { error } = await supabase.from('projects').select('id').limit(1);
-    // Even if the table doesn't exist yet, a 404 or PGRST error means the server is reachable and authenticated
+    // PGRST116, 42P01, PGRST205 confirm valid authentication with Supabase API gateway
     return {
-      connected: !error || error.code === 'PGRST116' || error.code === '42P01',
+      connected: !error || error.code === 'PGRST116' || error.code === '42P01' || error.code === 'PGRST205',
       latencyMs: Date.now() - start,
       error: error?.message,
     };

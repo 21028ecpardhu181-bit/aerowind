@@ -31,7 +31,9 @@ class RegisterRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    username_or_email: str
+    username_or_email: Optional[str] = None
+    username: Optional[str] = None
+    email: Optional[str] = None
     password: str
 
 
@@ -150,7 +152,9 @@ def register(req: RegisterRequest):
 
 @router.post("/login", response_model=AuthResponse)
 def login(req: LoginRequest):
-    identity = req.username_or_email.strip()
+    identity = (req.username_or_email or req.username or req.email or "").strip()
+    if not identity:
+        raise HTTPException(status_code=400, detail="Username or email is required")
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
