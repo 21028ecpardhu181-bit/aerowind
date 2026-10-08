@@ -54,18 +54,62 @@ def get_current_user(authorization: Optional[str] = Header(None)) -> Optional[di
     if not token:
         return None
 
+    # 1. First check local sessions table
     now = time.time()
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT u.id, u.username, u.email, u.created_at
-            FROM sessions s
-            JOIN users u ON s.user_id = u.id
-            WHERE s.token = ? AND s.expires_at > ?
-        """, (token, now))
-        row = cursor.fetchone()
-        if row:
-            return dict(row)
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT u.id, u.username, u.email, u.created_at
+                FROM sessions s
+                JOIN users u ON s.user_id = u.id
+                WHERE s.token = ? AND s.expires_at > ?
+            """, (token, now))
+            row = cursor.fetchone()
+            if row:
+                res = dict(row)
+                res["id"] = str(res["id"])
+                res["provider"] = "local"
+                return res
+    except Exception:
+        pass
+
+    # 2. Check Supabase Auth if token looks like a JWT
+    if "." in token:
+        import os
+        import json
+        import urllib.request
+        supabase_url = os.environ.get("SUPABASE_URL") or os.environ.get("VITE_SUPABASE_URL") or "https://avtkzutofgsjzldkimro.supabase.co"
+        anon_key = os.environ.get("SUPABASE_ANON_KEY") or os.environ.get("VITE_SUPABASE_ANON_KEY") or os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+        if supabase_url and anon_key:
+            try:
+                url = f"{supabase_url.rstrip('/')}/auth/v1/user"
+                req = urllib.request.Request(
+                    url,
+                    headers={
+                        "apikey": anon_key,
+                        "Authorization": f"Bearer {token}",
+                        "Accept": "application/json",
+                    },
+                )
+                with urllib.request.urlopen(req, timeout=3) as resp:
+                    if resp.status == 200:
+                        data = json.loads(resp.read().decode("utf-8"))
+                        user_id = data.get("id")
+                        if user_id:
+                            return {
+                                "id": str(user_id),
+                                "username": (
+                                    data.get("user_metadata", {}).get("username")
+                                    or (data.get("email", "").split("@")[0] if data.get("email") else str(user_id))
+                                ),
+                                "email": data.get("email", ""),
+                                "created_at": data.get("created_at", ""),
+                                "provider": "supabase",
+                            }
+            except Exception:
+                pass
+
     return None
 
 

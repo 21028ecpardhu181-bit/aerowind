@@ -807,10 +807,15 @@ export async function runClassicalOptimization(payload: ClassicalOptimizationPay
   return res.json();
 }
 
-export async function runQaoaOptimization(payload: QaoaOptimizationPayload): Promise<any> {
+export async function runQaoaOptimization(payload: QaoaOptimizationPayload, authToken?: string): Promise<any> {
+  const token = authToken || localStorage.getItem('aqw_token');
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
   const res = await fetch(`${API_BASE}/engineering/optimization/qaoa`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
@@ -839,6 +844,77 @@ export async function runQaoaQualityAudit(payload: {
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || `QAOA quality audit failed: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+// ── Per-User IBM Quantum Credentials Service ──────────────────────────────────
+
+export interface QuantumCredentialMetadata {
+  configured: boolean;
+  crn_configured: boolean;
+  instance_masked?: string | null;
+  token_masked?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  last_used_at?: string | null;
+  last_status?: string | null;
+}
+
+export async function fetchQuantumCredentials(authToken?: string): Promise<QuantumCredentialMetadata> {
+  const token = authToken || localStorage.getItem('aqw_token');
+  if (!token) return { configured: false, crn_configured: false };
+  const res = await fetch(`${API_BASE}/quantum/credentials`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    if (res.status === 401) return { configured: false, crn_configured: false };
+    throw new Error(`Failed to load credentials: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function saveQuantumCredentials(
+  data: { api_token: string; crn?: string },
+  authToken?: string
+): Promise<{ configured: boolean; message: string; updated_at?: string }> {
+  const token = authToken || localStorage.getItem('aqw_token');
+  if (!token) throw new Error('You must be signed in to configure IBM Quantum credentials.');
+  const res = await fetch(`${API_BASE}/quantum/credentials`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to save credentials: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function deleteQuantumCredentials(authToken?: string): Promise<boolean> {
+  const token = authToken || localStorage.getItem('aqw_token');
+  if (!token) return false;
+  const res = await fetch(`${API_BASE}/quantum/credentials`, {
+    method: 'DELETE',
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  return res.ok;
+}
+
+export async function testQuantumConnection(authToken?: string): Promise<{ success: boolean; message: string; backend_name?: string }> {
+  const token = authToken || localStorage.getItem('aqw_token');
+  if (!token) throw new Error('You must be signed in to test IBM Quantum credentials.');
+  const res = await fetch(`${API_BASE}/quantum/credentials/test`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'IBM Quantum connection failed.');
   }
   return res.json();
 }
