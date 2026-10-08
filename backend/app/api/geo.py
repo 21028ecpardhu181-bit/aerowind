@@ -742,7 +742,10 @@ async def get_site_imagery(
     import io
     import math
     import requests
-    from PIL import Image
+    try:
+        from PIL import Image
+    except ImportError:
+        Image = None
 
     r_lat = round(lat, 4)
     r_lon = round(lon, 4)
@@ -766,6 +769,24 @@ async def get_site_imagery(
 
     cx = int(center_x)
     cy = int(center_y)
+
+    if Image is None:
+        # Fallback to single central satellite tile if PIL is unavailable
+        sub = (cx + cy) % 4
+        url = f"https://mt{sub}.google.com/vt/lyrs=y&x={cx}&y={cy}&z={zoom}"
+        try:
+            r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5.0)
+            if r.status_code == 200 and len(r.content) > 500:
+                return Response(
+                    content=r.content,
+                    media_type="image/jpeg",
+                    headers={"Cache-Control": "public, max-age=2592000", "Access-Control-Allow-Origin": "*"}
+                )
+        except Exception:
+            pass
+        import base64
+        fallback_png = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=")
+        return Response(content=fallback_png, media_type="image/png", status_code=200, headers={"Access-Control-Allow-Origin": "*"})
 
     grid_size = 2 * grid_radius + 1
     composite = Image.new("RGB", (grid_size * 256, grid_size * 256))

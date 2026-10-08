@@ -102,30 +102,6 @@ function parseBoundaryPolygons(boundaryInput: any): BoundaryPolygonData[] {
   return [];
 }
 
-function computeSiteSatelliteBounds(lat: number, lon: number, zoom: number = 14, gridRadius: number = 2) {
-  const rLat = Number(lat.toFixed(4));
-  const rLon = Number(lon.toFixed(4));
-  const n = Math.pow(2, zoom);
-  const centerX = ((rLon + 180.0) / 360.0) * n;
-  const latRad = (rLat * Math.PI) / 180.0;
-  const centerY = ((1.0 - Math.asinh(Math.tan(latRad)) / Math.PI) / 2.0) * n;
-  const cx = Math.floor(centerX);
-  const cy = Math.floor(centerY);
-
-  const west = ((cx - gridRadius) / n) * 360.0 - 180.0;
-  const east = ((cx + gridRadius + 1) / n) * 360.0 - 180.0;
-  const north = (Math.atan(Math.sinh(Math.PI * (1.0 - (2.0 * (cy - gridRadius)) / n))) * 180.0) / Math.PI;
-  const south = (Math.atan(Math.sinh(Math.PI * (1.0 - (2.0 * (cy + gridRadius + 1)) / n))) * 180.0) / Math.PI;
-
-  return {
-    west,
-    south,
-    east,
-    north,
-    imageUrl: `/api/geo/site-imagery?lat=${rLat}&lon=${rLon}&zoom=${zoom}&grid_radius=${gridRadius}`,
-  };
-}
-
 export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
   containerId,
   centerLat,
@@ -158,7 +134,6 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
     streamlines: any[];
     telemetryLines: any[];
     boundaryEntities: any[];
-    siteSatelliteDrape: any | null;
   }>({
     turbines: [],
     candidates: [],
@@ -166,7 +141,6 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
     streamlines: [],
     telemetryLines: [],
     boundaryEntities: [],
-    siteSatelliteDrape: null,
   });
 
   const [viewerInstance, setViewerInstance] = useState<any>(null);
@@ -279,7 +253,14 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
         });
         viewer.imageryLayers.addImageryProvider(satelliteProvider);
       } catch (err) {
-        console.warn('[CesiumGlobeView] Could not load global satellite provider:', err);
+        console.warn('[CesiumGlobeView] Could not load global satellite provider, trying proxy fallback:', err);
+        try {
+          const proxyProvider = new Cesium.UrlTemplateImageryProvider({
+            url: '/api/geo/tiles/satellite/{z}/{x}/{y}',
+            maximumLevel: 19,
+          });
+          viewer.imageryLayers.addImageryProvider(proxyProvider);
+        } catch (_) {}
       }
 
       // Load Google Photorealistic 3D Tiles if API key is provided
@@ -408,42 +389,6 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
     }
   }, [effectiveCenterLat, effectiveCenterLon, radiusKm, activeCameraPreset, flyToProjectSite]);
 
-  // Render Site Boundary Polygon & Satellite Surface
-  // Synchronously compute bounds and drape high-definition satellite terrain
-  useEffect(() => {
-    const viewer = viewerInstance || viewerRef.current;
-    const Cesium = (window as any).Cesium;
-    if (!viewer || viewer.isDestroyed() || !Cesium) return;
-
-    const bounds = computeSiteSatelliteBounds(effectiveCenterLat, effectiveCenterLon, 14, 2);
-    const rectCoords = Cesium.Rectangle.fromDegrees(bounds.west, bounds.south, bounds.east, bounds.north);
-
-    if (entitiesRef.current.siteSatelliteDrape) {
-      try {
-        viewer.entities.remove(entitiesRef.current.siteSatelliteDrape);
-      } catch (_) {}
-      entitiesRef.current.siteSatelliteDrape = null;
-    }
-
-    const drape = viewer.entities.add({
-      name: 'Site High-Resolution Satellite Map',
-      rectangle: {
-        coordinates: rectCoords,
-        material: bounds.imageUrl,
-      },
-    });
-    entitiesRef.current.siteSatelliteDrape = drape;
-
-    return () => {
-      if (viewerRef.current && !viewerRef.current.isDestroyed() && entitiesRef.current.siteSatelliteDrape) {
-        try {
-          viewerRef.current.entities.remove(entitiesRef.current.siteSatelliteDrape);
-        } catch (_) {}
-        entitiesRef.current.siteSatelliteDrape = null;
-      }
-    };
-  }, [viewerInstance, effectiveCenterLat, effectiveCenterLon]);
-
   // Render Authoritative Site Boundary & Exclusion Holes
   useEffect(() => {
     const viewer = viewerInstance || viewerRef.current;
@@ -475,6 +420,7 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
         polygon: {
           hierarchy: hierarchy,
           material: Cesium.Color.fromCssColorString('rgba(255, 210, 31, 0.12)'),
+          classificationType: Cesium.ClassificationType ? Cesium.ClassificationType.BOTH : undefined,
           outline: false,
         },
       });
@@ -505,6 +451,7 @@ export const CesiumGlobeView: React.FC<CesiumGlobeViewProps> = ({
           polygon: {
             hierarchy: Cesium.Cartesian3.fromDegreesArray(holeCoords),
             material: Cesium.Color.fromCssColorString('rgba(239, 68, 68, 0.22)'),
+            classificationType: Cesium.ClassificationType ? Cesium.ClassificationType.BOTH : undefined,
             outline: false,
           },
           polyline: {
