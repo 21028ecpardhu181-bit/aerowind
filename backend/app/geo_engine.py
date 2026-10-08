@@ -207,16 +207,26 @@ def compute_terrain_elevation_and_slope(
     gx = round(x_m / 30.0) * 30
     gy = round(y_m / 30.0) * 30
 
-    if dem_cache and (gx, gy) in dem_cache:
-        z = dem_cache[(gx, gy)]
-        z_xp = dem_cache.get((gx + 30, gy), z)
-        z_xm = dem_cache.get((gx - 30, gy), z)
-        z_yp = dem_cache.get((gx, gy + 30), z)
-        z_ym = dem_cache.get((gx, gy - 30), z)
+    z_val = dem_cache.get((gx, gy)) if dem_cache else None
+    if z_val is not None:
+        try:
+            z = float(z_val)
+            z_xp_raw = dem_cache.get((gx + 30, gy))
+            z_xm_raw = dem_cache.get((gx - 30, gy))
+            z_yp_raw = dem_cache.get((gx, gy + 30))
+            z_ym_raw = dem_cache.get((gx, gy - 30))
 
-        dz_dx = (z_xp - z_xm) / 60.0 if (gx + 30, gy) in dem_cache or (gx - 30, gy) in dem_cache else 0.02
-        dz_dy = (z_yp - z_ym) / 60.0 if (gx, gy + 30) in dem_cache or (gx, gy - 30) in dem_cache else 0.01
-    else:
+            z_xp = float(z_xp_raw) if z_xp_raw is not None else z
+            z_xm = float(z_xm_raw) if z_xm_raw is not None else z
+            z_yp = float(z_yp_raw) if z_yp_raw is not None else z
+            z_ym = float(z_ym_raw) if z_ym_raw is not None else z
+
+            dz_dx = (z_xp - z_xm) / 60.0 if (z_xp_raw is not None or z_xm_raw is not None) else 0.02
+            dz_dy = (z_yp - z_ym) / 60.0 if (z_yp_raw is not None or z_ym_raw is not None) else 0.01
+        except Exception:
+            z_val = None
+
+    if z_val is None:
         # Fallback to realistic regional terrain elevation
         z = base_elevation_m + 8.0 * math.sin(x_m / 1200.0) * math.cos(y_m / 1500.0)
         h_step = 15.0
@@ -373,9 +383,13 @@ class CandidateGenerationEngine:
             try:
                 real_elevs = dem_client.fetch_elevations(sample_latlons)
                 for (x, y), el in zip(sample_pts, real_elevs):
-                    gx = round(x / 30.0) * 30
-                    gy = round(y / 30.0) * 30
-                    dem_cache[(gx, gy)] = el
+                    if el is not None:
+                        try:
+                            gx = round(x / 30.0) * 30
+                            gy = round(y / 30.0) * 30
+                            dem_cache[(gx, gy)] = float(el)
+                        except Exception:
+                            pass
             except Exception:
                 pass
 

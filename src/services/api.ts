@@ -509,7 +509,14 @@ export async function generateInitialLayout(payload: any): Promise<any> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error(`Initial layout failed: ${res.statusText}`);
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      const err = await res.json();
+      if (err?.detail) detail = typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail);
+    } catch (_) {}
+    throw new Error(detail ? `Initial layout failed: ${detail}` : 'Initial layout failed: Backend engineering service encountered an error.');
+  }
   return res.json();
 }
 
