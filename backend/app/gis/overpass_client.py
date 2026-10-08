@@ -54,7 +54,7 @@ class OverpassClient:
         "https://z.overpass-api.de/api/interpreter",
     ]
 
-    def __init__(self, timeout_sec: float = 8.0):
+    def __init__(self, timeout_sec: float = 3.0):
         self.timeout_sec = timeout_sec
 
     def _get_cache_key(self, lat: float, lon: float, radius_km: float) -> str:
