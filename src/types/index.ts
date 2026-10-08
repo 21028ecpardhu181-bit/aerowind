@@ -82,6 +82,7 @@ export interface SoilTelemetry {
   silt_percentage?: number;
   bulk_density_kg_dm3?: number;
   estimated_bearing_capacity_kpa?: number;
+  measured_bearing_capacity_kpa?: number;
   bearing_status?: string;
   foundation_recommendation?: string;
   foundation_type_required?: string;

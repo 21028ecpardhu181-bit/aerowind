@@ -605,9 +605,15 @@ export const Screen2Config: React.FC<Screen2ConfigProps> = ({
             <div className={`px-3 py-1 rounded-xl text-xs font-bold border ${
               site.soil_hazard_level === 'CRITICAL_BLOCKED'
                 ? 'bg-rose-100 text-rose-900 border-rose-300'
-                : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                : (site.soil_bearing_capacity_kpa && Number(site.soil_bearing_capacity_kpa) > 0)
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                : 'bg-amber-100 text-amber-900 border-amber-300'
             }`}>
-              {site.soil_hazard_level === 'CRITICAL_BLOCKED' ? 'Piles Mandatory' : 'Geotechnically Certified'}
+              {site.soil_hazard_level === 'CRITICAL_BLOCKED'
+                ? 'Piles Mandatory'
+                : (site.soil_bearing_capacity_kpa && Number(site.soil_bearing_capacity_kpa) > 0)
+                ? 'Geotechnically Certified'
+                : 'Preliminary Geotechnical Screening'}
             </div>
           </div>
 

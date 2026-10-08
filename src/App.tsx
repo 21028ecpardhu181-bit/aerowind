@@ -625,7 +625,9 @@ export function App() {
 
     const netAep = Math.round(count * mwPerTurbine * 8.76 * 0.35 * 0.94 * 10) / 10;
 
-    const soilBearing = effectiveSite.soil_bearing_capacity_kpa || effectiveSite.soilData?.estimated_bearing_capacity_kpa || effectiveSite.soilData?.geotechnical_metrics?.bearing_capacity_kpa || 210.0;
+    const soilBearing = (effectiveSite.soil_bearing_capacity_kpa && Number(effectiveSite.soil_bearing_capacity_kpa) > 0)
+      ? Number(effectiveSite.soil_bearing_capacity_kpa)
+      : (effectiveSite.soilData?.measured_bearing_capacity_kpa ? Number(effectiveSite.soilData.measured_bearing_capacity_kpa) : undefined);
     const usdaClass = effectiveSite.usda_texture_class || effectiveSite.soilData?.usda_texture_class || effectiveSite.soilData?.soil_classification?.usda_texture_class || 'Clay Loam';
     const foundationType = effectiveSite.foundation_type || effectiveSite.foundationType || effectiveSite.soilData?.foundation_type_required || 'GRAVITY_BASE';
     const hazardLevel = effectiveSite.soil_hazard_level || effectiveSite.soilData?.hazard_level || effectiveSite.soilData?.geotechnical_metrics?.hazard_level || 'SAFE';
