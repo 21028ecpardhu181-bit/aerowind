@@ -58,10 +58,20 @@ export const QuantumCredentialsModal: React.FC<QuantumCredentialsModalProps> = (
       return;
     }
 
+    // Dismiss on Escape key
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
     const token = authToken || localStorage.getItem('aqw_token') || undefined;
     if (!token) {
       setMetadata(null);
-      return;
+      return () => {
+        window.removeEventListener('keydown', handleKeyDown);
+      };
     }
 
     setIsLoading(true);
@@ -76,6 +86,10 @@ export const QuantumCredentialsModal: React.FC<QuantumCredentialsModalProps> = (
       .finally(() => {
         setIsLoading(false);
       });
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, [isOpen, authToken]);
 
   if (!isOpen) return null;
@@ -155,9 +169,19 @@ export const QuantumCredentialsModal: React.FC<QuantumCredentialsModalProps> = (
   return (
     <div
       id="quantum-credentials-modal"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md animate-in fade-in duration-200"
+      role="dialog"
+      aria-modal="true"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+      className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md animate-in fade-in duration-200 cursor-pointer"
     >
-      <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden border border-white/80 animate-in zoom-in-95 duration-200">
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden border border-white/80 animate-in zoom-in-95 duration-200 cursor-default"
+      >
         
         {/* Close Button */}
         <button

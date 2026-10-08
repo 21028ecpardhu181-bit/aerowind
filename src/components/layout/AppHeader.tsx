@@ -11,6 +11,7 @@ interface AppHeaderProps {
   onSearch?: (q: string) => void;
   onNewProject?: () => void;
   onOpenAuth?: () => void;
+  isAuthOpen?: boolean;
   user?: { username: string; email: string } | null;
   canGoBack?: boolean;
   onBack?: () => void;
@@ -24,6 +25,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   onSearch,
   onNewProject,
   onOpenAuth,
+  isAuthOpen = false,
   user,
   canGoBack = false,
   onBack,
@@ -141,14 +143,20 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
         {/* User Sign In / Avatar Button */}
         <button
           id="btn-open-auth"
+          type="button"
           onClick={onOpenAuth}
-          className="flex items-center gap-2 p-0.5 sm:px-2.5 sm:py-1 rounded-full bg-white/80 hover:bg-white border border-white/80 shadow-xs active:scale-95 transition-all select-none cursor-pointer"
-          title={user ? `Signed in as ${user.username}` : 'Sign In / Account'}
+          className={`flex items-center gap-2 p-0.5 sm:px-2.5 sm:py-1 rounded-full border shadow-xs active:scale-95 transition-all select-none cursor-pointer ${
+            isAuthOpen
+              ? 'bg-amber-100/90 hover:bg-amber-100 border-amber-300 ring-2 ring-amber-400 text-amber-950 shadow-sm'
+              : 'bg-white/80 hover:bg-white border-white/80 text-slate-800'
+          }`}
+          title={user ? `Signed in as ${user.username}` : isAuthOpen ? 'Close Sign In' : 'Sign In / Account'}
+          aria-expanded={isAuthOpen}
         >
           <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-amber-500/15 border border-amber-500/30 flex items-center justify-center p-0.5">
             <AeroQuantumLogo size={20} />
           </div>
-          <span className="hidden sm:inline text-xs font-bold text-slate-800 pr-1" id="header-user-label">
+          <span className="hidden sm:inline text-xs font-bold pr-1" id="header-user-label">
             {user ? user.username : 'Sign In'}
           </span>
         </button>

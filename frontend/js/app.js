@@ -3793,8 +3793,26 @@
                 if (authModal) authModal.style.display = 'none';
             };
 
+            if (authModal) {
+                authModal.addEventListener('click', (e) => {
+                    if (e.target === authModal) {
+                        closeAuth();
+                    }
+                });
+            }
+
+            window.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && authModal && authModal.style.display === 'flex') {
+                    closeAuth();
+                }
+            });
+
             if (btnOpenAuth) {
                 btnOpenAuth.addEventListener('click', () => {
+                    if (authModal && authModal.style.display === 'flex') {
+                        closeAuth();
+                        return;
+                    }
                     if (APP_STATE.currentUser) {
                         if (confirm(`Logged in as ${APP_STATE.currentUser.username} (${APP_STATE.currentUser.email}). Log out?`)) {
                             localStorage.removeItem('aqw_auth_token');

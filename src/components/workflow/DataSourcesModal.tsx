@@ -12,6 +12,17 @@ export const DataSourcesModal: React.FC<DataSourcesModalProps> = ({ isOpen, onCl
   });
   const [keySaved, setKeySaved] = useState<boolean>(false);
 
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const handleSaveApiKey = () => {
@@ -107,9 +118,19 @@ export const DataSourcesModal: React.FC<DataSourcesModalProps> = ({ isOpen, onCl
   return (
     <div
       id="data-sources-modal"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-sm animate-in fade-in"
+      role="dialog"
+      aria-modal="true"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+      className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-sm animate-in fade-in cursor-pointer"
     >
-      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl bg-white p-6 sm:p-8 shadow-2xl border border-slate-200 flex flex-col gap-5">
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl bg-white p-6 sm:p-8 shadow-2xl border border-slate-200 flex flex-col gap-5 cursor-default"
+      >
         {/* Header */}
         <div className="flex items-start justify-between pb-4 border-b border-slate-100">
           <div className="flex items-center gap-3">

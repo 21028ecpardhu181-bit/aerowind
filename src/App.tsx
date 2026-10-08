@@ -166,7 +166,17 @@ export function App() {
     return 'home';
   });
 
+  // Global modals and drawers
+  const [isDataSourcesOpen, setIsDataSourcesOpen] = useState<boolean>(false);
+  const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
+  const [isQuantumCredentialsModalOpen, setIsQuantumCredentialsModalOpen] = useState<boolean>(false);
+  const [isMobileProjectSheetOpen, setIsMobileProjectSheetOpen] = useState<boolean>(false);
+
   const navigateToScreen = useCallback((screen: WorkflowScreen, replace = false) => {
+    setIsAuthOpen(false);
+    setIsQuantumCredentialsModalOpen(false);
+    setIsDataSourcesOpen(false);
+    setIsMobileProjectSheetOpen(false);
     setCurrentScreen(screen);
     if (screen === 'home') setCurrentTab('home');
     else if (screen === 'dashboard') setCurrentTab('dashboard');
@@ -190,6 +200,24 @@ export function App() {
   }, []);
 
   const handleGoBack = useCallback(() => {
+    // If any modal is open, dismiss it first
+    if (isAuthOpen) {
+      setIsAuthOpen(false);
+      return;
+    }
+    if (isQuantumCredentialsModalOpen) {
+      setIsQuantumCredentialsModalOpen(false);
+      return;
+    }
+    if (isDataSourcesOpen) {
+      setIsDataSourcesOpen(false);
+      return;
+    }
+    if (isMobileProjectSheetOpen) {
+      setIsMobileProjectSheetOpen(false);
+      return;
+    }
+
     const fallbackPrev: Record<WorkflowScreen, WorkflowScreen> = {
       s6_blueprint: 's5_inspect',
       s5_inspect: 's3_analysis',
@@ -203,7 +231,7 @@ export function App() {
 
     const prevScreen = fallbackPrev[currentScreen] || 'home';
     navigateToScreen(prevScreen);
-  }, [currentScreen, navigateToScreen]);
+  }, [currentScreen, isAuthOpen, isQuantumCredentialsModalOpen, isDataSourcesOpen, isMobileProjectSheetOpen, navigateToScreen]);
 
   // Synchronize browser history and listen for mobile hardware/browser back events
   useEffect(() => {
@@ -237,9 +265,6 @@ export function App() {
   const [projects, setProjects] = useState<ProjectSummary[]>(DEFAULT_PROJECTS);
   const [activeProject, setActiveProject] = useState<ProjectDetail | ProjectSummary | null>(DEFAULT_PROJECTS[0]);
   const [telemetry, setTelemetry] = useState<TelemetryData | null>(null);
-  const [isDataSourcesOpen, setIsDataSourcesOpen] = useState<boolean>(false);
-  const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
-  const [isQuantumCredentialsModalOpen, setIsQuantumCredentialsModalOpen] = useState<boolean>(false);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
     try {
       const saved = localStorage.getItem('aqw_user');
@@ -249,7 +274,6 @@ export function App() {
     }
   });
   const [is3DActive, setIs3DActive] = useState<boolean>(false);
-  const [isMobileProjectSheetOpen, setIsMobileProjectSheetOpen] = useState<boolean>(false);
 
   // Active engineering site
   const [site, setSite] = useState<SiteInfo>({
@@ -1207,7 +1231,11 @@ export function App() {
       {/* Global Header */}
       <AppHeader
         currentTab={currentTab}
+        isAuthOpen={isAuthOpen}
         onTabChange={(tab) => {
+          setIsAuthOpen(false);
+          setIsQuantumCredentialsModalOpen(false);
+          setIsDataSourcesOpen(false);
           setCurrentTab(tab);
           if (tab === 'home') navigateToScreen('home');
           else if (tab === 'dashboard' || tab === 'projects') navigateToScreen('dashboard');
@@ -1231,12 +1259,18 @@ export function App() {
           else if (tab === 'blueprints' || tab === 'reports') navigateToScreen('s6_blueprint');
         }}
         telemetry={telemetry}
-        onNewProject={handleNewProject}
-        onOpenAuth={() => setIsAuthOpen(true)}
+        onNewProject={() => {
+          setIsAuthOpen(false);
+          handleNewProject();
+        }}
+        onOpenAuth={() => setIsAuthOpen((prev) => !prev)}
         user={currentUser}
         canGoBack={currentScreen !== 'home'}
         onBack={handleGoBack}
-        onOpenQuantumCredentials={() => setIsQuantumCredentialsModalOpen(true)}
+        onOpenQuantumCredentials={() => {
+          setIsAuthOpen(false);
+          setIsQuantumCredentialsModalOpen((prev) => !prev);
+        }}
       />
 
       {/* Main Workspace with Sidebar on Desktop */}
@@ -1247,6 +1281,8 @@ export function App() {
             <AppSidebar
               currentTab={currentTab}
               onTabChange={(tab) => {
+                setIsAuthOpen(false);
+                setIsQuantumCredentialsModalOpen(false);
                 if (tab === 'home') navigateToScreen('home');
                 else if (tab === 'dashboard' || tab === 'projects') navigateToScreen('dashboard');
                 else setCurrentTab(tab);
@@ -1389,6 +1425,8 @@ export function App() {
         <MobileBottomNav
           currentTab={currentTab}
           onTabChange={(tab) => {
+            setIsAuthOpen(false);
+            setIsQuantumCredentialsModalOpen(false);
             if (tab === 'home') navigateToScreen('home');
             else if (tab === 'projects') {
               // First tap opens Project Dashboard, or open switcher if already on it
@@ -1402,7 +1440,10 @@ export function App() {
             else if (tab === 'reports') navigateToScreen('s6_blueprint');
             else setCurrentTab(tab);
           }}
-          onNewProject={handleNewProject}
+          onNewProject={() => {
+            setIsAuthOpen(false);
+            handleNewProject();
+          }}
         />
       )}
 

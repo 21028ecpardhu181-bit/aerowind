@@ -60,6 +60,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
+    // Dismiss on Escape key
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
     setSupabaseStatus((prev) => ({ ...prev, checking: true }));
     checkSupabaseConnection()
       .then((res) => {
@@ -75,7 +83,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           checking: false,
         });
       });
-  }, [isOpen]);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -172,9 +184,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   return (
     <div
       id="auth-modal"
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/65 backdrop-blur-md overflow-y-auto"
+      role="dialog"
+      aria-modal="true"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+      className="fixed inset-0 z-[2000] flex items-center justify-center p-3 sm:p-4 bg-slate-950/65 backdrop-blur-md overflow-y-auto cursor-pointer"
     >
-      <div className="relative w-full max-w-md max-h-[92vh] overflow-y-auto bg-white rounded-3xl shadow-2xl border border-white/80 animate-in fade-in zoom-in-95 duration-200 my-auto">
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="relative w-full max-w-md max-h-[92vh] overflow-y-auto bg-white rounded-3xl shadow-2xl border border-white/80 animate-in fade-in zoom-in-95 duration-200 my-auto cursor-default"
+      >
         {/* Close Button */}
         <button
           id="btn-close-auth"
