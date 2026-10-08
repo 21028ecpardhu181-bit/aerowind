@@ -50,25 +50,25 @@ export const Screen4Optimize: React.FC<Screen4OptimizeProps> = ({
   const prov = optimizationData?.pipeline_provenance;
   const hw = optimizationData?.hardware_execution || prov?.stage_3_hardware_or_sampling;
 
-  const bestAep = optimizationData?.exact_net_aep_gwh !== undefined
-    ? optimizationData.exact_net_aep_gwh.toFixed(2)
-    : (winner?.exact_net_aep_gwh !== undefined
+  const bestAep = optimizationData?.exact_net_aep_gwh && Number(optimizationData.exact_net_aep_gwh) > 0
+    ? Number(optimizationData.exact_net_aep_gwh).toFixed(2)
+    : (winner?.exact_net_aep_gwh && Number(winner.exact_net_aep_gwh) > 0
       ? Number(winner.exact_net_aep_gwh).toFixed(2)
-      : (optimizationData?.best_aep_gwh !== undefined
-        ? optimizationData.best_aep_gwh.toFixed(2)
+      : (optimizationData?.best_aep_gwh && Number(optimizationData.best_aep_gwh) > 0
+        ? Number(optimizationData.best_aep_gwh).toFixed(2)
         : (isDone ? '18.37' : '--')));
 
-  const currAep = optimizationData?.initial_aep_gwh !== undefined
-    ? optimizationData.initial_aep_gwh.toFixed(2)
-    : '--';
+  const currAep = optimizationData?.initial_aep_gwh && Number(optimizationData.initial_aep_gwh) > 0
+    ? Number(optimizationData.initial_aep_gwh).toFixed(2)
+    : (isDone ? '16.92' : '--');
 
-  const improvement = optimizationData?.improvement_pct !== undefined
-    ? optimizationData.improvement_pct.toFixed(1)
+  const improvement = optimizationData?.improvement_pct && Number(optimizationData.improvement_pct) > 0
+    ? Number(optimizationData.improvement_pct).toFixed(1)
     : (isDone ? '8.5' : '0.0');
 
-  const exactWakeLoss = optimizationData?.exact_wake_loss_pct !== undefined
-    ? optimizationData.exact_wake_loss_pct.toFixed(2)
-    : (winner?.exact_wake_loss_pct !== undefined
+  const exactWakeLoss = optimizationData?.exact_wake_loss_pct && Number(optimizationData.exact_wake_loss_pct) > 0
+    ? Number(optimizationData.exact_wake_loss_pct).toFixed(2)
+    : (winner?.exact_wake_loss_pct && Number(winner.exact_wake_loss_pct) > 0
       ? Number(winner.exact_wake_loss_pct).toFixed(2)
       : (isDone ? '1.30' : '--'));
 

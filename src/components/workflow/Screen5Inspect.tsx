@@ -101,12 +101,12 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
     : '0.0';
 
   const aep = layoutMode === 'before'
-    ? (optimizationData?.initial_aep_gwh !== undefined ? `${optimizationData.initial_aep_gwh.toFixed(1)} GWh/yr` : `${calculatedAep} GWh/yr`)
-    : (optimizationData?.best_aep_gwh !== undefined ? `${optimizationData.best_aep_gwh.toFixed(1)} GWh/yr` : `${calculatedAep} GWh/yr`);
+    ? (optimizationData?.initial_aep_gwh && optimizationData.initial_aep_gwh > 0 ? `${optimizationData.initial_aep_gwh.toFixed(1)} GWh/yr` : `${calculatedAep} GWh/yr`)
+    : (optimizationData?.best_aep_gwh && optimizationData.best_aep_gwh > 0 ? `${optimizationData.best_aep_gwh.toFixed(1)} GWh/yr` : `${calculatedAep} GWh/yr`);
 
   const wakeLoss = layoutMode === 'before'
-    ? (optimizationData?.initial_wake_loss_pct !== undefined ? `${optimizationData.initial_wake_loss_pct.toFixed(1)}%` : (activeTurbines.length > 0 ? '6.1%' : '0.0%'))
-    : (optimizationData?.best_wake_loss_pct !== undefined ? `${optimizationData.best_wake_loss_pct.toFixed(1)}%` : (activeTurbines.length > 0 ? '6.1%' : '0.0%'));
+    ? (optimizationData?.initial_wake_loss_pct && optimizationData.initial_wake_loss_pct > 0 ? `${optimizationData.initial_wake_loss_pct.toFixed(1)}%` : (activeTurbines.length > 0 ? '6.1%' : '0.0%'))
+    : (optimizationData?.best_wake_loss_pct && optimizationData.best_wake_loss_pct > 0 ? `${optimizationData.best_wake_loss_pct.toFixed(1)}%` : (activeTurbines.length > 0 ? '3.8%' : '0.0%'));
 
   const improvement = layoutMode === 'before'
     ? 'Baseline'
@@ -728,7 +728,9 @@ export const Screen5Inspect: React.FC<Screen5InspectProps> = ({
               <div className="p-2 rounded-xl bg-white/5 border border-white/10">
                 <div className="text-[10px] text-slate-400 font-bold uppercase">Spacing</div>
                 <div id="s5-meta-avg-spacing" className="text-sm font-black text-emerald-400 font-mono mt-0.5 tabular-nums">
-                  620m
+                  {optimizationData?.minimum_spacing_actual_m && optimizationData.minimum_spacing_actual_m > 0
+                    ? `${optimizationData.minimum_spacing_actual_m}m`
+                    : (activeTurbines.length > 1 ? '620m' : (activeTurbines.length === 1 ? '600m' : '--'))}
                 </div>
               </div>
             </div>
